@@ -38,9 +38,9 @@ main.js (boot: auth → save → init)
 
 ### Engine Modules (`src/game/engine/`)
 
-- **SceneManager.js** — Single THREE.Scene, lighting (directional sun + ambient + hemisphere)
-- **CameraController.js** — Hybrid camera: orbital (drag/zoom/click-focus) + free (Shift+WASD+mouse)
-- **RenderPipeline.js** — WebGLRenderer (logarithmic depth buffer) + EffectComposer (bloom, tone mapping)
+- **SceneManager.js** — Single THREE.Scene, lighting (directional sun with shadows + ambient + hemisphere), exponential fog for depth
+- **CameraController.js** — Hybrid camera: orbital (drag/zoom/click-focus) + free (Shift+WASD+mouse). Dynamic near/far planes by zoom level.
+- **RenderPipeline.js** — WebGLRenderer (logarithmic depth buffer, PCFSoft shadow maps) + EffectComposer (bloom, ACES tone mapping)
 - **AnimationLoop.js** — rAF loop, calls `gameState.tick(dt)` + update callbacks + render
 - **InputManager.js** — Raycasting for 3D click detection on planet meshes
 
@@ -75,7 +75,7 @@ Shared GLSL utilities in `src/game/utils/ShaderLib.js` (noise, FBM, Fresnel).
 - **Galaxy.js** — Manages all 8 SolarSystems and 10 Hyperlanes
 - **SolarSystem.js** — Groups Planet3D + Station3D + RobotManager3D + DustCloud + NebulaVolume + LensFlare. Manages LOD visibility per component.
 - **Hyperlane.js** — Glowing line with flowing particles between connected systems
-- **Skybox.js** — Procedural starfield cubemap + nebula shader overlay (palette shifts per planet)
+- **Skybox.js** — Procedural starfield cubemap + 500 twinkling animated stars + nebula shader overlay (palette shifts per planet)
 
 ### 3D Objects (`src/game/objects/`)
 
@@ -154,8 +154,10 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 - **Fonts**: Orbitron (headers/numbers), Share Tech Mono (body/values) — loaded via Google Fonts in `index.html`
 - **Panel layout**: 270px left (upgrades), 250px right (stats), 56px top bar, 64px bottom bar (planet selector)
 - **CSS**: All styling in `src/ui/HUD.css` — CSS Grid layout with scanline effects, gradient gold borders, glassmorphism panels
-- **Post-processing**: Bloom (UnrealBloomPass), ACES Filmic tone mapping
-- **Lighting**: Hybrid — directional sun + ambient + hemisphere + per-planet point lights
+- **Post-processing**: Bloom (UnrealBloomPass, strength 0.5, threshold 0.75), ACES Filmic tone mapping (exposure 1.1)
+- **Lighting**: Hybrid — directional sun (with PCFSoft shadow maps) + ambient + hemisphere + per-planet rim light + fill light
+- **Shadows**: Planet meshes cast shadows, rings receive shadows. Shadow map 1024×1024.
+- **Fog**: Exponential fog (0.0008 density) for depth cue at galaxy scale
 
 ## Game Mechanics
 
@@ -164,4 +166,5 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 - **Upgrade cost scaling**: `baseCost × 1.15^level` — buy multiplier toggles ×1/×10/×100
 - **8 planets**: Colonization costs range from 0 to 8M ore, bonuses from 0% to 3000%
 - **5 robot types**: Miner, Scout, Spider, Hover, Titan — each with unique procedural 3D geometry
-- **Camera**: Orbital (default) + free-fly (hold Shift). Scroll to zoom, click planet to focus.
+- **Camera**: Orbital (default) + free-fly (hold Shift). Scroll to zoom, click planet to focus. Dynamic near/far planes adjust by zoom level (0.05–1.0 near, 500–2000 far).
+- **Performance**: Distant systems (>300 units) update at 10% frequency. Hyperlanes skip updates beyond 250 units.

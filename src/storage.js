@@ -21,6 +21,10 @@ export function loadFromLocal() {
   return null;
 }
 
+export function hasLocalSave() {
+  return !!localStorage.getItem(SAVE_KEY);
+}
+
 let autoSaveInterval = null;
 
 export function startAutoSave(intervalMs = 10000) {

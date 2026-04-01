@@ -1,0 +1,368 @@
+/* ══════════════════════════════════════════════════════
+   ASTRO HARVEST — Landing Screen
+   Extends HUD.css variables and patterns
+   ══════════════════════════════════════════════════════ */
+
+/* ── OVERLAY ── */
+#landing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 16, 0.65);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+#landing-overlay.landing-visible {
+  opacity: 1;
+}
+#landing-overlay.landing-exit {
+  opacity: 0;
+  transform: scale(1.02);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  pointer-events: none;
+}
+
+/* ── BACKGROUND LAYERS ── */
+#landing-bg-gradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 80% 60% at 50% 40%,
+    rgba(212, 168, 67, 0.04) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+#landing-scanlines {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.04) 2px,
+    rgba(0, 0, 0, 0.04) 4px
+  );
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* ── CONTENT PANEL ── */
+#landing-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  padding: 48px 60px;
+  background: rgba(10, 12, 16, 0.90);
+  border: 1px solid var(--dune-border);
+  backdrop-filter: blur(14px);
+  border-radius: 2px;
+  min-width: 420px;
+  max-width: 520px;
+  width: 100%;
+  box-shadow:
+    0 0 60px rgba(212, 168, 67, 0.06),
+    inset 0 1px 0 rgba(212, 168, 67, 0.08);
+  animation: landing-slide-in 0.5s ease 0.3s both;
+}
+@keyframes landing-slide-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ── LOGO ── */
+#landing-logo {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.landing-logo-hex {
+  font-size: 44px;
+  color: var(--dune-gold);
+  line-height: 1;
+  text-shadow:
+    0 0 20px rgba(212, 168, 67, 0.7),
+    0 0 40px rgba(212, 168, 67, 0.3);
+  animation: landing-pulse 3s ease-in-out infinite;
+}
+@keyframes landing-pulse {
+  0%, 100% { text-shadow: 0 0 20px rgba(212,168,67,0.7), 0 0 40px rgba(212,168,67,0.3); }
+  50%       { text-shadow: 0 0 30px rgba(212,168,67,1.0), 0 0 60px rgba(212,168,67,0.5); }
+}
+.landing-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--dune-gold-bright);
+  letter-spacing: 6px;
+  text-shadow: 0 0 20px rgba(212, 168, 67, 0.35);
+  margin: 0;
+}
+.landing-subtitle {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--dune-text-secondary);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+.landing-version {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text-dim);
+  letter-spacing: 2px;
+}
+
+/* ── NAV BUTTONS ── */
+#landing-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.landing-btn {
+  width: 100%;
+  padding: 13px 20px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--dune-text-secondary);
+  background: transparent;
+  border: 1px solid var(--dune-border);
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    border-color 0.2s,
+    background 0.2s,
+    transform 0.15s,
+    box-shadow 0.2s;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+.landing-btn:hover:not(:disabled) {
+  color: var(--dune-gold);
+  border-color: var(--dune-border-bright);
+  background: rgba(212, 168, 67, 0.06);
+  transform: translateY(-2px);
+  box-shadow: 0 0 14px rgba(212, 168, 67, 0.12);
+}
+.landing-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.landing-btn:disabled {
+  opacity: 0.22;
+  cursor: not-allowed;
+}
+/* Primary (highlighted) state */
+.landing-btn-primary {
+  color: var(--dune-gold);
+  border-color: var(--dune-border-bright);
+  background: rgba(212, 168, 67, 0.05);
+}
+.landing-btn-primary:hover:not(:disabled) {
+  background: rgba(212, 168, 67, 0.10);
+  box-shadow: 0 0 20px rgba(212, 168, 67, 0.16);
+}
+/* Shimmer on primary button — reuses bar-shim keyframe from HUD.css */
+.landing-btn-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(212,168,67,0.08), transparent);
+  animation: bar-shim 4s ease-in-out infinite;
+  pointer-events: none;
+}
+/* Confirm (amber) state for New Game */
+.landing-btn-confirm {
+  color: var(--dune-amber) !important;
+  border-color: rgba(198, 123, 48, 0.5) !important;
+  background: rgba(198, 123, 48, 0.06) !important;
+}
+/* Sub-label below button text */
+.landing-btn-sub {
+  display: block;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  color: var(--dune-text-dim);
+  margin-top: 3px;
+}
+
+/* ── SUB-PANEL (cloud saves / settings) ── */
+#landing-subpanel {
+  width: 100%;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+}
+#landing-subpanel.open {
+  max-height: 320px;
+  opacity: 1;
+}
+.landing-panel-box {
+  padding: 16px;
+  background: rgba(212, 168, 67, 0.02);
+  border: 1px solid var(--dune-border);
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.landing-panel-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  color: var(--dune-gold-dim);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+/* Cloud save card */
+.landing-save-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: rgba(212, 168, 67, 0.04);
+  border: 1px solid var(--dune-border);
+  border-radius: 2px;
+}
+.landing-save-ore {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--dune-gold);
+  text-shadow: 0 0 8px rgba(212, 168, 67, 0.3);
+}
+.landing-save-meta {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text-dim);
+  letter-spacing: 1px;
+}
+/* Settings placeholder rows */
+.landing-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  opacity: 0.35;
+  border-bottom: 1px solid var(--dune-border);
+}
+.landing-setting-row:last-of-type { border-bottom: none; }
+.landing-setting-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text-secondary);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.landing-setting-ctrl {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text-dim);
+}
+.landing-coming-soon {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-gold-dim);
+  letter-spacing: 2px;
+  text-align: center;
+  padding-top: 4px;
+}
+/* Generic message (no saves, error, etc.) */
+.landing-msg {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--dune-text-secondary);
+  letter-spacing: 1px;
+  text-align: center;
+  padding: 8px 0;
+}
+/* Small back button inside sub-panel */
+.landing-btn-back {
+  align-self: flex-start;
+  padding: 7px 16px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--dune-text-dim);
+  background: transparent;
+  border: 1px solid var(--dune-border);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.landing-btn-back:hover {
+  color: var(--dune-text-secondary);
+  border-color: var(--dune-border-bright);
+}
+/* Small load button inside cloud saves panel */
+.landing-btn-load {
+  padding: 10px 18px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--dune-gold);
+  background: rgba(212, 168, 67, 0.06);
+  border: 1px solid var(--dune-border-bright);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.landing-btn-load:hover {
+  background: rgba(212, 168, 67, 0.12);
+  box-shadow: 0 0 12px rgba(212, 168, 67, 0.14);
+}
+
+/* ── SPINNER ── */
+.landing-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--dune-border);
+  border-top-color: var(--dune-gold);
+  border-radius: 50%;
+  animation: landing-spin 0.7s linear infinite;
+  display: inline-block;
+  align-self: center;
+}
+@keyframes landing-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── FOOTER ── */
+#landing-footer {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 14px;
+  border-top: 1px solid var(--dune-border);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text-dim);
+  letter-spacing: 1px;
+  gap: 8px;
+}
+.landing-footer-r {
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 55%;
+}
+.landing-footer-error {
+  color: var(--dune-amber);
+}

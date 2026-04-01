@@ -8,6 +8,7 @@ import { gameState } from './GameState.js';
 import { Galaxy } from './world/Galaxy.js';
 import { Skybox } from './world/Skybox.js';
 import { ClickFeedback } from './effects/ClickFeedback.js';
+import { GodRayShader } from './shaders/effects/GodRayShader.js';
 
 export function createGame() {
   const container = document.getElementById('game-container');
@@ -29,6 +30,7 @@ export function createGame() {
 
   // Post-processing
   renderPipeline.setupPostProcessing(sceneManager.scene, camera);
+  renderPipeline.addGodRayPass(GodRayShader);
 
   // Input
   const inputManager = new InputManager(
@@ -52,56 +54,77 @@ export function createGame() {
   const galaxy = new Galaxy();
   sceneManager.add(galaxy.group);
 
+  // Planet collision colliders — use live position getters for orbiting planets
+  const planetColliders = Object.values(galaxy.systems).map(sys => ({
+    get position() { return sys.planetWorldPosition; },
+    radius: sys.planet.radius,
+  }));
+  cameraController.setPlanetColliders(planetColliders);
+
   // Register click targets
   for (const target of galaxy.getClickTargets()) {
     inputManager.addClickable(target.mesh, (hit) => {
       const { planetId, system } = target;
-      const zoomLevel = cameraController.getZoomLevel();
 
-      if ((zoomLevel === 'planet' || zoomLevel === 'close') && gameState.activePlanet === planetId) {
-        // Mine ore + visual feedback
-        gameState.addOre(gameState.clickPow);
-
-        // 3D click feedback at hit point
-        const worldPoint = hit.point;
-        const normal = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize() : new THREE.Vector3(0, 1, 0);
-        clickFeedback.spawn(worldPoint, normal, gameState.clickPow);
-      } else if (gameState.ownedPlanets.includes(planetId)) {
+      if (gameState.ownedPlanets.includes(planetId)) {
         gameState.switchPlanet(planetId);
       } else {
         gameState.colonizePlanet(planetId);
       }
 
-      cameraController.focusOnPosition(system.worldPosition, 30);
+      cameraController.trackObject(() => system.planetWorldPosition, 55);
     });
   }
 
-  // Focus on active planet at start
-  const startPos = galaxy.getPosition(gameState.activePlanet);
-  if (startPos) {
+  // Focus on active planet at start — track the orbiting planet
+  const startSystem = galaxy.getSystem(gameState.activePlanet);
+  if (startSystem) {
+    const startPos = startSystem.planetWorldPosition;
     cameraController.targetTarget.copy(startPos);
     cameraController.target.copy(startPos);
     cameraController.spherical.radius = 30;
     cameraController.targetSpherical.radius = 30;
+    cameraController.trackObject(() => startSystem.planetWorldPosition, 55);
   }
 
-  // Planet events
+  // Planet events — track orbiting planet position
   gameState.on('planetChanged', (id) => {
-    const pos = galaxy.getPosition(id);
-    if (pos) cameraController.focusOnPosition(pos, 30);
+    const system = galaxy.getSystem(id);
+    if (system) cameraController.trackObject(() => system.planetWorldPosition, 55);
     skybox.setPlanetPalette(gameState.activePlanetDef);
   });
   gameState.on('planetColonized', (id) => {
-    const pos = galaxy.getPosition(id);
-    if (pos) cameraController.focusOnPosition(pos, 30);
+    const system = galaxy.getSystem(id);
+    if (system) cameraController.trackObject(() => system.planetWorldPosition, 55);
     skybox.setPlanetPalette(gameState.activePlanetDef);
   });
+
+  // Reusable vector to avoid per-frame allocation for god rays
+  const _godRayUV = new THREE.Vector2();
+  const _godRayNDC = new THREE.Vector3();
 
   // Per-frame update
   animationLoop.onUpdate((dt, time) => {
     galaxy.update(camera, dt, time);
     skybox.update(time);
     clickFeedback.update(dt);
+    renderPipeline.tick(time);
+
+    // God rays: activate when a star-type planet is near and on-screen
+    const activeDef = gameState.activePlanetDef;
+    if (activeDef?.type === 'star') {
+      const sys = galaxy.getSystem(activeDef.id);
+      if (sys) {
+        _godRayNDC.copy(sys.worldPosition).project(camera);
+        _godRayUV.set((_godRayNDC.x + 1) * 0.5, (_godRayNDC.y + 1) * 0.5);
+        const dist = camera.position.distanceTo(sys.worldPosition);
+        const onScreen = Math.abs(_godRayNDC.x) < 1.8 && Math.abs(_godRayNDC.y) < 1.8 && _godRayNDC.z < 1.0;
+        const intensity = THREE.MathUtils.smoothstep(350, 80, dist);
+        renderPipeline.setGodRaySource(_godRayUV, onScreen ? intensity : 0.0);
+      }
+    } else {
+      renderPipeline.setGodRaySource(_godRayUV.set(0.5, 0.5), 0.0);
+    }
   });
 
   // Handle resize

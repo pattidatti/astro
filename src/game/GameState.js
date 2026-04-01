@@ -27,6 +27,25 @@ class GameState extends EventEmitter {
     this.lastSaved = Date.now();
   }
 
+  reset() {
+    this.ore = 0;
+    this.crystal = 0;
+    this.energy = 0;
+    this.robots = 0;
+    this.clickPow = 1;
+    this.autoRate = 0;
+    this.effMult = 1;
+    this.crystalUnlocked = false;
+    this.energyUnlocked = false;
+    this.ownedPlanets = ['xerion'];
+    this.activePlanet = 'xerion';
+    this.upgradeLevels = {};
+    this.buyMult = 1;
+    this.lastSaved = Date.now();
+    this.emit('stateLoaded');
+    this.emit('robotsChanged', 0);
+  }
+
   get activePlanetDef() {
     return PLANETS.find(p => p.id === this.activePlanet) || PLANETS[0];
   }
@@ -93,7 +112,6 @@ class GameState extends EventEmitter {
 
     switch (u.effect) {
       case 'rob': this.robots += u.amt * n; this.emit('robotsChanged', this.robots); break;
-      case 'clk': this.clickPow += u.amt * n; break;
       case 'aut': this.autoRate += u.amt * n; break;
       case 'eff': this.effMult += u.amt * n; break;
       case 'cry': this.crystalUnlocked = true; this.emit('crystalUnlocked'); break;

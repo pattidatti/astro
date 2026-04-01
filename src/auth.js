@@ -22,6 +22,16 @@ export async function signInAnon() {
   }
 }
 
+export function getCurrentUser() {
+  return auth ? auth.currentUser : null;
+}
+
+export function isGoogleUser() {
+  const user = getCurrentUser();
+  if (!user) return false;
+  return user.providerData.some(p => p.providerId === 'google.com');
+}
+
 export async function upgradeToGoogle() {
   if (!auth || !auth.currentUser) return null;
   const provider = new GoogleAuthProvider();

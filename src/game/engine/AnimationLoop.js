@@ -38,13 +38,13 @@ export class AnimationLoop {
     // Tick game state
     gameState.tick(dt);
 
-    // Update camera
-    this.cameraController.update(dt);
-
-    // Run update callbacks (for world objects, effects, etc.)
+    // Run update callbacks first (moves planets to current-frame positions)
     for (const fn of this._updateCallbacks) {
       fn(dt, now / 1000);
     }
+
+    // Update camera after world — so tracking reads current planet positions
+    this.cameraController.update(dt);
 
     // Render
     this.renderPipeline.render();

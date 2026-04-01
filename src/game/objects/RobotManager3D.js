@@ -47,11 +47,13 @@ export class RobotManager3D {
       }
       this.robots.push(robot);
       this.group.add(robot.group);
+      this.group.add(robot.trail);
     }
 
     // Hide excess robots (don't dispose — may be needed again)
     for (let i = 0; i < this.robots.length; i++) {
       this.robots[i].group.visible = i < this.targetCount;
+      this.robots[i].trail.visible = i < this.targetCount;
     }
   }
 

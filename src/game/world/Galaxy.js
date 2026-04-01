@@ -1,44 +1,36 @@
 import * as THREE from 'three';
 import { PLANETS } from '../data/planets.js';
-import { HYPERLANES } from '../data/galaxyLayout.js';
+import { CENTRAL_STAR } from '../data/galaxyLayout.js';
 import { getAllWorldPositions } from '../utils/CoordinateMapper.js';
 import { SolarSystem } from './SolarSystem.js';
-import { Hyperlane } from './Hyperlane.js';
-import { gameState } from '../GameState.js';
+import { Star3D } from '../objects/Star3D.js';
 
 /**
- * Galaxy manages all SolarSystems and Hyperlanes in the 3D scene.
- * Handles LOD updates and provides access to individual systems.
+ * Galaxy — one solar system: a central star with 8 orbiting planets.
+ * Handles LOD updates and provides access to individual planet systems.
  */
 export class Galaxy {
   constructor() {
     this.group = new THREE.Group();
     this.systems = {};
-    this.hyperlanes = [];
     this.worldPositions = getAllWorldPositions();
 
+    // Central star — the sun of our solar system
+    this.centralStar = new Star3D(CENTRAL_STAR);
+    // Place at the shared center position (all planets share the same origin)
+    const centerPos = this.worldPositions[PLANETS[0].id];
+    this.centralStar.group.position.copy(centerPos);
+    this.group.add(this.centralStar.group);
+
     this._createSystems();
-    this._createHyperlanes();
   }
 
   _createSystems() {
     for (const def of PLANETS) {
-      const pos = this.worldPositions[def.id];
+      const pos = this.worldPositions[def.id]; // all the same center
       const system = new SolarSystem(def, pos);
       this.systems[def.id] = system;
       this.group.add(system.group);
-    }
-  }
-
-  _createHyperlanes() {
-    for (const [fromId, toId] of HYPERLANES) {
-      const fromPos = this.worldPositions[fromId];
-      const toPos = this.worldPositions[toId];
-      if (fromPos && toPos) {
-        const lane = new Hyperlane(fromPos, toPos, fromId, toId);
-        this.hyperlanes.push(lane);
-        this.group.add(lane.group);
-      }
     }
   }
 
@@ -47,9 +39,14 @@ export class Galaxy {
     return this.systems[planetId];
   }
 
-  /** Get the world position of a planet */
+  /** Get the static system center position (sun) */
   getPosition(planetId) {
     return this.worldPositions[planetId];
+  }
+
+  /** Get the live world position of the orbiting planet */
+  getPlanetWorldPosition(planetId) {
+    return this.systems[planetId]?.planetWorldPosition;
   }
 
   /** Get all planet click targets for InputManager registration */
@@ -66,7 +63,7 @@ export class Galaxy {
   }
 
   /**
-   * Update all systems and hyperlanes.
+   * Update all planet systems.
    * @param {THREE.Camera} camera
    * @param {number} dt - Delta time
    * @param {number} time - Elapsed time
@@ -74,15 +71,18 @@ export class Galaxy {
   update(camera, dt, time) {
     const cameraPos = camera.position;
 
-    // Update each solar system's LOD
+    // Update central star
+    this.centralStar.update(time);
+
+    // Update each planet system's LOD — distance measured to planet, not center
     for (const id in this.systems) {
       const system = this.systems[id];
-      const distance = cameraPos.distanceTo(system.worldPosition);
+      const distance = cameraPos.distanceTo(system.planetWorldPosition);
 
-      // Skip full updates for very distant systems (performance)
-      if (distance > 300) {
-        system.group.visible = true; // still visible as a dot
-        // Only update at reduced frequency (every ~10 frames)
+      // Distant planets: always update orbit (smooth motion), throttle visuals
+      if (distance > 430) {
+        system.group.visible = true;
+        system._updateOrbit(time);
         if (Math.random() < 0.1) {
           system.updateLOD(distance, time, dt, camera);
         }
@@ -90,25 +90,12 @@ export class Galaxy {
         system.updateLOD(distance, time, dt, camera);
       }
     }
-
-    // Update hyperlanes
-    const owned = gameState.ownedPlanets;
-    for (const lane of this.hyperlanes) {
-      // Approximate distance check using one endpoint
-      const laneDist = cameraPos.distanceTo(lane.fromPos);
-      if (laneDist < 250) {
-        const bothOwned = owned.includes(lane.fromId) && owned.includes(lane.toId);
-        lane.update(dt, bothOwned);
-      }
-    }
   }
 
   dispose() {
+    this.centralStar.dispose();
     for (const id in this.systems) {
       this.systems[id].dispose();
-    }
-    for (const lane of this.hyperlanes) {
-      lane.dispose();
     }
   }
 }

@@ -1,0 +1,331 @@
+import { hasLocalSave } from '../storage.js';
+import { getCurrentUser, isGoogleUser, upgradeToGoogle } from '../auth.js';
+import { loadFromFirestore } from '../db.js';
+import { isFirebaseConfigured } from '../firebase.js';
+
+function fmtOre(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return Math.floor(n).toString();
+}
+
+function fmtDate(ts) {
+  if (!ts) return 'unknown date';
+  const diff = Date.now() - ts;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  return Math.floor(diff / 86400000) + 'd ago';
+}
+
+export class LandingScreen {
+  // inGame: true = pause menu mode (shows RESUME instead of CONTINUE)
+  constructor({ inGame = false } = {}) {
+    this._inGame = inGame;
+    this._resolve = null;
+    this._newGamePending = false;
+    this._newGameTimer = null;
+    this._onKeyDown = (e) => { if (e.key === 'Escape') this._handleResume(); };
+    this._overlay = this._buildDOM();
+    document.body.appendChild(this._overlay);
+    document.addEventListener('keydown', this._onKeyDown);
+    const hud = document.getElementById('hud-overlay');
+    if (hud) hud.style.visibility = 'hidden';
+  }
+
+  _buildDOM() {
+    const overlay = document.createElement('div');
+    overlay.id = 'landing-overlay';
+
+    const continueLabel = this._inGame ? 'RESUME' : 'CONTINUE';
+    const continueSub = this._inGame ? 'Return to game' : 'Loading...';
+
+    overlay.innerHTML = `
+      <div id="landing-bg-gradient"></div>
+      <div id="landing-scanlines"></div>
+      <div id="landing-content">
+        <div id="landing-logo">
+          <div class="landing-logo-hex">&#x2B22;</div>
+          <h1 class="landing-title">ASTRO HARVEST</h1>
+          <div class="landing-subtitle">Galactic Extraction</div>
+          <div class="landing-version">v1.0</div>
+        </div>
+        <nav id="landing-nav">
+          <button class="landing-btn" id="btn-continue">
+            ${continueLabel}
+            <span class="landing-btn-sub" id="btn-continue-sub">${continueSub}</span>
+          </button>
+          <button class="landing-btn" id="btn-cloud">
+            CLOUD SAVES
+            <span class="landing-btn-sub">Sync with Google account</span>
+          </button>
+          <button class="landing-btn" id="btn-new">
+            NEW GAME
+            <span class="landing-btn-sub">Start from scratch</span>
+          </button>
+          <button class="landing-btn" id="btn-settings">
+            SETTINGS
+            <span class="landing-btn-sub">Audio, graphics &amp; more</span>
+          </button>
+          <button class="landing-btn" id="btn-login">
+            LOGIN WITH GOOGLE
+            <span class="landing-btn-sub">Link account for cloud saves</span>
+          </button>
+        </nav>
+        <div id="landing-subpanel"></div>
+        <div id="landing-footer">
+          <span class="landing-footer-l" id="footer-left">SAVE: LOCAL ONLY</span>
+          <span class="landing-footer-r" id="footer-right">ANONYMOUS</span>
+        </div>
+      </div>
+    `;
+
+    return overlay;
+  }
+
+  async init() {
+    const btnContinue = document.getElementById('btn-continue');
+    const btnContinueSub = document.getElementById('btn-continue-sub');
+
+    if (this._inGame) {
+      // Pause mode: Resume is always primary and always enabled
+      btnContinue.classList.add('landing-btn-primary');
+      btnContinueSub.textContent = 'Return to game  [ESC]';
+    } else {
+      // Boot mode: enable only if local save exists
+      if (hasLocalSave()) {
+        btnContinue.classList.add('landing-btn-primary');
+        try {
+          const raw = localStorage.getItem('astro_save');
+          const data = raw ? JSON.parse(raw) : null;
+          const ore = data?.ore || 0;
+          btnContinueSub.textContent = ore > 0 ? fmtOre(ore) + ' ore' : 'No progress yet';
+        } catch {
+          btnContinueSub.textContent = 'Local save found';
+        }
+      } else {
+        btnContinue.disabled = true;
+        btnContinueSub.textContent = 'No save found';
+      }
+    }
+
+    // Cloud saves button
+    const btnCloud = document.getElementById('btn-cloud');
+    if (!isFirebaseConfigured()) {
+      btnCloud.disabled = true;
+      document.querySelector('#btn-cloud .landing-btn-sub').textContent = 'Firebase not configured';
+    }
+
+    // Login button — hide if already Google user
+    if (isGoogleUser()) {
+      document.getElementById('btn-login').style.display = 'none';
+    }
+
+    // If boot mode, no local save, no Firebase — make New Game primary
+    if (!this._inGame && !hasLocalSave() && !isFirebaseConfigured()) {
+      document.getElementById('btn-new').classList.add('landing-btn-primary');
+    }
+
+    this._updateFooter();
+    this._attachListeners();
+  }
+
+  _attachListeners() {
+    document.getElementById('btn-continue').addEventListener('click', () => this._handleResume());
+    document.getElementById('btn-cloud').addEventListener('click', () => this._showCloudSavesPanel());
+    document.getElementById('btn-new').addEventListener('click', () => this._handleNewGame());
+    document.getElementById('btn-settings').addEventListener('click', () => this._showSettingsPanel());
+    document.getElementById('btn-login').addEventListener('click', () => this._handleLogin());
+  }
+
+  show() {
+    requestAnimationFrame(() => {
+      this._overlay.classList.add('landing-visible');
+    });
+  }
+
+  waitForChoice() {
+    return new Promise((resolve) => {
+      this._resolve = resolve;
+    });
+  }
+
+  _dismiss() {
+    clearTimeout(this._newGameTimer);
+    document.removeEventListener('keydown', this._onKeyDown);
+    this._overlay.classList.add('landing-exit');
+    const hud = document.getElementById('hud-overlay');
+    if (hud) hud.style.visibility = '';
+    this._overlay.addEventListener('transitionend', () => {
+      this._overlay.remove();
+    }, { once: true });
+  }
+
+  // Continue (boot) or Resume (pause) — both just close the overlay
+  _handleResume() {
+    const action = this._inGame ? 'resume' : 'continue';
+    this._resolve({ action });
+    this._dismiss();
+  }
+
+  _handleNewGame() {
+    const btn = document.getElementById('btn-new');
+    if (this._newGamePending) {
+      clearTimeout(this._newGameTimer);
+      this._resolve({ action: 'newgame' });
+      this._dismiss();
+    } else {
+      this._newGamePending = true;
+      btn.classList.add('landing-btn-confirm');
+      const sub = btn.querySelector('.landing-btn-sub');
+      btn.childNodes[0].textContent = ' CONFIRM NEW GAME? ';
+      sub.textContent = 'Click again to confirm — resets local save';
+      this._newGameTimer = setTimeout(() => {
+        this._newGamePending = false;
+        btn.classList.remove('landing-btn-confirm');
+        btn.childNodes[0].textContent = ' NEW GAME ';
+        sub.textContent = 'Start from scratch';
+      }, 3000);
+    }
+  }
+
+  async _handleLogin() {
+    const btn = document.getElementById('btn-login');
+    const footerRight = document.getElementById('footer-right');
+    btn.disabled = true;
+    btn.querySelector('.landing-btn-sub').textContent = 'Opening Google sign-in...';
+
+    const user = await upgradeToGoogle();
+    if (user) {
+      btn.style.display = 'none';
+      this._updateFooter();
+      const btnCloud = document.getElementById('btn-cloud');
+      if (isFirebaseConfigured()) btnCloud.disabled = false;
+    } else {
+      btn.disabled = false;
+      btn.querySelector('.landing-btn-sub').textContent = 'Link account for cloud saves';
+      footerRight.textContent = 'LOGIN FAILED';
+      footerRight.classList.add('landing-footer-error');
+      setTimeout(() => {
+        footerRight.classList.remove('landing-footer-error');
+        this._updateFooter();
+      }, 3000);
+    }
+  }
+
+  async _showCloudSavesPanel() {
+    this._closeSubPanel();
+    const panel = document.getElementById('landing-subpanel');
+    panel.innerHTML = `
+      <div class="landing-panel-box">
+        <div class="landing-panel-title">CLOUD SAVES</div>
+        <div class="landing-spinner"></div>
+      </div>
+    `;
+    panel.classList.add('open');
+
+    const user = getCurrentUser();
+
+    if (!user || !isGoogleUser()) {
+      panel.innerHTML = `
+        <div class="landing-panel-box">
+          <div class="landing-panel-title">CLOUD SAVES</div>
+          <div class="landing-msg">Sign in with Google to access cloud saves.</div>
+          <button class="landing-btn-back" id="panel-back">BACK</button>
+        </div>
+      `;
+      document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
+      return;
+    }
+
+    try {
+      const cloudSave = await loadFromFirestore(user.uid);
+      if (!cloudSave) {
+        panel.innerHTML = `
+          <div class="landing-panel-box">
+            <div class="landing-panel-title">CLOUD SAVES</div>
+            <div class="landing-msg">No cloud save found for this account.</div>
+            <button class="landing-btn-back" id="panel-back">BACK</button>
+          </div>
+        `;
+      } else {
+        const ore = cloudSave.ore || 0;
+        const ts = cloudSave.lastSaved || cloudSave.timestamp;
+        panel.innerHTML = `
+          <div class="landing-panel-box">
+            <div class="landing-panel-title">CLOUD SAVES</div>
+            <div class="landing-save-card">
+              <div class="landing-save-ore">${fmtOre(ore)} ORE</div>
+              <div class="landing-save-meta">Last saved: ${fmtDate(ts)}</div>
+            </div>
+            <button class="landing-btn-load" id="panel-load">LOAD THIS SAVE</button>
+            <button class="landing-btn-back" id="panel-back">BACK</button>
+          </div>
+        `;
+        document.getElementById('panel-load').addEventListener('click', () => {
+          this._resolve({ action: 'cloud', saveData: cloudSave });
+          this._dismiss();
+        });
+      }
+      document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
+    } catch {
+      panel.innerHTML = `
+        <div class="landing-panel-box">
+          <div class="landing-panel-title">CLOUD SAVES</div>
+          <div class="landing-msg">Failed to load cloud save.</div>
+          <button class="landing-btn-back" id="panel-back">BACK</button>
+        </div>
+      `;
+      document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
+    }
+  }
+
+  _showSettingsPanel() {
+    this._closeSubPanel();
+    const panel = document.getElementById('landing-subpanel');
+    panel.innerHTML = `
+      <div class="landing-panel-box">
+        <div class="landing-panel-title">SETTINGS</div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">AUDIO VOLUME</span>
+          <span class="landing-setting-ctrl">&#x25A0;&#x25A0;&#x25A0;&#x25A1;&#x25A1;</span>
+        </div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">RENDER QUALITY</span>
+          <span class="landing-setting-ctrl">HIGH</span>
+        </div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">BLOOM EFFECT</span>
+          <span class="landing-setting-ctrl">ON</span>
+        </div>
+        <div class="landing-coming-soon">— COMING IN FUTURE UPDATE —</div>
+        <button class="landing-btn-back" id="panel-back">BACK</button>
+      </div>
+    `;
+    panel.classList.add('open');
+    document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
+  }
+
+  _closeSubPanel() {
+    const panel = document.getElementById('landing-subpanel');
+    panel.classList.remove('open');
+    setTimeout(() => { panel.innerHTML = ''; }, 300);
+  }
+
+  _updateFooter() {
+    const leftEl = document.getElementById('footer-left');
+    const rightEl = document.getElementById('footer-right');
+    const user = getCurrentUser();
+    if (isGoogleUser()) {
+      leftEl.textContent = 'SAVE: CLOUD + LOCAL';
+      rightEl.textContent = user.email || user.displayName || 'GOOGLE USER';
+    } else if (user) {
+      leftEl.textContent = 'SAVE: LOCAL ONLY';
+      rightEl.textContent = 'ANONYMOUS';
+    } else {
+      leftEl.textContent = 'SAVE: LOCAL ONLY';
+      rightEl.textContent = 'OFFLINE';
+    }
+  }
+}

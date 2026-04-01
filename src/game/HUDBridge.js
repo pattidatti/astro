@@ -13,9 +13,10 @@ const fmt = (n) => {
 export class HUDBridge {
   constructor(game) {
     this.game = game;
+    this.activeTab = 'mining';
+    this.minimized = false;
     this.updateTimer = 0;
 
-    // Cache DOM refs
     this.dom = {
       vOre: document.getElementById('vOre'),
       rOre: document.getElementById('rOre'),
@@ -26,65 +27,112 @@ export class HUDBridge {
       rcCrys: document.getElementById('rcCrys'),
       sepCrys: document.getElementById('sepCrys'),
       rcEnrg: document.getElementById('rcEnrg'),
-      sRob: document.getElementById('sRob'),
-      sWld: document.getElementById('sWld'),
-      sClk: document.getElementById('sClk'),
-      sRate: document.getElementById('sRate'),
-      upgGrid: document.getElementById('upgGrid'),
-      pList: document.getElementById('pList'),
+      barUpgrades: document.getElementById('bar-upgrades'),
+      barMinimize: document.getElementById('bar-minimize'),
+      bottomBar: document.getElementById('bottom-bar'),
+      upgTooltip: document.getElementById('upg-tooltip'),
+      planetTooltip: document.getElementById('planet-tooltip'),
       toast: document.getElementById('toast'),
-      pdName: document.getElementById('pd-name'),
-      pdType: document.getElementById('pd-type'),
-      pdBonus: document.getElementById('pd-bonus'),
-      galaxyToggle: document.getElementById('galaxyToggle'),
-      leftPanel: document.getElementById('left-panel'),
-      rightPanel: document.getElementById('right-panel'),
-      leftToggle: document.getElementById('left-toggle'),
-      rightToggle: document.getElementById('right-toggle'),
     };
 
-    this.leftPanelOpen = true;
-    this.rightPanelOpen = true;
-
-    this._setupButtons();
-    this._setupKeyboard();
+    this._setupTabs();
+    this._setupMultiplier();
+    this._setupMinimize();
+    this._setupPlanetHover();
     this._setupEvents();
-    this._initialRender();
+    this._renderUpgrades();
+
+    // Show offline earnings or welcome
+    if (gameState._offlineEarnings) {
+      const oe = gameState._offlineEarnings;
+      const hrs = Math.floor(oe.elapsed / 3600);
+      const mins = Math.floor((oe.elapsed % 3600) / 60);
+      const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+      this.toast(`OFFLINE ${timeStr}: +${fmt(oe.earned)} ORE`);
+      delete gameState._offlineEarnings;
+    } else {
+      this.toast('WELCOME, COMMANDER');
+    }
 
     // Register with animation loop for per-frame updates
     game.animationLoop.onUpdate((dt) => this.update(dt));
   }
 
-  _setupButtons() {
+  _setupTabs() {
+    document.querySelectorAll('.bar-tab').forEach(btn => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        this.activeTab = btn.dataset.cat;
+        document.querySelectorAll('.bar-tab').forEach(b => b.classList.toggle('active', b === btn));
+        this._renderUpgrades();
+      });
+    });
+  }
+
+  _updateTabBadges() {
+    const cats = ['mining', 'robots', 'tech'];
+    for (const cat of cats) {
+      const count = UPGRADES.filter(u => u.cat === cat && gameState.canAfford(u.id)).length;
+      const badge = document.getElementById(`tbadge-${cat}`);
+      if (!badge) continue;
+      badge.textContent = count > 0 ? count : '';
+    }
+  }
+
+  _setupMultiplier() {
     document.getElementById('m1').addEventListener('pointerdown', () => this._setMult(1));
     document.getElementById('m10').addEventListener('pointerdown', () => this._setMult(10));
     document.getElementById('m100').addEventListener('pointerdown', () => this._setMult(100));
+  }
 
-    this.dom.galaxyToggle.addEventListener('pointerdown', (e) => {
+  _setupMinimize() {
+    this.dom.barMinimize.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
-      // Galaxy toggle will be wired up when galaxy view is implemented
+      this._toggleMinimize();
     });
-
-    this.dom.leftToggle.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      this._toggleLeftPanel();
-    });
-    this.dom.rightToggle.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      this._toggleRightPanel();
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        this._toggleMinimize();
+      }
     });
   }
 
-  _setupKeyboard() {
-    this._keydownHandler = (e) => {
-      if (e.code === 'KeyQ') this._toggleLeftPanel();
-      if (e.code === 'KeyE') this._toggleRightPanel();
-    };
-    window.addEventListener('keydown', this._keydownHandler);
+  _toggleMinimize() {
+    this.minimized = !this.minimized;
+    this.dom.bottomBar.classList.toggle('minimized', this.minimized);
+    this.dom.barMinimize.textContent = this.minimized ? '\u25B2' : '\u25BC';
   }
 
-  dispose() {
-    window.removeEventListener('keydown', this._keydownHandler);
+  _setupPlanetHover() {
+    this.game.inputManager.onHover((planetId, x, y) => {
+      const tt = this.dom.planetTooltip;
+      if (!planetId) {
+        tt.classList.remove('visible');
+        return;
+      }
+
+      const planet = PLANETS.find(p => p.id === planetId);
+      if (!planet) return;
+      const owned = gameState.ownedPlanets.includes(planetId);
+      const isActive = gameState.activePlanet === planetId;
+
+      tt.innerHTML = `
+        <div class="pt-name">${planet.name}</div>
+        <div class="pt-type">${planet.desc}</div>
+        ${planet.mb > 0 ? `<div class="pt-bonus">+${(planet.mb * 100).toFixed(0)}% extraction bonus</div>` : ''}
+        ${owned && isActive ? `<div class="pt-stats">
+          <span>DRONES \u2014 ${fmt(gameState.robots)}</span>
+          <span>WORLDS \u2014 ${gameState.ownedPlanets.length}</span>
+          <span>ORE/S \u2014 ${fmt(gameState.oreRate)}</span>
+        </div>` : ''}
+        ${owned && !isActive ? '<div class="pt-type">Click to warp</div>' : ''}
+        ${!owned ? `<div class="pt-cost">\u2B21 ${fmt(planet.cost)}</div>` : ''}
+      `;
+      tt.classList.add('visible');
+      tt.style.left = (x + 16) + 'px';
+      tt.style.top = (y - 10) + 'px';
+    });
   }
 
   _setupEvents() {
@@ -100,11 +148,6 @@ export class HUDBridge {
     gameState.on('planetColonized', (id) => {
       const p = PLANETS.find(x => x.id === id);
       this.toast('\u{1F30D} COLONIZED: ' + (p ? p.name : id));
-      this._renderPlanetDetail();
-    });
-    gameState.on('planetChanged', () => {
-      this._renderPlanetDetail();
-      this._renderPlanets();
     });
     gameState.on('stateLoaded', () => {
       if (gameState.crystalUnlocked) {
@@ -114,29 +157,10 @@ export class HUDBridge {
       if (gameState.energyUnlocked) {
         this.dom.rcEnrg.style.display = '';
       }
-      this._renderPlanetDetail();
     });
   }
 
-  _initialRender() {
-    this._renderUpgrades();
-    this._renderPlanets();
-    this._renderPlanetDetail();
-
-    if (gameState._offlineEarnings) {
-      const oe = gameState._offlineEarnings;
-      const hrs = Math.floor(oe.elapsed / 3600);
-      const mins = Math.floor((oe.elapsed % 3600) / 60);
-      const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-      this.toast(`OFFLINE ${timeStr}: +${fmt(oe.earned)} ORE`);
-      delete gameState._offlineEarnings;
-    } else {
-      this.toast('WELCOME, COMMANDER \u2014 CLICK THE PLANET');
-    }
-  }
-
   update(dt) {
-    // Update HUD values every frame
     this.dom.vOre.textContent = fmt(gameState.ore);
     this.dom.rOre.textContent = '+' + fmt(gameState.oreRate) + '/s';
 
@@ -149,17 +173,11 @@ export class HUDBridge {
       this.dom.rEnrg.textContent = '+' + fmt(gameState.energyRate) + '/s';
     }
 
-    this.dom.sRob.textContent = fmt(gameState.robots);
-    this.dom.sWld.textContent = gameState.ownedPlanets.length;
-    this.dom.sClk.textContent = fmt(gameState.clickPow);
-    this.dom.sRate.textContent = fmt(gameState.oreRate);
-
-    // Periodic renders
+    // Periodic upgrade re-render
     this.updateTimer += dt;
     if (this.updateTimer >= 0.35) {
       this.updateTimer = 0;
       this._renderUpgrades();
-      this._renderPlanets();
     }
   }
 
@@ -169,22 +187,12 @@ export class HUDBridge {
     this._renderUpgrades();
   }
 
-  _renderPlanetDetail() {
-    const def = gameState.activePlanetDef;
-    this.dom.pdName.textContent = def.name;
-    this.dom.pdType.textContent = def.desc;
-    if (def.mb > 0) {
-      this.dom.pdBonus.textContent = `+${(def.mb * 100).toFixed(0)}% extraction bonus`;
-    } else {
-      this.dom.pdBonus.textContent = 'Base extraction rate';
-    }
-  }
-
   _renderUpgrades() {
-    const grid = this.dom.upgGrid;
-    grid.innerHTML = '';
+    const container = this.dom.barUpgrades;
+    container.innerHTML = '';
 
-    const visible = UPGRADES.filter(u => {
+    const filtered = UPGRADES.filter(u => {
+      if (u.cat !== this.activeTab) return false;
       const lv = gameState.upgradeLevels[u.id] || 0;
       if (u.max && lv >= u.max) return false;
       if (u.effect === 'cry' && gameState.crystalUnlocked) return false;
@@ -192,90 +200,58 @@ export class HUDBridge {
       return true;
     });
 
-    for (const u of visible) {
-      const cost = gameState.upgradeCost(u.id);
+    for (const u of filtered) {
       const can = gameState.canAfford(u.id);
       const lv = gameState.upgradeLevels[u.id] || 0;
 
-      let costStr = '';
-      if (cost.ore > 0) costStr += '\u2B21' + fmt(cost.ore);
-      if (cost.crystal > 0) costStr += (costStr ? ' ' : '') + '\u25C8' + fmt(cost.crystal);
-      if (cost.mult > 1) costStr += ` \u00D7${cost.mult}`;
+      const el = document.createElement('div');
+      el.className = 'bar-upg ' + (can ? 'can' : 'no');
+      el.innerHTML = `
+        <span class="bar-upg-icon">${u.icon}</span>
+        ${lv > 0 ? `<span class="upg-badge">${lv}</span>` : ''}
+      `;
 
-      const d = document.createElement('div');
-      d.className = 'upg ' + (can ? 'can' : 'no');
-      d.innerHTML = `
-        <div class="upg-top">
-          <span class="upg-icon">${u.icon}</span>
-          <span class="upg-name">${u.name}</span>
-          ${lv > 0 ? `<span class="upg-lv">LV${lv}</span>` : ''}
-        </div>
-        <div class="upg-bottom">
-          <span class="upg-desc">${u.desc}</span>
-          <span class="upg-cost">${costStr}</span>
-        </div>`;
+      // Hover tooltip
+      el.addEventListener('mouseenter', (e) => this._showUpgTooltip(u, e));
+      el.addEventListener('mouseleave', () => this._hideUpgTooltip());
 
+      // Click to buy
       if (can) {
-        d.addEventListener('pointerdown', (e) => {
+        el.addEventListener('pointerdown', (e) => {
           e.stopPropagation();
           gameState.buyUpgrade(u.id);
           this._renderUpgrades();
         });
       }
-      grid.appendChild(d);
+      container.appendChild(el);
     }
+
+    this._updateTabBadges();
   }
 
-  _renderPlanets() {
-    const list = this.dom.pList;
-    list.innerHTML = '';
+  _showUpgTooltip(upgrade, event) {
+    const cost = gameState.upgradeCost(upgrade.id);
+    const lv = gameState.upgradeLevels[upgrade.id] || 0;
+    let costStr = '';
+    if (cost.ore > 0) costStr += '\u2B21 ' + fmt(cost.ore);
+    if (cost.crystal > 0) costStr += (costStr ? '  ' : '') + '\u25C8 ' + fmt(cost.crystal);
 
-    PLANETS.forEach(p => {
-      const owned = gameState.ownedPlanets.includes(p.id);
-      const isAct = gameState.activePlanet === p.id;
-      const canBuy = !owned && gameState.ore >= p.cost;
-      const locked = !owned && !canBuy;
+    this.dom.upgTooltip.innerHTML = `
+      <div class="utt-name">${upgrade.name}</div>
+      ${lv > 0 ? `<div class="utt-level">LEVEL ${lv}</div>` : ''}
+      <div class="utt-desc">${upgrade.desc}</div>
+      <div class="utt-cost">${costStr}</div>
+    `;
+    this.dom.upgTooltip.classList.add('visible');
 
-      const d = document.createElement('div');
-      d.className = 'pl-chip' + (isAct ? ' act' : canBuy ? ' buy' : locked ? ' lck' : '');
-      d.innerHTML = `
-        <div class="pl-dot" style="background:radial-gradient(circle at 35% 35%,${p.col}cc,${p.col}44);box-shadow:0 0 12px ${p.glow}44"></div>
-        <div style="display:flex;flex-direction:column;gap:2px">
-          <span class="pl-name">${p.name}</span>
-          ${isAct ? '<span class="pl-status">\u25CF ACTIVE</span>' : ''}
-          ${!owned && p.cost > 0 ? `<span class="pl-cost">\u2B21 ${fmt(p.cost)}</span>` : ''}
-          ${owned && !isAct ? `<span class="pl-bonus">+${(p.mb * 100).toFixed(0)}%</span>` : ''}
-        </div>
-        ${!owned ? '<span class="pl-lock">\u{1F512}</span>' : ''}`;
-
-      if (owned) {
-        d.addEventListener('pointerdown', () => {
-          gameState.switchPlanet(p.id);
-          this.toast('WARPING TO ' + p.name);
-        });
-      } else if (canBuy) {
-        d.addEventListener('pointerdown', () => {
-          gameState.colonizePlanet(p.id);
-        });
-      }
-      list.appendChild(d);
-    });
+    const rect = event.target.closest('.bar-upg').getBoundingClientRect();
+    this.dom.upgTooltip.style.left = rect.left + 'px';
+    this.dom.upgTooltip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+    this.dom.upgTooltip.style.top = 'auto';
   }
 
-  _toggleLeftPanel(forceState) {
-    const open = forceState !== undefined ? forceState : !this.leftPanelOpen;
-    this.leftPanelOpen = open;
-    this.dom.leftPanel.classList.toggle('collapsed', !open);
-    this.dom.leftToggle.classList.toggle('panel-hidden', !open);
-    this.dom.leftToggle.innerHTML = open ? '&#x25C0;' : '&#x25B6;';
-  }
-
-  _toggleRightPanel(forceState) {
-    const open = forceState !== undefined ? forceState : !this.rightPanelOpen;
-    this.rightPanelOpen = open;
-    this.dom.rightPanel.classList.toggle('collapsed', !open);
-    this.dom.rightToggle.classList.toggle('panel-hidden', !open);
-    this.dom.rightToggle.innerHTML = open ? '&#x25B6;' : '&#x25C0;';
+  _hideUpgTooltip() {
+    this.dom.upgTooltip.classList.remove('visible');
   }
 
   toast(msg) {

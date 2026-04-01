@@ -61,7 +61,6 @@ export class Robot3D {
       depthWrite: false,
     });
     this.trail = new THREE.Line(this.trailGeo, this.trailMat);
-    this.group.add(this.trail);
 
     // Initialize trail positions
     this.trailPositions = [];

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 const ORBIT_DAMPING = 0.08;
 const ZOOM_SPEED = 0.08;
 const MIN_DISTANCE = 3;
+const PLANET_BUFFER = 0.5;
 const MAX_DISTANCE = 600;
 const MIN_POLAR = 0.1;
 const MAX_POLAR = Math.PI - 0.1;
@@ -124,10 +125,27 @@ export class CameraController {
     );
   }
 
+  /** Register planet spheres for camera collision */
+  setPlanetColliders(colliders) {
+    this._planetColliders = colliders;
+  }
+
   /** Smoothly focus camera on a world position at planet-level zoom */
   focusOnPosition(position, distance = 30) {
+    this._trackFn = null;
     this.targetTarget.copy(position);
     this.targetSpherical.radius = distance;
+  }
+
+  /** Track a moving object's world position each frame */
+  trackObject(getPositionFn, distance = 30) {
+    this._trackFn = getPositionFn;
+    this.targetSpherical.radius = distance;
+  }
+
+  /** Stop tracking, keep current position */
+  stopTracking() {
+    this._trackFn = null;
   }
 
   /** Returns whether the last pointer interaction was a click (not drag) */
@@ -160,12 +178,36 @@ export class CameraController {
       if (this.keys['Space']) this.camera.position.y += speed;
       if (this.keys['KeyC']) this.camera.position.y -= speed;
     } else {
-      // Smooth orbital interpolation
-      this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * ORBIT_DAMPING;
-      this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * ORBIT_DAMPING;
-      this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * ORBIT_DAMPING;
+      // WASD pan in orbital mode
+      const wasdKeys = this.keys['KeyW'] || this.keys['KeyS'] || this.keys['KeyA'] || this.keys['KeyD'];
+      if (wasdKeys) {
+        this._trackFn = null;
+        const panSpeed = this.spherical.radius * 0.8 * dt;
+        const forward = new THREE.Vector3();
+        this.camera.getWorldDirection(forward);
+        forward.y = 0;
+        if (forward.lengthSq() < 0.0001) forward.set(0, 0, -1);
+        forward.normalize();
+        const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+        if (this.keys['KeyW']) this.targetTarget.addScaledVector(forward, panSpeed);
+        if (this.keys['KeyS']) this.targetTarget.addScaledVector(forward, -panSpeed);
+        if (this.keys['KeyA']) this.targetTarget.addScaledVector(right, -panSpeed);
+        if (this.keys['KeyD']) this.targetTarget.addScaledVector(right, panSpeed);
+      }
 
-      this.target.lerp(this.targetTarget, ORBIT_DAMPING);
+      // If tracking a moving object, update target each frame
+      if (this._trackFn) {
+        const pos = this._trackFn();
+        if (pos) this.targetTarget.copy(pos);
+      }
+
+      // Smooth orbital interpolation (frame-rate independent)
+      const damping = 1 - Math.pow(1 - ORBIT_DAMPING, dt * 60);
+      this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * damping;
+      this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * damping;
+      this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * damping;
+
+      this.target.lerp(this.targetTarget, damping);
 
       this._updateCameraPosition();
     }
@@ -173,7 +215,24 @@ export class CameraController {
 
   _updateCameraPosition() {
     const offset = new THREE.Vector3().setFromSpherical(this.spherical);
-    this.camera.position.copy(this.target).add(offset);
+    const newPos = new THREE.Vector3().copy(this.target).add(offset);
+
+    // Planet collision: prevent camera from entering planet sphere
+    if (this._planetColliders) {
+      for (const { position, radius } of this._planetColliders) {
+        const minDist = radius + PLANET_BUFFER;
+        if (newPos.distanceTo(position) < minDist) {
+          const dir = newPos.clone().sub(position);
+          if (dir.lengthSq() < 0.0001) dir.set(0, 1, 0);
+          dir.normalize();
+          newPos.copy(position).addScaledVector(dir, minDist);
+          this.spherical.radius = newPos.distanceTo(this.target);
+          this.targetSpherical.radius = Math.max(this.targetSpherical.radius, this.spherical.radius);
+        }
+      }
+    }
+
+    this.camera.position.copy(newPos);
     this.camera.lookAt(this.target);
 
     // Dynamic near/far based on zoom distance to reduce Z-fighting
