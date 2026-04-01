@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════
    ASTRO HARVEST — Dune Golden UI Theme
-   Warm gold/amber/sand palette, minimalist overlay
+   Warm gold/amber/sand palette, floating panel overlay
    ══════════════════════════════════════════════════════ */
 
 :root {
@@ -10,7 +10,7 @@
   --dune-amber: #c67b30;
   --dune-sand: #e8d5b0;
   --dune-sand-dim: #a89870;
-  --dune-bg: rgba(10, 12, 16, 0.82);
+  --dune-bg: rgba(10, 12, 16, 0.88);
   --dune-bg-solid: #0a0c10;
   --dune-border: rgba(212, 168, 67, 0.25);
   --dune-border-bright: rgba(212, 168, 67, 0.5);
@@ -20,6 +20,7 @@
   --dune-text-dim: #6a5a40;
   --dune-green: #8aaa5a;
   --dune-green-bright: #a4c87a;
+  --panel-width: 280px;
 }
 
 /* ── HUD OVERLAY ── */
@@ -33,332 +34,454 @@
   pointer-events: auto;
 }
 
-/* ══════════════════════════════════════════════════════
-   TOP BAR — Slim resource display
-   ══════════════════════════════════════════════════════ */
-#top-bar {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  height: 36px;
-  width: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16px;
-  background: linear-gradient(180deg, rgba(10,12,16,0.75) 0%, rgba(10,12,16,0.5) 100%);
-  border: 1px solid var(--dune-border);
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  backdrop-filter: blur(8px);
-  z-index: 40;
-}
-
+/* ── MENU BUTTON (top-left) ── */
 #menu-btn {
   position: absolute;
+  top: 12px;
   left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
   font-size: 16px;
   color: var(--dune-text-secondary);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 2px;
-  padding: 4px 8px;
+  background: rgba(10,12,16,0.7);
+  border: 1px solid var(--dune-border);
+  border-radius: 4px;
+  padding: 6px 10px;
   cursor: pointer;
   transition: color 0.2s, border-color 0.2s, background 0.2s;
   line-height: 1;
+  backdrop-filter: blur(6px);
+  z-index: 50;
 }
 #menu-btn:hover {
   color: var(--dune-gold);
-  border-color: var(--dune-border);
-  background: rgba(212, 168, 67, 0.06);
-}
-
-#resources {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-}
-
-.rc {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.rc-icon {
-  font-size: 14px;
-  color: var(--dune-gold);
-  text-shadow: 0 0 8px rgba(212,168,67,0.3);
-  line-height: 1;
-}
-.rc-info {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.rc-lbl {
-  font-size: 9px;
-  color: var(--dune-text-dim);
-  letter-spacing: 2px;
-  line-height: 1;
-}
-.rc-val {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--dune-sand);
-  line-height: 1;
-}
-.rc-rate {
-  font-size: 10px;
-  color: var(--dune-green);
-  text-shadow: 0 0 4px rgba(138,170,90,0.2);
-}
-.rc-sep {
-  width: 1px;
-  height: 18px;
-  background: linear-gradient(180deg, transparent, var(--dune-border), transparent);
+  border-color: var(--dune-border-bright);
+  background: rgba(212, 168, 67, 0.08);
 }
 
 /* ══════════════════════════════════════════════════════
-   BOTTOM BAR — Vic3-style two-row layout
+   FLOATING PLANET PANELS
    ══════════════════════════════════════════════════════ */
-#bottom-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+.planet-panel {
+  position: fixed;
+  top: 50%;
+  width: var(--panel-width);
+  max-height: 80vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(0deg, rgba(10,12,16,0.88) 0%, rgba(10,12,16,0.65) 100%);
-  border-top: 1px solid var(--dune-border);
-  backdrop-filter: blur(10px);
+  background: rgba(10, 12, 16, 0.92);
+  border: 1px solid var(--dune-border);
+  border-radius: 6px;
+  backdrop-filter: blur(14px);
   z-index: 40;
-  transition: transform 350ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              opacity 350ms ease;
-}
-#bottom-bar.minimized {
-  transform: translateY(calc(100% - 6px));
-}
-#bottom-bar.minimized #bar-minimize {
-  transform: translateY(calc(-100% - 10px));
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 0 40px rgba(0,0,0,0.5), 0 0 20px rgba(212,168,67,0.04);
 }
 
-/* ── Tab-rad ── */
-#bar-tab-row {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  padding: 6px 16px 0;
-  flex-shrink: 0;
+#panel-left {
+  left: 12px;
+  transform: translateY(-50%) translateX(-120%);
+}
+#panel-right {
+  right: 12px;
+  transform: translateY(-50%) translateX(120%);
 }
 
-/* ── Tabs (Vic3-solid) ── */
-#bar-tabs {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
+.planet-panel.visible {
+  opacity: 1;
 }
-.bar-tab {
+#panel-left.visible {
+  transform: translateY(-50%) translateX(0);
+}
+#panel-right.visible {
+  transform: translateY(-50%) translateX(0);
+}
+
+/* ── Panel header ── */
+.panel-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--dune-border);
+  flex-shrink: 0;
+  background: rgba(212,168,67,0.04);
+}
+.panel-planet-icon {
+  font-size: 14px;
+  color: var(--dune-gold);
+}
+.panel-planet-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--dune-gold-bright);
+  flex: 1;
+  text-shadow: 0 0 8px rgba(212,168,67,0.2);
+}
+.panel-close {
+  background: transparent;
+  border: none;
+  color: var(--dune-text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: color 0.15s;
+  line-height: 1;
+}
+.panel-close:hover { color: var(--dune-gold); }
+
+/* ── Panel body (scrollable) ── */
+.panel-body {
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dune-gold-dim) transparent;
+}
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--dune-gold-dim); border-radius: 2px; }
+
+/* ── Panel section ── */
+.panel-section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--dune-border);
+}
+.panel-section:last-child {
+  border-bottom: none;
+}
+.panel-section-title {
   font-family: 'Orbitron', sans-serif;
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
   color: var(--dune-text-dim);
-  background: transparent;
-  border: 1px solid var(--dune-border);
-  border-bottom: none;
-  border-radius: 4px 4px 0 0;
-  padding: 7px 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-  position: relative;
-}
-.bar-tab:hover {
-  color: var(--dune-text-secondary);
-  background: rgba(212,168,67,0.04);
-  border-color: var(--dune-border-bright);
-}
-.bar-tab.active {
-  color: var(--dune-gold);
-  background: rgba(212,168,67,0.1);
-  border-color: var(--dune-border-bright);
-  box-shadow: 0 -2px 8px rgba(212,168,67,0.08);
-}
-.bar-tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--dune-gold);
-  box-shadow: 0 0 8px rgba(212,168,67,0.4);
-}
-.tab-icon {
-  font-size: 13px;
-  line-height: 1;
+  margin-bottom: 10px;
+  text-transform: uppercase;
 }
 
-/* ── Tab badge (kjøpbare upgrades) ── */
-.tab-badge {
-  display: none;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 8px;
-  font-weight: 700;
-  color: #fff;
-  background: #c0392b;
-  border-radius: 8px;
-  padding: 1px 5px;
-  line-height: 1.4;
-  min-width: 14px;
-  text-align: center;
-}
-.tab-badge:not(:empty) {
-  display: inline-block;
-}
-
-/* ── Upgrade-rad ── */
-#bar-upgrade-row {
+/* ── Silo bars ── */
+.silo-bar-row {
   display: flex;
   align-items: center;
-  padding: 8px 16px;
-  border-top: 1px solid var(--dune-border);
-  gap: 12px;
-}
-
-/* ── Upgrade icons row (sentrert) ── */
-#bar-upgrades {
-  display: flex;
   gap: 8px;
-  align-items: center;
+  margin-bottom: 8px;
+}
+.silo-label {
+  font-size: 10px;
+  color: var(--dune-text-secondary);
+  letter-spacing: 1px;
+  width: 52px;
+  flex-shrink: 0;
+}
+.silo-track {
   flex: 1;
-  justify-content: center;
-  padding: 2px 0;
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.silo-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.silo-fill.ore     { background: linear-gradient(90deg, var(--dune-gold-dim), var(--dune-gold)); }
+.silo-fill.energy  { background: linear-gradient(90deg, #1a5588, #4af0ff); }
+.silo-fill.crystal { background: linear-gradient(90deg, #551188, #cc44ff); }
+.silo-fill.full    { background: linear-gradient(90deg, #882222, #ff4444); animation: silo-pulse 1.2s ease-in-out infinite; }
+@keyframes silo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.silo-amount {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  color: var(--dune-sand-dim);
+  width: 72px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
-.bar-upg {
-  width: 52px;
-  height: 52px;
+/* ── Base upgrade grid ── */
+.base-upg-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.base-upg-btn {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 4px;
+  padding: 8px 6px;
   background: rgba(10,12,16,0.5);
   border: 1px solid var(--dune-border);
-  border-radius: 8px;
-  font-size: 22px;
+  border-radius: 5px;
   cursor: pointer;
-  position: relative;
   transition: all 0.2s;
-  flex-shrink: 0;
+  text-align: center;
 }
-.bar-upg.can {
+.base-upg-btn:hover:not(:disabled) {
   border-color: var(--dune-border-bright);
-  background: rgba(212,168,67,0.04);
+  background: rgba(212,168,67,0.06);
 }
-.bar-upg.can:hover {
-  background: rgba(212,168,67,0.1);
-  border-color: var(--dune-gold);
-  box-shadow: 0 0 14px rgba(212,168,67,0.15);
-  transform: translateY(-2px);
+.base-upg-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
-.bar-upg.can:active {
-  transform: scale(0.94);
+.base-upg-btn.maxed {
+  border-color: var(--dune-green);
+  opacity: 0.6;
+  cursor: default;
 }
-.bar-upg.no {
-  opacity: 0.2;
-  pointer-events: none;
-}
-.bar-upg-icon {
-  line-height: 1;
-  filter: drop-shadow(0 0 2px rgba(255,255,255,0.08));
-}
-
-/* Level badge */
-.upg-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
+.base-upg-icon { font-size: 18px; line-height: 1; }
+.base-upg-name {
   font-family: 'Orbitron', sans-serif;
   font-size: 8px;
   font-weight: 700;
-  color: var(--dune-gold-bright);
-  background: rgba(10,12,16,0.9);
-  border: 1px solid var(--dune-gold-dim);
-  border-radius: 3px;
-  padding: 1px 4px;
-  line-height: 1.2;
-  text-shadow: 0 0 4px rgba(212,168,67,0.3);
-}
-
-/* Shimmer on affordable upgrades */
-.bar-upg.can::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
-  background: linear-gradient(90deg, transparent, rgba(212,168,67,0.06), transparent);
-  animation: bar-shim 4s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes bar-shim {
-  0%, 100% { transform: translateX(-100%); }
-  50% { transform: translateX(100%); }
-}
-
-/* ── Multiplier buttons ── */
-#bar-mult {
-  display: flex;
-  gap: 3px;
-  flex-shrink: 0;
-}
-.mbtn {
-  padding: 4px 10px;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  background: transparent;
-  border: 1px solid rgba(212,168,67,0.12);
-  color: var(--dune-text-dim);
-  cursor: pointer;
-  transition: all 0.15s;
-  border-radius: 3px;
-}
-.mbtn.on {
-  background: rgba(212,168,67,0.1);
-  border-color: var(--dune-gold-dim);
-  color: var(--dune-gold);
-  text-shadow: 0 0 6px rgba(212,168,67,0.2);
-}
-.mbtn:hover:not(.on) {
-  border-color: rgba(212,168,67,0.25);
   color: var(--dune-text-secondary);
+  letter-spacing: 1px;
+  line-height: 1.2;
+}
+.base-upg-level {
+  font-size: 9px;
+  color: var(--dune-green);
+}
+.base-upg-cost {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  color: var(--dune-gold);
+}
+.base-upg-cost.cant {
+  color: var(--dune-text-dim);
 }
 
-/* ── Minimize button ── */
-#bar-minimize {
-  width: 28px;
-  height: 28px;
+/* ── Build base button ── */
+.build-base-btn {
+  width: 100%;
+  padding: 12px;
+  background: rgba(212,168,67,0.06);
+  border: 1px solid var(--dune-border-bright);
+  border-radius: 5px;
+  color: var(--dune-gold);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.build-base-btn:hover:not(:disabled) {
+  background: rgba(212,168,67,0.12);
+  box-shadow: 0 0 16px rgba(212,168,67,0.1);
+}
+.build-base-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.build-base-cost {
+  font-size: 10px;
+  color: var(--dune-text-secondary);
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+
+/* ── Route list ── */
+.route-item {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(212,168,67,0.08);
+  font-size: 11px;
+}
+.route-item:last-child { border-bottom: none; }
+.route-from-to {
+  flex: 1;
+  color: var(--dune-text-secondary);
+  font-size: 10px;
+}
+.route-resource {
+  color: var(--dune-gold);
+  font-size: 10px;
+}
+.route-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dune-green);
+  flex-shrink: 0;
+}
+.route-status.inactive { background: var(--dune-text-dim); }
+.route-delete {
   background: transparent;
-  border: 1px solid var(--dune-border);
+  border: none;
+  color: var(--dune-text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  transition: color 0.15s;
+}
+.route-delete:hover { color: #ff4444; }
+
+.add-route-btn {
+  width: 100%;
+  padding: 8px;
+  margin-top: 6px;
+  background: transparent;
+  border: 1px dashed var(--dune-border);
   border-radius: 4px;
   color: var(--dune-text-dim);
   font-size: 10px;
+  letter-spacing: 1px;
   cursor: pointer;
-  transition: all 0.2s, transform 350ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  flex-shrink: 0;
+  transition: all 0.2s;
 }
-#bar-minimize:hover {
-  color: var(--dune-gold);
+.add-route-btn:hover {
   border-color: var(--dune-border-bright);
+  color: var(--dune-text-secondary);
+}
+
+/* ── Robot hire buttons ── */
+.hire-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.hire-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  background: rgba(10,12,16,0.5);
+  border: 1px solid var(--dune-border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.hire-btn:hover:not(:disabled) {
+  border-color: var(--dune-border-bright);
+  background: rgba(212,168,67,0.06);
+  transform: translateY(-1px);
+}
+.hire-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.hire-btn-icon { font-size: 20px; line-height: 1; }
+.hire-btn-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--dune-text-secondary);
+  letter-spacing: 1px;
+}
+.hire-btn-count {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dune-sand);
+}
+.hire-btn-cost {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  color: var(--dune-gold);
+}
+.hire-btn-cost.cant { color: var(--dune-text-dim); }
+
+/* ── Active robots list ── */
+.robot-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(212,168,67,0.06);
+  font-size: 11px;
+}
+.robot-row:last-child { border-bottom: none; }
+.robot-row-icon { font-size: 14px; flex-shrink: 0; }
+.robot-row-name { color: var(--dune-text-secondary); flex: 1; font-size: 10px; }
+.robot-row-count {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  color: var(--dune-sand);
+}
+
+/* ── Robot upgrade compact list ── */
+.robot-upg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+.robot-upg-name {
+  font-size: 10px;
+  color: var(--dune-text-secondary);
+  flex: 1;
+}
+.robot-upg-level {
+  font-size: 10px;
+  color: var(--dune-green);
+  width: 36px;
+  text-align: center;
+}
+.robot-upg-btn {
+  padding: 3px 8px;
+  font-size: 9px;
+  font-family: 'Orbitron', sans-serif;
+  background: rgba(212,168,67,0.06);
+  border: 1px solid var(--dune-border);
+  border-radius: 3px;
+  color: var(--dune-gold);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.robot-upg-btn:hover:not(:disabled) {
+  border-color: var(--dune-border-bright);
+  background: rgba(212,168,67,0.12);
+}
+.robot-upg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ══════════════════════════════════════════════════════
+   TUTORIAL HAND
+   ══════════════════════════════════════════════════════ */
+#tutorial-hand {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  display: none;
+  transform: translateX(-50%);
+  text-align: center;
+}
+.tutorial-bubble {
+  background: rgba(10,12,16,0.96);
+  border: 1px solid var(--dune-gold-dim);
+  border-radius: 5px;
+  padding: 8px 14px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--dune-gold);
+  letter-spacing: 2px;
+  text-shadow: 0 0 6px rgba(212,168,67,0.3);
+  white-space: nowrap;
+  box-shadow: 0 0 16px rgba(212,168,67,0.15);
+}
+.tutorial-pointer {
+  color: var(--dune-gold);
+  font-size: 14px;
+  line-height: 1;
+  animation: tut-bounce 0.9s ease-in-out infinite;
+  text-shadow: 0 0 8px rgba(212,168,67,0.4);
+}
+@keyframes tut-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
 }
 
 /* ══════════════════════════════════════════════════════
@@ -378,9 +501,7 @@
   transition: opacity 0.15s;
   border-radius: 4px;
 }
-#upg-tooltip.visible {
-  opacity: 1;
-}
+#upg-tooltip.visible { opacity: 1; }
 
 .utt-name {
   font-family: 'Orbitron', sans-serif;
@@ -428,9 +549,7 @@
   transition: opacity 0.15s;
   border-radius: 4px;
 }
-#planet-tooltip.visible {
-  opacity: 1;
-}
+#planet-tooltip.visible { opacity: 1; }
 
 .pt-name {
   font-family: 'Orbitron', sans-serif;
@@ -462,9 +581,7 @@
   padding-top: 6px;
   margin-top: 4px;
 }
-.pt-stats span {
-  letter-spacing: 1px;
-}
+.pt-stats span { letter-spacing: 1px; }
 .pt-cost {
   font-family: 'Orbitron', sans-serif;
   font-size: 13px;
@@ -479,7 +596,7 @@
    ══════════════════════════════════════════════════════ */
 #toast {
   position: fixed;
-  bottom: 116px;
+  bottom: 40px;
   left: 50%;
   transform: translateX(-50%) translateY(16px);
   background: rgba(10,12,16,0.96);

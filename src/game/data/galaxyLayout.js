@@ -15,8 +15,18 @@ export const SYSTEM_POSITIONS = {
   voidex:   { x: 2000, y: 2000 },
 };
 
-/** No hyperlanes — single solar system, planets orbit the same star. */
-export const HYPERLANES = [];
+/** Hyperlane connections between planet systems (used for ship routes + visuals). */
+export const HYPERLANES = [
+  ['xerion',   'drakon'],
+  ['drakon',   'crystara'],
+  ['crystara', 'voltara'],
+  ['voltara',  'glacius'],
+  ['glacius',  'nebulox'],
+  ['nebulox',  'solaris'],
+  ['solaris',  'voidex'],
+  ['xerion',   'crystara'],  // hub spoke
+  ['xerion',   'voltara'],   // hub spoke
+];
 
 export const GALAXY_SIZE = 4000;
 

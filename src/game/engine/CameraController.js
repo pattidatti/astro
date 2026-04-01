@@ -117,8 +117,9 @@ export class CameraController {
 
   _onWheel(e) {
     e.preventDefault();
-    // Exponential zoom for consistent feel at all distances
-    const zoomFactor = 1 + Math.sign(e.deltaY) * ZOOM_SPEED;
+    const r = this.targetSpherical.radius;
+    const speed = r < 15 ? 0.03 : r < 45 ? 0.05 : ZOOM_SPEED;
+    const zoomFactor = 1 + Math.sign(e.deltaY) * speed;
     this.targetSpherical.radius = Math.max(
       MIN_DISTANCE,
       Math.min(MAX_DISTANCE, this.targetSpherical.radius * zoomFactor)

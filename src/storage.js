@@ -32,8 +32,12 @@ export function startAutoSave(intervalMs = 10000) {
   autoSaveInterval = setInterval(saveToLocal, intervalMs);
 
   // Save on significant actions
-  gameState.on('upgradeBought', saveToLocal);
+  gameState.on('baseUpgraded',  saveToLocal);
+  gameState.on('robotHired',    saveToLocal);
+  gameState.on('robotUpgraded', saveToLocal);
   gameState.on('planetColonized', saveToLocal);
+  gameState.on('routeAdded',    saveToLocal);
+  gameState.on('routeRemoved',  saveToLocal);
 
   // Save on tab close / visibility change
   document.addEventListener('visibilitychange', () => {

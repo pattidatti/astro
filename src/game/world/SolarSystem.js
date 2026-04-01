@@ -174,7 +174,8 @@ export class SolarSystem {
     this._onPlanetChanged = () => this._syncRobots();
     this._onStateLoaded = () => this._syncRobots();
     this._syncRobots();
-    gameState.on('robotsChanged', this._onRobotsChanged);
+    gameState.on('robotHired', this._onRobotsChanged);
+    gameState.on('focusedPlanet', this._onPlanetChanged);
     gameState.on('planetChanged', this._onPlanetChanged);
     gameState.on('stateLoaded', this._onStateLoaded);
 
@@ -209,8 +210,8 @@ export class SolarSystem {
   }
 
   _syncRobots() {
-    const isActive = gameState.activePlanet === this.id;
-    const count = isActive ? gameState.robots : 0;
+    const ps = gameState.getPlanetState(this.id);
+    const count = ps ? Object.values(ps.robots).reduce((s, r) => s + r.count, 0) : 0;
     this.robotManager.syncCount(count);
   }
 
@@ -222,25 +223,27 @@ export class SolarSystem {
     ctx.font = 'bold 28px Orbitron, monospace';
     ctx.textAlign = 'center';
 
-    // Mørk dropshadow i flere lag for kontrast uten synlig ramme
-    ctx.shadowColor = 'rgba(0, 0, 0, 1)';
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = '#000';
-    for (let i = 0; i < 3; i++) ctx.fillText(name, 128, 42);
+    // Mørk kontur + dempet gull under bloom-terskelen (0.55 luminans)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+    ctx.lineWidth = 5;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(name, 128, 42);
 
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#e8d070';
+    ctx.fillStyle = '#b89040';
     ctx.fillText(name, 128, 42);
 
     const texture = new THREE.CanvasTexture(canvas);
-    texture.minFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
     const mat = new THREE.SpriteMaterial({
       map: texture,
       transparent: true,
       depthWrite: false,
+      depthTest: false,
     });
     this.label = new THREE.Sprite(mat);
     this.label.scale.set(12, 3, 1);
+    this.label.renderOrder = 999;
     this.label.position.set(0, 14, 0);
     this.orbitGroup.add(this.label);
   }
@@ -362,10 +365,6 @@ export class SolarSystem {
 
     // Label
     this.label.visible = distance > 15 && distance < 300;
-    if (this.label.visible) {
-      const s = Math.min(1.0, distance / 50);
-      this.label.scale.set(12 * s, 3 * s, 1);
-    }
 
     // Atmosphere — fade out 240→280
     if (this.planet.atmosphereMesh) {
@@ -392,9 +391,10 @@ export class SolarSystem {
   }
 
   dispose() {
-    gameState.off('robotsChanged', this._onRobotsChanged);
+    gameState.off('robotHired',    this._onRobotsChanged);
     gameState.off('planetChanged', this._onPlanetChanged);
-    gameState.off('stateLoaded', this._onStateLoaded);
+    gameState.off('focusedPlanet', this._onPlanetChanged);
+    gameState.off('stateLoaded',   this._onStateLoaded);
     this.planet.dispose();
     this.station.dispose();
     this.robotManager.dispose();

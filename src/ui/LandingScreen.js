@@ -2,6 +2,7 @@ import { hasLocalSave } from '../storage.js';
 import { getCurrentUser, isGoogleUser, upgradeToGoogle } from '../auth.js';
 import { loadFromFirestore } from '../db.js';
 import { isFirebaseConfigured } from '../firebase.js';
+import { AudioManager } from '../game/audio/AudioManager.js';
 
 function fmtOre(n) {
   if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
@@ -132,11 +133,12 @@ export class LandingScreen {
   }
 
   _attachListeners() {
-    document.getElementById('btn-continue').addEventListener('click', () => this._handleResume());
-    document.getElementById('btn-cloud').addEventListener('click', () => this._showCloudSavesPanel());
-    document.getElementById('btn-new').addEventListener('click', () => this._handleNewGame());
-    document.getElementById('btn-settings').addEventListener('click', () => this._showSettingsPanel());
-    document.getElementById('btn-login').addEventListener('click', () => this._handleLogin());
+    const menuClick = () => { AudioManager.unlock(); AudioManager.play('UI_MENU_CLICK'); };
+    document.getElementById('btn-continue').addEventListener('click', () => { menuClick(); this._handleResume(); });
+    document.getElementById('btn-cloud').addEventListener('click', () => { menuClick(); this._showCloudSavesPanel(); });
+    document.getElementById('btn-new').addEventListener('click', () => { menuClick(); this._handleNewGame(); });
+    document.getElementById('btn-settings').addEventListener('click', () => { menuClick(); this._showSettingsPanel(); });
+    document.getElementById('btn-login').addEventListener('click', () => { menuClick(); this._handleLogin(); });
   }
 
   show() {
@@ -172,6 +174,7 @@ export class LandingScreen {
   _handleNewGame() {
     const btn = document.getElementById('btn-new');
     if (this._newGamePending) {
+      AudioManager.play('UI_CONFIRM');
       clearTimeout(this._newGameTimer);
       this._resolve({ action: 'newgame' });
       this._dismiss();
@@ -284,12 +287,19 @@ export class LandingScreen {
   _showSettingsPanel() {
     this._closeSubPanel();
     const panel = document.getElementById('landing-subpanel');
+    const muted = AudioManager.isMuted();
+    const vol   = AudioManager.getVolume();
     panel.innerHTML = `
       <div class="landing-panel-box">
         <div class="landing-panel-title">SETTINGS</div>
         <div class="landing-setting-row">
-          <span class="landing-setting-label">AUDIO VOLUME</span>
-          <span class="landing-setting-ctrl">&#x25A0;&#x25A0;&#x25A0;&#x25A1;&#x25A1;</span>
+          <span class="landing-setting-label">VOLUME</span>
+          <input type="range" id="audio-vol-slider" min="0" max="1" step="0.05" value="${vol}"
+            style="width:90px;accent-color:var(--dune-gold);vertical-align:middle">
+        </div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">MUTE</span>
+          <button id="audio-mute-btn" class="landing-setting-ctrl" style="cursor:pointer;background:transparent;border:1px solid var(--dune-border);color:var(--dune-gold);padding:2px 10px;font-family:inherit;font-size:inherit">${muted ? 'ON' : 'OFF'}</button>
         </div>
         <div class="landing-setting-row">
           <span class="landing-setting-label">RENDER QUALITY</span>
@@ -299,11 +309,19 @@ export class LandingScreen {
           <span class="landing-setting-label">BLOOM EFFECT</span>
           <span class="landing-setting-ctrl">ON</span>
         </div>
-        <div class="landing-coming-soon">— COMING IN FUTURE UPDATE —</div>
+        <div class="landing-coming-soon">— MORE SETTINGS IN FUTURE UPDATE —</div>
         <button class="landing-btn-back" id="panel-back">BACK</button>
       </div>
     `;
     panel.classList.add('open');
+    document.getElementById('audio-vol-slider').addEventListener('input', (e) => {
+      AudioManager.setVolume(parseFloat(e.target.value));
+    });
+    document.getElementById('audio-mute-btn').addEventListener('click', (e) => {
+      const nowMuted = AudioManager.toggleMute();
+      if (!nowMuted) AudioManager.play('UI_MUTE');
+      e.currentTarget.textContent = nowMuted ? 'ON' : 'OFF';
+    });
     document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
   }
 

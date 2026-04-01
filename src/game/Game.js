@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { AudioManager } from './audio/AudioManager.js';
+import { PLANETS } from './data/planets.js';
 import { SceneManager } from './engine/SceneManager.js';
 import { CameraController } from './engine/CameraController.js';
 import { RenderPipeline } from './engine/RenderPipeline.js';
@@ -9,6 +11,7 @@ import { Galaxy } from './world/Galaxy.js';
 import { Skybox } from './world/Skybox.js';
 import { ClickFeedback } from './effects/ClickFeedback.js';
 import { GodRayShader } from './shaders/effects/GodRayShader.js';
+import { ShipManager3D } from './world/ShipManager3D.js';
 
 export function createGame() {
   const container = document.getElementById('game-container');
@@ -67,14 +70,24 @@ export function createGame() {
       const { planetId, system } = target;
 
       if (gameState.ownedPlanets.includes(planetId)) {
+        AudioManager.play('PLANET_CLICK_3D');
         gameState.switchPlanet(planetId);
       } else {
-        gameState.colonizePlanet(planetId);
+        // Colonize from the currently focused planet
+        const toDef = PLANETS.find(p => p.id === planetId);
+        const { ore: oreCost = 0, energy: energyCost = 0 } = toDef?.baseCost ?? {};
+        const canAfford = gameState.siloHas(gameState.focusedPlanet, 'ore', oreCost) &&
+                          gameState.siloHas(gameState.focusedPlanet, 'energy', energyCost);
+        AudioManager.play(canAfford ? 'PLANET_CLICK_3D' : 'COLONIZE_DENIED');
+        gameState.colonizePlanet(gameState.focusedPlanet, planetId);
       }
 
       cameraController.trackObject(() => system.planetWorldPosition, 55);
     });
   }
+
+  // --- Ships ---
+  const shipManager = new ShipManager3D(sceneManager.scene, animationLoop, galaxy);
 
   // Focus on active planet at start — track the orbiting planet
   const startSystem = galaxy.getSystem(gameState.activePlanet);
@@ -149,5 +162,6 @@ export function createGame() {
     inputManager,
     galaxy,
     skybox,
+    shipManager,
   };
 }

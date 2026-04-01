@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>ASTRO HARVEST</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -24,72 +25,54 @@
   <!-- HUD Overlay -->
   <div id="hud-overlay" style="visibility:hidden">
 
-    <!-- Top resource bar -->
-    <div id="top-bar">
-      <button id="menu-btn" title="Menu [ESC]">&#x2630;</button>
-      <div id="resources">
-        <div class="rc">
-          <div class="rc-icon">&#x2B21;</div>
-          <div class="rc-info">
-            <div class="rc-lbl">ORE</div>
-            <div class="rc-val" id="vOre">0</div>
-          </div>
-          <div class="rc-rate" id="rOre">+0/s</div>
+    <!-- Menu button (top-left) -->
+    <button id="menu-btn" title="Menu [ESC]">&#x2630;</button>
+
+    <!-- Left floating panel — Space Base -->
+    <div id="panel-left" class="planet-panel">
+      <div class="panel-header">
+        <span class="panel-planet-icon">&#x2B21;</span>
+        <span class="panel-planet-name">SPACE BASE</span>
+        <button class="panel-close" id="panel-close">&#x2715;</button>
+      </div>
+      <div class="panel-body">
+        <div class="panel-section" id="panel-base">
+          <!-- Populated by PlanetPanel.js -->
         </div>
-        <div class="rc-sep"></div>
-        <div class="rc" id="rcCrys" style="display:none">
-          <div class="rc-icon">&#x25C8;</div>
-          <div class="rc-info">
-            <div class="rc-lbl">CRYSTAL</div>
-            <div class="rc-val" id="vCrys">0</div>
-          </div>
-          <div class="rc-rate" id="rCrys">+0/s</div>
+        <div class="panel-section" id="panel-silos">
+          <!-- Resource silos -->
         </div>
-        <div class="rc-sep" id="sepCrys" style="display:none"></div>
-        <div class="rc" id="rcEnrg" style="display:none">
-          <div class="rc-icon">&#9889;</div>
-          <div class="rc-info">
-            <div class="rc-lbl">ENERGY</div>
-            <div class="rc-val" id="vEnrg">0</div>
-          </div>
-          <div class="rc-rate" id="rEnrg">+0/s</div>
+        <div class="panel-section" id="panel-routes">
+          <!-- Ship routes -->
         </div>
       </div>
     </div>
 
-    <!-- Bottom bar: Vic3-style tabs + centered upgrades -->
-    <div id="bottom-bar">
-      <!-- Tab-rad -->
-      <div id="bar-tab-row">
-        <div id="bar-tabs">
-          <button class="bar-tab active" data-cat="mining">
-            <span class="tab-icon">&#x26CF;</span>
-            <span class="tab-label">MINING</span>
-            <span class="tab-badge" id="tbadge-mining"></span>
-          </button>
-          <button class="bar-tab" data-cat="robots">
-            <span class="tab-icon">&#x1F916;</span>
-            <span class="tab-label">ROBOTS</span>
-            <span class="tab-badge" id="tbadge-robots"></span>
-          </button>
-          <button class="bar-tab" data-cat="tech">
-            <span class="tab-icon">&#x1F52C;</span>
-            <span class="tab-label">TECH</span>
-            <span class="tab-badge" id="tbadge-tech"></span>
-          </button>
-        </div>
-        <button id="bar-minimize" title="Minimize [Tab]">&#x25BC;</button>
+    <!-- Right floating panel — Robots -->
+    <div id="panel-right" class="planet-panel">
+      <div class="panel-header">
+        <span class="panel-planet-icon">&#x1F916;</span>
+        <span class="panel-planet-name">ROBOTS</span>
       </div>
-      <!-- Upgrade-rad -->
-      <div id="bar-upgrade-row">
-        <div id="bar-upgrades"></div>
-        <div id="bar-mult">
-          <button class="mbtn on" id="m1">&times;1</button>
-          <button class="mbtn" id="m10">&times;10</button>
-          <button class="mbtn" id="m100">&times;100</button>
+      <div class="panel-body">
+        <div class="panel-section" id="panel-robots-hire">
+          <!-- Robot hire buttons -->
+        </div>
+        <div class="panel-section" id="panel-robots-active">
+          <!-- Active robot list -->
+        </div>
+        <div class="panel-section" id="panel-robots-upgrades">
+          <!-- Robot specialization upgrades -->
         </div>
       </div>
     </div>
+
+    <!-- Tutorial hand pointer -->
+    <div id="tutorial-hand">
+      <div class="tutorial-bubble"></div>
+      <div class="tutorial-pointer">&#9660;</div>
+    </div>
+
   </div>
 
   <!-- Tooltips -->

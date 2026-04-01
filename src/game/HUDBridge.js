@@ -1,6 +1,7 @@
 import { gameState } from './GameState.js';
-import { UPGRADES } from './data/upgrades.js';
 import { PLANETS } from './data/planets.js';
+import { PlanetPanel } from './ui/PlanetPanel.js';
+import { AudioManager } from './audio/AudioManager.js';
 
 const fmt = (n) => {
   if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
@@ -10,98 +11,37 @@ const fmt = (n) => {
   return Math.floor(n) + '';
 };
 
+// Camera distance threshold for showing planet panels
+const PANEL_SHOW_DISTANCE = 80;
+
 export class HUDBridge {
-  constructor(game) {
+  constructor(game, { onMenu } = {}) {
     this.game = game;
-    this.activeTab = 'mining';
-    this.minimized = false;
-    this.updateTimer = 0;
+    this._planetPanel = new PlanetPanel();
+    this._panelsVisible = false;
+    this._currentPlanetId = null;
 
     this.dom = {
-      vOre: document.getElementById('vOre'),
-      rOre: document.getElementById('rOre'),
-      vCrys: document.getElementById('vCrys'),
-      rCrys: document.getElementById('rCrys'),
-      vEnrg: document.getElementById('vEnrg'),
-      rEnrg: document.getElementById('rEnrg'),
-      rcCrys: document.getElementById('rcCrys'),
-      sepCrys: document.getElementById('sepCrys'),
-      rcEnrg: document.getElementById('rcEnrg'),
-      barUpgrades: document.getElementById('bar-upgrades'),
-      barMinimize: document.getElementById('bar-minimize'),
-      bottomBar: document.getElementById('bottom-bar'),
-      upgTooltip: document.getElementById('upg-tooltip'),
+      upgTooltip:    document.getElementById('upg-tooltip'),
       planetTooltip: document.getElementById('planet-tooltip'),
-      toast: document.getElementById('toast'),
+      toast:         document.getElementById('toast'),
     };
 
-    this._setupTabs();
-    this._setupMultiplier();
-    this._setupMinimize();
+    if (onMenu) {
+      document.getElementById('menu-btn')?.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        onMenu();
+      });
+    }
+
     this._setupPlanetHover();
     this._setupEvents();
-    this._renderUpgrades();
 
-    // Show offline earnings or welcome
-    if (gameState._offlineEarnings) {
-      const oe = gameState._offlineEarnings;
-      const hrs = Math.floor(oe.elapsed / 3600);
-      const mins = Math.floor((oe.elapsed % 3600) / 60);
-      const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-      this.toast(`OFFLINE ${timeStr}: +${fmt(oe.earned)} ORE`);
-      delete gameState._offlineEarnings;
-    } else {
-      this.toast('WELCOME, COMMANDER');
-    }
+    // Show welcome toast
+    this.toast('WELCOME, COMMANDER');
 
-    // Register with animation loop for per-frame updates
+    // Per-frame update
     game.animationLoop.onUpdate((dt) => this.update(dt));
-  }
-
-  _setupTabs() {
-    document.querySelectorAll('.bar-tab').forEach(btn => {
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        this.activeTab = btn.dataset.cat;
-        document.querySelectorAll('.bar-tab').forEach(b => b.classList.toggle('active', b === btn));
-        this._renderUpgrades();
-      });
-    });
-  }
-
-  _updateTabBadges() {
-    const cats = ['mining', 'robots', 'tech'];
-    for (const cat of cats) {
-      const count = UPGRADES.filter(u => u.cat === cat && gameState.canAfford(u.id)).length;
-      const badge = document.getElementById(`tbadge-${cat}`);
-      if (!badge) continue;
-      badge.textContent = count > 0 ? count : '';
-    }
-  }
-
-  _setupMultiplier() {
-    document.getElementById('m1').addEventListener('pointerdown', () => this._setMult(1));
-    document.getElementById('m10').addEventListener('pointerdown', () => this._setMult(10));
-    document.getElementById('m100').addEventListener('pointerdown', () => this._setMult(100));
-  }
-
-  _setupMinimize() {
-    this.dom.barMinimize.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      this._toggleMinimize();
-    });
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'Tab') {
-        e.preventDefault();
-        this._toggleMinimize();
-      }
-    });
-  }
-
-  _toggleMinimize() {
-    this.minimized = !this.minimized;
-    this.dom.bottomBar.classList.toggle('minimized', this.minimized);
-    this.dom.barMinimize.textContent = this.minimized ? '\u25B2' : '\u25BC';
   }
 
   _setupPlanetHover() {
@@ -115,143 +55,121 @@ export class HUDBridge {
       const planet = PLANETS.find(p => p.id === planetId);
       if (!planet) return;
       const owned = gameState.ownedPlanets.includes(planetId);
-      const isActive = gameState.activePlanet === planetId;
+      const isFocused = gameState.focusedPlanet === planetId;
+      const ps = gameState.getPlanetState(planetId);
+
+      let statsHtml = '';
+      if (owned && ps) {
+        const totalRobots = Object.values(ps.robots).reduce((s, r) => s + r.count, 0);
+        const oreAmount = ps.silos.ore?.amount || 0;
+        const oreCapacity = ps.silos.ore?.capacity || 0;
+        statsHtml = `
+          <div class="pt-stats">
+            <span>ROBOTS — ${totalRobots}</span>
+            <span>ORE — ${fmt(oreAmount)} / ${fmt(oreCapacity)}</span>
+            <span>PLANETS — ${gameState.ownedPlanets.length}</span>
+          </div>
+          ${!isFocused ? '<div class="pt-type" style="margin-top:6px">Click to warp</div>' : ''}
+        `;
+      }
+
+      const oreCost = planet.baseCost?.ore || 0;
+      const energyCost = planet.baseCost?.energy || 0;
+      let costStr = '';
+      if (oreCost > 0) costStr += `⬡ ${fmt(oreCost)} ORE`;
+      if (energyCost > 0) costStr += (costStr ? '  ' : '') + `⚡ ${fmt(energyCost)} ENERGY`;
 
       tt.innerHTML = `
         <div class="pt-name">${planet.name}</div>
         <div class="pt-type">${planet.desc}</div>
         ${planet.mb > 0 ? `<div class="pt-bonus">+${(planet.mb * 100).toFixed(0)}% extraction bonus</div>` : ''}
-        ${owned && isActive ? `<div class="pt-stats">
-          <span>DRONES \u2014 ${fmt(gameState.robots)}</span>
-          <span>WORLDS \u2014 ${gameState.ownedPlanets.length}</span>
-          <span>ORE/S \u2014 ${fmt(gameState.oreRate)}</span>
-        </div>` : ''}
-        ${owned && !isActive ? '<div class="pt-type">Click to warp</div>' : ''}
-        ${!owned ? `<div class="pt-cost">\u2B21 ${fmt(planet.cost)}</div>` : ''}
+        ${statsHtml}
+        ${!owned ? `<div class="pt-cost">${costStr || 'FREE'}</div>` : ''}
       `;
       tt.classList.add('visible');
       tt.style.left = (x + 16) + 'px';
-      tt.style.top = (y - 10) + 'px';
+      tt.style.top  = (y - 10) + 'px';
     });
   }
 
   _setupEvents() {
-    gameState.on('crystalUnlocked', () => {
-      this.dom.rcCrys.style.display = '';
-      this.dom.sepCrys.style.display = '';
-      this.toast('\u{1F48E} CRYSTAL EXTRACTION ONLINE');
-    });
-    gameState.on('energyUnlocked', () => {
-      this.dom.rcEnrg.style.display = '';
-      this.toast('\u26A1 FUSION REACTOR ONLINE');
-    });
     gameState.on('planetColonized', (id) => {
+      AudioManager.play('PLANET_COLONIZED');
+      this._suppressNextPlanetChanged = true; // colonize emits focusedPlanet right after — avoid double-sound
       const p = PLANETS.find(x => x.id === id);
-      this.toast('\u{1F30D} COLONIZED: ' + (p ? p.name : id));
+      this.toast('🌍 COLONIZED: ' + (p ? p.name : id));
+    });
+    gameState.on('focusedPlanet', (id) => {
+      if (this._suppressNextPlanetChanged) {
+        this._suppressNextPlanetChanged = false;
+      } else {
+        AudioManager.play('PLANET_CHANGED');
+      }
+      this._currentPlanetId = id;
+      // If panels are visible, update them for new planet
+      if (this._panelsVisible) {
+        this._planetPanel.show(id);
+      }
+    });
+    gameState.on('baseUpgraded', ({ planetId }) => {
+      AudioManager.play('BASE_UPGRADED');
+      if (planetId === this._currentPlanetId) return; // panel re-renders itself
+      this.toast('⬆ BASE UPGRADED');
+    });
+    gameState.on('robotHired', () => {
+      AudioManager.play('ROBOT_HIRED');
+    });
+    gameState.on('robotUpgraded', () => {
+      AudioManager.play('ROBOT_UPGRADED');
+    });
+    gameState.on('shipLaunched', () => {
+      AudioManager.play('SHIP_LAUNCHED');
+    });
+    gameState.on('shipArrived', (ship) => {
+      AudioManager.play('SHIP_ARRIVED');
+      const toDef = PLANETS.find(p => p.id === ship.toPlanet);
+      if (toDef) this.toast(`📦 DELIVERY: ${fmt(ship.amount)} to ${toDef.name}`);
+    });
+    gameState.on('depositUnlocked', ({ planetId, resource, zones }) => {
+      AudioManager.play('DEPOSIT_UNLOCKED');
+      this.toast(`🔭 NEW DEPOSIT: ${resource.toUpperCase()} (${zones} zones)`);
+    });
+    gameState.on('routeAdded', () => {
+      AudioManager.play('UI_ROUTE_ADD');
+    });
+    gameState.on('routeRemoved', () => {
+      AudioManager.play('UI_CLICK_DENIED');
     });
     gameState.on('stateLoaded', () => {
-      if (gameState.crystalUnlocked) {
-        this.dom.rcCrys.style.display = '';
-        this.dom.sepCrys.style.display = '';
-      }
-      if (gameState.energyUnlocked) {
-        this.dom.rcEnrg.style.display = '';
-      }
+      AudioManager.play('STATE_LOADED');
+      this._currentPlanetId = gameState.focusedPlanet;
     });
   }
 
-  update(dt) {
-    this.dom.vOre.textContent = fmt(gameState.ore);
-    this.dom.rOre.textContent = '+' + fmt(gameState.oreRate) + '/s';
+  update(_dt) {
+    const camera = this.game.camera;
+    const cameraController = this.game.cameraController;
+    const galaxy = this.game.galaxy;
 
-    if (gameState.crystalUnlocked) {
-      this.dom.vCrys.textContent = fmt(gameState.crystal);
-      this.dom.rCrys.textContent = '+' + fmt(gameState.crystalRate) + '/s';
-    }
-    if (gameState.energyUnlocked) {
-      this.dom.vEnrg.textContent = fmt(gameState.energy);
-      this.dom.rEnrg.textContent = '+' + fmt(gameState.energyRate) + '/s';
-    }
+    // Check camera distance to focused planet to decide panel visibility
+    const planetPos = galaxy.getPlanetWorldPosition(gameState.focusedPlanet);
+    if (planetPos) {
+      const dist = camera.position.distanceTo(planetPos);
+      const shouldShow = dist < PANEL_SHOW_DISTANCE;
 
-    // Periodic upgrade re-render
-    this.updateTimer += dt;
-    if (this.updateTimer >= 0.35) {
-      this.updateTimer = 0;
-      this._renderUpgrades();
-    }
-  }
-
-  _setMult(m) {
-    gameState.buyMult = m;
-    [1, 10, 100].forEach(v => document.getElementById('m' + v).classList.toggle('on', v === m));
-    this._renderUpgrades();
-  }
-
-  _renderUpgrades() {
-    const container = this.dom.barUpgrades;
-    container.innerHTML = '';
-
-    const filtered = UPGRADES.filter(u => {
-      if (u.cat !== this.activeTab) return false;
-      const lv = gameState.upgradeLevels[u.id] || 0;
-      if (u.max && lv >= u.max) return false;
-      if (u.effect === 'cry' && gameState.crystalUnlocked) return false;
-      if (u.effect === 'enr' && gameState.energyUnlocked) return false;
-      return true;
-    });
-
-    for (const u of filtered) {
-      const can = gameState.canAfford(u.id);
-      const lv = gameState.upgradeLevels[u.id] || 0;
-
-      const el = document.createElement('div');
-      el.className = 'bar-upg ' + (can ? 'can' : 'no');
-      el.innerHTML = `
-        <span class="bar-upg-icon">${u.icon}</span>
-        ${lv > 0 ? `<span class="upg-badge">${lv}</span>` : ''}
-      `;
-
-      // Hover tooltip
-      el.addEventListener('mouseenter', (e) => this._showUpgTooltip(u, e));
-      el.addEventListener('mouseleave', () => this._hideUpgTooltip());
-
-      // Click to buy
-      if (can) {
-        el.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
-          gameState.buyUpgrade(u.id);
-          this._renderUpgrades();
-        });
+      if (shouldShow && !this._panelsVisible) {
+        this._panelsVisible = true;
+        this._planetPanel.show(gameState.focusedPlanet);
+      } else if (!shouldShow && this._panelsVisible) {
+        this._panelsVisible = false;
+        this._planetPanel.hide();
       }
-      container.appendChild(el);
+
+      // Update panel position to track planet Y on screen
+      if (this._panelsVisible) {
+        this._planetPanel.update(camera, galaxy);
+      }
     }
-
-    this._updateTabBadges();
-  }
-
-  _showUpgTooltip(upgrade, event) {
-    const cost = gameState.upgradeCost(upgrade.id);
-    const lv = gameState.upgradeLevels[upgrade.id] || 0;
-    let costStr = '';
-    if (cost.ore > 0) costStr += '\u2B21 ' + fmt(cost.ore);
-    if (cost.crystal > 0) costStr += (costStr ? '  ' : '') + '\u25C8 ' + fmt(cost.crystal);
-
-    this.dom.upgTooltip.innerHTML = `
-      <div class="utt-name">${upgrade.name}</div>
-      ${lv > 0 ? `<div class="utt-level">LEVEL ${lv}</div>` : ''}
-      <div class="utt-desc">${upgrade.desc}</div>
-      <div class="utt-cost">${costStr}</div>
-    `;
-    this.dom.upgTooltip.classList.add('visible');
-
-    const rect = event.target.closest('.bar-upg').getBoundingClientRect();
-    this.dom.upgTooltip.style.left = rect.left + 'px';
-    this.dom.upgTooltip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
-    this.dom.upgTooltip.style.top = 'auto';
-  }
-
-  _hideUpgTooltip() {
-    this.dom.upgTooltip.classList.remove('visible');
   }
 
   toast(msg) {
