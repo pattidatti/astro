@@ -55,6 +55,17 @@ export class Galaxy {
     }
   }
 
+  /**
+   * Wire a delivery burst callback on all systems.
+   * Called from Game.js after clickFeedback is constructed.
+   * @param {(worldPos: THREE.Vector3, amount: number) => void} fn
+   */
+  setDeliveryCallback(fn) {
+    for (const id in this.systems) {
+      this.systems[id].setDeliveryCallback(fn);
+    }
+  }
+
   /** Get a SolarSystem by planet ID */
   getSystem(planetId) {
     return this.systems[planetId];
@@ -81,6 +92,15 @@ export class Galaxy {
       });
     }
     return targets;
+  }
+
+  /** Get all station click targets for InputManager registration */
+  getStationClickTargets() {
+    return Object.entries(this.systems).map(([id, sys]) => ({
+      mesh: sys.stationClickTarget,
+      planetId: id,
+      system: sys,
+    }));
   }
 
   /**

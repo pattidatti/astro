@@ -1,53 +1,84 @@
 import * as THREE from 'three';
 import { Robot3D } from '../Robot3D.js';
 
-/** Sphere body with articulated legs */
+/**
+ * Capacitor-sphere energy collector.
+ * Pulsing amber core, spinning collector rings, orbiting capacitor pods.
+ */
 export class SpiderBot extends Robot3D {
   _buildMesh() {
     const group = new THREE.Group();
 
-    // Body sphere
-    const bodyGeo = new THREE.SphereGeometry(0.3, 10, 10);
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x555555,
-      metalness: 0.8,
-      roughness: 0.3,
+    // ── CORE SPHERE ───────────────────────────────────────────────────────
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0xd4a843, emissive: 0xd4a843, emissiveIntensity: 2.2,
+      metalness: 0.25, roughness: 0.45,
     });
-    group.add(new THREE.Mesh(bodyGeo, bodyMat));
+    this._core = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), coreMat);
+    group.add(this._core);
 
-    // Eyes (emissive)
-    const eyeGeo = new THREE.SphereGeometry(0.05, 6, 6);
-    const eyeMat = new THREE.MeshStandardMaterial({
-      color: 0xff2200,
-      emissive: 0xff2200,
-      emissiveIntensity: 2.0,
+    // ── OUTER ICOSAHEDRON CAGE (wireframe) ───────────────────────────────
+    const cageMat = new THREE.MeshStandardMaterial({
+      color: 0xc8a84e, emissive: 0xc8a84e, emissiveIntensity: 0.2,
+      metalness: 0.9, roughness: 0.2, wireframe: true,
     });
-    for (let side = -1; side <= 1; side += 2) {
-      const eye = new THREE.Mesh(eyeGeo, eyeMat);
-      eye.position.set(0.2, 0.1, side * 0.12);
-      group.add(eye);
+    this._cage = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), cageMat);
+    group.add(this._cage);
+
+    // ── 3 COLLECTOR RINGS (different axes, different speeds) ─────────────
+    const ringDefs = [
+      { rx: 0,             ry: 0,             speed:  0.9  },
+      { rx: Math.PI / 2,   ry: 0,             speed: -1.3  },
+      { rx: Math.PI / 4,   ry: Math.PI / 4,   speed:  1.7  },
+    ];
+    this._rings = [];
+    for (const def of ringDefs) {
+      const ringMat = new THREE.MeshStandardMaterial({
+        color: 0x4488ff, emissive: 0x4488ff, emissiveIntensity: 0.85,
+        metalness: 0.7, roughness: 0.2,
+      });
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.54, 0.022, 8, 32),
+        ringMat,
+      );
+      ring.rotation.set(def.rx, def.ry, 0);
+      this._rings.push({ mesh: ring, speed: def.speed });
+      group.add(ring);
     }
 
-    // 6 legs
-    this._legs = [];
-    const legMat = new THREE.MeshStandardMaterial({
-      color: 0x777777,
-      metalness: 0.7,
-      roughness: 0.4,
-    });
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2;
-      const legGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.4, 4);
-      const leg = new THREE.Mesh(legGeo, legMat);
-      leg.position.set(
-        Math.cos(angle) * 0.25,
-        -0.15,
-        Math.sin(angle) * 0.25
+    // ── 4 CAPACITOR PODS (orbit around core) ─────────────────────────────
+    this._podGroups = [];
+    for (let i = 0; i < 4; i++) {
+      const podGroup = new THREE.Group();
+      podGroup.rotation.y = (i / 4) * Math.PI * 2;
+
+      // Arm
+      const arm = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.013, 0.013, 0.32, 4),
+        new THREE.MeshStandardMaterial({ color: 0x8a7a4e, metalness: 0.8 }),
       );
-      leg.rotation.z = Math.cos(angle) * 0.6;
-      leg.rotation.x = Math.sin(angle) * 0.6;
-      this._legs.push(leg);
-      group.add(leg);
+      arm.rotation.z = Math.PI / 2;
+      arm.position.x = 0.53;
+      podGroup.add(arm);
+
+      // Pod body
+      const pod = new THREE.Mesh(
+        new THREE.BoxGeometry(0.095, 0.095, 0.2),
+        new THREE.MeshStandardMaterial({ color: 0x1a1208, metalness: 0.88, roughness: 0.32 }),
+      );
+      pod.position.x = 0.69;
+      podGroup.add(pod);
+
+      // Emissive tip
+      const tipMat = new THREE.MeshStandardMaterial({
+        color: 0xff8800, emissive: 0xff8800, emissiveIntensity: 2.0,
+      });
+      const podTip = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 6), tipMat);
+      podTip.position.set(0.69, 0.11, 0);
+      this._podGroups.push({ group: podGroup, tipMat, phase: i * 1.57 });
+      podGroup.add(podTip);
+
+      group.add(podGroup);
     }
 
     return group;
@@ -55,10 +86,27 @@ export class SpiderBot extends Robot3D {
 
   update(dt, time) {
     super.update(dt, time);
-    // Animate legs
-    for (let i = 0; i < this._legs.length; i++) {
-      const phase = (i / this._legs.length) * Math.PI * 2;
-      this._legs[i].rotation.z += Math.sin(time * 4 + phase) * dt * 2;
+
+    // Core breathes
+    if (this._core) {
+      this._core.material.emissiveIntensity = 1.6 + Math.sin(time * 2.8) * 1.0;
+    }
+
+    // Cage slowly tumbles
+    if (this._cage) {
+      this._cage.rotation.y += dt * 0.28;
+      this._cage.rotation.z += dt * 0.19;
+    }
+
+    // Rings spin on their respective axes
+    for (const r of this._rings) {
+      r.mesh.rotation.z += dt * r.speed;
+    }
+
+    // Pods orbit and flicker
+    for (const p of this._podGroups) {
+      p.group.rotation.y += dt * 0.55;
+      p.tipMat.emissiveIntensity = 1.4 + Math.abs(Math.sin(time * 4.1 + p.phase)) * 1.2;
     }
   }
 }

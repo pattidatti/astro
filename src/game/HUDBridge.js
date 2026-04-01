@@ -19,14 +19,16 @@ export class HUDBridge {
     this.game = game;
     this._planetPanel = new PlanetPanel();
     this._panelsVisible = false;
-    this._currentPlanetId = null;
+    this._currentPlanetId = gameState.focusedPlanet;
     this._suppressNextPlanetChanged = false;
 
     this.dom = {
-      upgTooltip:    document.getElementById('upg-tooltip'),
-      planetTooltip: document.getElementById('planet-tooltip'),
-      toast:         document.getElementById('toast'),
+      upgTooltip:       document.getElementById('upg-tooltip'),
+      planetTooltip:    document.getElementById('planet-tooltip'),
+      stationTargetBox: document.getElementById('station-target-box'),
+      toast:            document.getElementById('toast'),
     };
+    this._hoveredStationId = null;
 
     if (onMenu) {
       document.getElementById('menu-btn')?.addEventListener('pointerdown', (e) => {
@@ -36,6 +38,7 @@ export class HUDBridge {
     }
 
     this._setupPlanetHover();
+    this._setupStationHover();
     this._setupEvents();
 
     // Show welcome toast
@@ -86,6 +89,36 @@ export class HUDBridge {
         ${planet.mb > 0 ? `<div class="pt-bonus">+${(planet.mb * 100).toFixed(0)}% extraction bonus</div>` : ''}
         ${statsHtml}
         ${!owned ? `<div class="pt-cost">${costStr || 'FREE'}</div>` : ''}
+      `;
+      tt.classList.add('visible');
+      tt.style.left = (x + 16) + 'px';
+      tt.style.top  = (y - 10) + 'px';
+    });
+  }
+
+  _setupStationHover() {
+    this.game.inputManager.onHoverStation((stationPlanetId, x, y) => {
+      this._hoveredStationId = stationPlanetId;
+      const tt = this.dom.planetTooltip;
+      if (!stationPlanetId) {
+        tt.classList.remove('visible');
+        return;
+      }
+      const planet = PLANETS.find(p => p.id === stationPlanetId);
+      const ps = gameState.getPlanetState(stationPlanetId);
+      if (!planet || !ps) return;
+
+      const { ore, energy, crystal } = ps.silos;
+      const siloRows = [
+        ore ? `<span>⬡ ORE — ${fmt(ore.amount)} / ${fmt(ore.capacity)}</span>` : '',
+        energy ? `<span>⚡ ENERGY — ${fmt(energy.amount)} / ${fmt(energy.capacity)}</span>` : '',
+        (crystal?.capacity > 0) ? `<span>◈ CRYSTAL — ${fmt(crystal.amount)} / ${fmt(crystal.capacity)}</span>` : '',
+      ].filter(Boolean).join('');
+
+      tt.innerHTML = `
+        <div class="pt-name">${planet.name} Station</div>
+        <div class="pt-type">ORBITAL STATION</div>
+        <div class="pt-stats">${siloRows}</div>
       `;
       tt.classList.add('visible');
       tt.style.left = (x + 16) + 'px';
@@ -152,6 +185,21 @@ export class HUDBridge {
     const cameraController = this.game.cameraController;
     const galaxy = this.game.galaxy;
 
+    // Update station target box screen position
+    if (this._hoveredStationId) {
+      const sys = galaxy.getSystem(this._hoveredStationId);
+      if (sys) {
+        const pos = sys.stationWorldPosition.clone().project(camera);
+        const x = (pos.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-pos.y * 0.5 + 0.5) * window.innerHeight;
+        this.dom.stationTargetBox.style.left = x + 'px';
+        this.dom.stationTargetBox.style.top  = y + 'px';
+        this.dom.stationTargetBox.classList.add('visible');
+      }
+    } else {
+      this.dom.stationTargetBox.classList.remove('visible');
+    }
+
     // Check camera distance to focused planet to decide panel visibility
     const planetPos = galaxy.getPlanetWorldPosition(gameState.focusedPlanet);
     if (planetPos) {
@@ -168,7 +216,7 @@ export class HUDBridge {
 
       // Update panel position to track planet Y on screen
       if (this._panelsVisible) {
-        this._planetPanel.update(camera, galaxy);
+        this._planetPanel.update(camera, cameraController.target);
       }
     }
   }

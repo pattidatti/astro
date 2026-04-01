@@ -37,6 +37,8 @@ export class CameraController {
     this.keys = {};
     this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
+    this._lastZoom = 0;
+
     this._bindEvents();
     this._updateCameraPosition();
   }
@@ -117,8 +119,18 @@ export class CameraController {
 
   _onWheel(e) {
     e.preventDefault();
+    const now = performance.now();
     const r = this.targetSpherical.radius;
-    const speed = r < 15 ? 0.03 : r < 45 ? 0.05 : ZOOM_SPEED;
+    // Detect touchpad: pixel-mode scroll with small per-event delta.
+    // Mouse wheel typically sends |deltaY| ≥ 100; touchpad sends < 50.
+    const isTouchpad = e.deltaMode === 0 && Math.abs(e.deltaY) < 50;
+    // Throttle: touchpad fires ~30 events/s; mouse wheel fires ~3/s.
+    // At planet level, slow down further. At galaxy level, throttle touchpad more.
+    const throttleMs = r < 15 ? 120 : r < 45 ? 50 : isTouchpad ? 100 : 16;
+    if (now - this._lastZoom < throttleMs) return;
+    this._lastZoom = now;
+
+    const speed = r < 15 ? 0.04 : r < 45 ? 0.08 : isTouchpad ? 0.08 : 0.10;
     const zoomFactor = 1 + Math.sign(e.deltaY) * speed;
     this.targetSpherical.radius = Math.max(
       MIN_DISTANCE,

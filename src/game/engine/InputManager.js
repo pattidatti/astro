@@ -13,6 +13,9 @@ export class InputManager {
 
     this._hoveredPlanet = null;
     this._onHoverCallbacks = [];
+    this._hoveredStation = null;
+    this._onHoverStationCallbacks = [];
+    this._onMissedClickCallbacks = [];
 
     // Click handler — only fire on pointerup if it wasn't a drag
     domElement.addEventListener('pointerup', (e) => this._onPointerUp(e));
@@ -35,6 +38,16 @@ export class InputManager {
     this._onHoverCallbacks.push(fn);
   }
 
+  /** Register a station hover callback: fn(stationPlanetId|null, clientX, clientY) */
+  onHoverStation(fn) {
+    this._onHoverStationCallbacks.push(fn);
+  }
+
+  /** Register a callback fired when a click lands on nothing registered */
+  onMissedClick(fn) {
+    this._onMissedClickCallbacks.push(fn);
+  }
+
   _onPointerUp(e) {
     if (!this.cameraController.wasClick()) return;
     if (e.button !== 0) return;
@@ -52,6 +65,8 @@ export class InputManager {
       if (obj.userData._clickHandler) {
         obj.userData._clickHandler(hits[0]);
       }
+    } else {
+      for (const fn of this._onMissedClickCallbacks) fn();
     }
   }
 
@@ -63,24 +78,37 @@ export class InputManager {
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const hits = this.raycaster.intersectObjects(this.clickables, false);
 
-    // Walk up hierarchy to find planetId
+    // Check for station hit first (station hitbox is inner — takes priority)
+    let stationId = null;
     let planetId = null;
-    if (hits.length > 0) {
-      let current = hits[0].object;
-      while (current) {
-        if (current.userData?.planetId) {
-          planetId = current.userData.planetId;
-          break;
-        }
-        current = current.parent;
+    for (const hit of hits) {
+      if (hit.object.userData?.stationId && !stationId) {
+        stationId = hit.object.userData.stationId;
       }
+      if (!stationId) {
+        let current = hit.object;
+        while (current) {
+          if (current.userData?.planetId) {
+            planetId = current.userData.planetId;
+            break;
+          }
+          current = current.parent;
+        }
+      }
+      if (stationId) break;
     }
 
-    if (planetId !== this._hoveredPlanet || planetId) {
-      this._hoveredPlanet = planetId;
-      for (const fn of this._onHoverCallbacks) {
-        fn(planetId, e.clientX, e.clientY);
-      }
+    // Station hover
+    if (stationId !== this._hoveredStation) {
+      this._hoveredStation = stationId;
+      for (const fn of this._onHoverStationCallbacks) fn(stationId, e.clientX, e.clientY);
+    }
+
+    // Planet hover — suppress if hovering station
+    const effectivePlanetId = stationId ? null : planetId;
+    if (effectivePlanetId !== this._hoveredPlanet) {
+      this._hoveredPlanet = effectivePlanetId;
+      for (const fn of this._onHoverCallbacks) fn(effectivePlanetId, e.clientX, e.clientY);
     }
   }
 }

@@ -57,6 +57,11 @@ export function createGame() {
   const galaxy = new Galaxy();
   sceneManager.add(galaxy.group);
 
+  // Wire delivery ceremony: robot arrival → clickFeedback burst at station
+  galaxy.setDeliveryCallback((worldPos, amount) => {
+    clickFeedback.deliveryBurst(worldPos, amount);
+  });
+
   // Planet collision colliders — use live position getters for orbiting planets
   const planetColliders = Object.values(galaxy.systems).map(sys => ({
     get position() { return sys.planetWorldPosition; },
@@ -83,6 +88,14 @@ export function createGame() {
       }
 
       cameraController.trackObject(() => system.planetWorldPosition, 55);
+    });
+  }
+
+  // Register station click targets
+  for (const target of galaxy.getStationClickTargets()) {
+    inputManager.addClickable(target.mesh, () => {
+      AudioManager.play('PLANET_CLICK_3D');
+      cameraController.trackObject(() => target.system.stationWorldPosition, 12);
     });
   }
 

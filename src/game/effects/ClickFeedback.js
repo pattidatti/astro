@@ -1,15 +1,19 @@
 import * as THREE from 'three';
 
-const MAX_RINGS = 8;
-const RING_LIFETIME = 0.6;
+const MAX_RINGS            = 8;
+const RING_LIFETIME        = 0.6;
+const MAX_DELIVERY_RINGS   = 4;
+const DELIVERY_LIFETIME    = 1.0;
 
 /**
  * 3D click feedback: expanding ring + floating number at click point.
+ * Also handles delivery ceremony bursts at station positions.
  */
 export class ClickFeedback {
   constructor(scene) {
     this.scene = scene;
-    this.activeRings = [];
+    this.activeRings        = [];
+    this.activeDeliveryRings = [];
   }
 
   /**
@@ -84,7 +88,96 @@ export class ClickFeedback {
     return sprite;
   }
 
+  /**
+   * Spawn a delivery ceremony burst at a station world position.
+   * Larger ring, brighter text, floats upward.
+   * @param {THREE.Vector3} worldPos - Station world position
+   * @param {number} amount          - Cargo amount to show
+   */
+  deliveryBurst(worldPos, amount) {
+    // Expanding energy ring
+    const ringGeo = new THREE.RingGeometry(0.4, 0.7, 40);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffcc44,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.copy(worldPos);
+    ring.rotation.x = Math.PI / 2; // lay flat
+    this.scene.add(ring);
+
+    // Larger, brighter floating number
+    const sprite = this._createDeliverySprite(amount);
+    sprite.position.copy(worldPos).setY(worldPos.y + 1.0);
+    this.scene.add(sprite);
+
+    const entry = { ring, sprite, age: 0, startY: worldPos.y };
+    this.activeDeliveryRings.push(entry);
+
+    // Cap pool
+    while (this.activeDeliveryRings.length > MAX_DELIVERY_RINGS) {
+      this._disposeDeliveryEntry(this.activeDeliveryRings.shift());
+    }
+  }
+
+  _createDeliverySprite(amount) {
+    const canvas = document.createElement('canvas');
+    canvas.width  = 192;
+    canvas.height = 80;
+    const ctx = canvas.getContext('2d');
+    ctx.font      = 'bold 44px Orbitron, monospace';
+    ctx.textAlign = 'center';
+    // White glow halo
+    ctx.fillStyle  = 'rgba(255,255,255,0.25)';
+    ctx.fillText('+' + Math.round(amount), 96, 56);
+    // Gold foreground
+    ctx.fillStyle = '#ffcc44';
+    ctx.fillText('+' + Math.round(amount), 96, 54);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    const mat = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(4.5, 2.2, 1);
+    return sprite;
+  }
+
+  _disposeDeliveryEntry(entry) {
+    this.scene.remove(entry.ring);
+    this.scene.remove(entry.sprite);
+    entry.ring.geometry.dispose();
+    entry.ring.material.dispose();
+    entry.sprite.material.map.dispose();
+    entry.sprite.material.dispose();
+  }
+
   update(dt) {
+    // Delivery rings
+    for (let i = this.activeDeliveryRings.length - 1; i >= 0; i--) {
+      const entry = this.activeDeliveryRings[i];
+      entry.age += dt;
+      if (entry.age >= DELIVERY_LIFETIME) {
+        this._disposeDeliveryEntry(entry);
+        this.activeDeliveryRings.splice(i, 1);
+        continue;
+      }
+      const t = entry.age / DELIVERY_LIFETIME;
+      entry.ring.scale.setScalar(1 + t * 7);
+      entry.ring.material.opacity = (1 - t) * 0.9;
+      entry.sprite.position.y     = entry.startY + 1.0 + t * 4;
+      entry.sprite.material.opacity = 1 - t;
+    }
+
     for (let i = this.activeRings.length - 1; i >= 0; i--) {
       const entry = this.activeRings[i];
       entry.age += dt;

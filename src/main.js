@@ -21,6 +21,7 @@ async function openPauseMenu() {
     return;
   } else if (choice.action === 'newgame') {
     localStorage.removeItem('astro_save');
+    sessionStorage.setItem('astro_force_newgame', '1');
     location.reload();
   } else if (choice.action === 'cloud' && choice.saveData) {
     localStorage.setItem('astro_save', JSON.stringify(choice.saveData));
@@ -42,11 +43,18 @@ async function boot() {
   // Launch Three.js immediately — galaxy renders behind landing screen
   const game = createGame();
 
-  // Show landing screen
-  const landing = new LandingScreen();
-  await landing.init();
-  landing.show();
-  const choice = await landing.waitForChoice();
+  // Check if we're returning from a pause-menu "New Game" reload
+  let choice;
+  const forceNew = sessionStorage.getItem('astro_force_newgame');
+  if (forceNew) {
+    sessionStorage.removeItem('astro_force_newgame');
+    choice = { action: 'newgame' };
+  } else {
+    const landing = new LandingScreen();
+    await landing.init();
+    landing.show();
+    choice = await landing.waitForChoice();
+  }
 
   // ── Phase 2: Apply chosen action ──────────────────────────────
   let bestSave = null;

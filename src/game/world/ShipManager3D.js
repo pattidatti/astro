@@ -22,8 +22,9 @@ export class ShipManager3D {
     }
 
     // Listen for ship events
-    gameState.on('shipLaunched', (data) => this._onShipLaunched(data));
-    gameState.on('shipArrived',  (data) => this._onShipArrived(data));
+    gameState.on('shipLaunched',       (data) => this._onShipLaunched(data));
+    gameState.on('shipArrived',        (data) => this._onShipArrived(data));
+    gameState.on('colonyShipLaunched', (data) => this._onShipLaunched(data));
 
     // Per-frame update
     animationLoop.onUpdate((dt) => this._update(dt));
@@ -55,6 +56,21 @@ export class ShipManager3D {
 
   _update(_dt) {
     for (const [shipId, entry] of this._active) {
+      // Colony ships self-manage their t (not tracked in gameState.activeShips)
+      if (entry.data.isColony) {
+        entry.data.t += _dt / entry.data.duration;
+        if (entry.data.t >= 1) {
+          entry.ship3d.deactivate();
+          this._pool.push(entry.ship3d);
+          this._active.delete(shipId);
+          continue;
+        }
+        const fromPos = this._galaxy.getPlanetWorldPosition(entry.data.fromPlanet);
+        const toPos   = this._galaxy.getPlanetWorldPosition(entry.data.toPlanet);
+        if (fromPos && toPos) entry.ship3d.update(entry.data.t, fromPos, toPos);
+        continue;
+      }
+
       // Find corresponding active ship data from gameState
       const shipData = gameState.activeShips.find(s => s.id === shipId);
       if (!shipData) {

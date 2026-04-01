@@ -12,8 +12,9 @@ export class Tutorial {
     this._bubbleEl = this._handEl?.querySelector('.tutorial-bubble');
     this._steps = this._defineSteps();
 
-    if (this._step >= 0 && this._handEl) {
+    if (this._handEl) {
       game.animationLoop.onUpdate(() => this._tick());
+      gameState.on('stateLoaded', () => { this._step = gameState.tutorialStep; });
     }
   }
 
@@ -61,27 +62,46 @@ export class Tutorial {
       return;
     }
 
+    // Measure bubble dimensions before final placement
+    this._handEl.style.visibility = 'hidden';
     this._handEl.style.display = 'block';
-    this._handEl.style.left = (rect.left + rect.width / 2) + 'px';
-    this._handEl.style.top  = (rect.top - 60) + 'px';
+    this._handEl.style.left = '0px';
+    this._handEl.style.top  = '0px';
+    const handW = this._handEl.offsetWidth;
+    const handH = this._handEl.offsetHeight;
+    this._handEl.style.visibility = '';
+
+    const margin = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Default: above target with small gap
+    let left = rect.left + rect.width / 2;
+    let top  = rect.top - handH - 10;
+
+    // If too close to top, flip below target instead
+    if (top < margin) top = rect.bottom + 10;
+
+    // Clamp horizontal (element is centered via translateX(-50%))
+    left = Math.max(handW / 2 + margin, Math.min(vw - handW / 2 - margin, left));
+    // Clamp vertical
+    top  = Math.max(margin, Math.min(vh - handH - margin, top));
+
+    this._handEl.style.left = left + 'px';
+    this._handEl.style.top  = top + 'px';
   }
 
   _defineSteps() {
-    const game = this._game;
     return [
-      {
-        message: 'ZOOM IN ON XERION TO BEGIN',
-        condition: () => {
-          const ps = game.galaxy?.getPlanetWorldPosition('xerion');
-          if (!ps) return false;
-          return game.camera.position.distanceTo(ps) < 80;
-        },
-        targetEl: () => null,
-      },
       {
         message: 'BUILD YOUR SPACE BASE',
         condition: () => gameState.getPlanetState('xerion')?.hasBase === true,
-        targetEl: () => document.querySelector('#panel-base .build-base-btn'),
+        targetEl: () => document.querySelector('.build-base-btn'),
+      },
+      {
+        message: 'HIRE AN ENERGY HARVESTER',
+        condition: () => (gameState.getPlanetState('xerion')?.robots.energyBot.count ?? 0) >= 1,
+        targetEl: () => document.querySelector('.hire-energy-btn'),
       },
       {
         message: 'HIRE YOUR FIRST MINER',
@@ -94,19 +114,20 @@ export class Tutorial {
         targetEl: () => document.querySelector('#panel-silos .silo-bar-row'),
       },
       {
-        message: 'HIRE AN ENERGY HARVESTER',
-        condition: () => (gameState.getPlanetState('xerion')?.robots.energyBot.count ?? 0) >= 1,
-        targetEl: () => document.querySelector('.hire-energy-btn'),
-      },
-      {
         message: 'EXPAND YOUR BASE STORAGE',
         condition: () => (gameState.getPlanetState('xerion')?.baseLevels.storage ?? 0) >= 1,
         targetEl: () => document.querySelector('.base-upg-btn'),
       },
       {
-        // Final step — auto-complete
+        // Final step — show for 4 seconds, then complete
         message: 'GOOD LUCK, COMMANDER',
-        condition: () => true,
+        condition: (() => {
+          let shownAt = null;
+          return () => {
+            if (!shownAt) { shownAt = Date.now(); return false; }
+            return Date.now() - shownAt > 4000;
+          };
+        })(),
         targetEl: () => null,
       },
     ];

@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+
+const CARGO_THRESHOLD_DISPLAY = 3; // matches Robot3D CARGO_THRESHOLD for the "+N" display
+
 import { Planet3D } from '../objects/Planet3D.js';
 import { Station3D } from '../objects/Station3D.js';
 import { RobotManager3D } from '../objects/RobotManager3D.js';
@@ -6,6 +9,7 @@ import { DustCloud } from '../effects/DustCloud.js';
 import { NebulaVolume } from '../effects/NebulaVolume.js';
 import { AsteroidBelt } from '../effects/AsteroidBelt.js';
 import { LensFlare } from '../effects/LensFlare.js';
+import { MiningBurst } from '../effects/MiningBurst.js';
 import { gameState } from '../GameState.js';
 
 /**
@@ -45,12 +49,30 @@ export class SolarSystem {
 
     // Station
     this.station = new Station3D();
+    this.station.init(planetDef.id);
     this.orbitGroup.add(this.station.group);
 
     // Robots
     this.robotManager = new RobotManager3D();
     this.orbitGroup.add(this.robotManager.group);
     this._lastStationSync = 0;
+
+    // Mining burst effect (planet-local space — added to orbitGroup)
+    this.miningBurst = new MiningBurst(this.orbitGroup);
+
+    // Wire robot callbacks
+    this.robotManager.onMiningBurst = (localPos, normal) => {
+      this.miningBurst.spawn(localPos, normal);
+    };
+    this.robotManager.onDelivery = () => {
+      this.station.flashDelivery();
+      if (this._onDeliveryWorld) {
+        const worldPos = new THREE.Vector3();
+        this.station.group.getWorldPosition(worldPos);
+        this._onDeliveryWorld(worldPos, CARGO_THRESHOLD_DISPLAY);
+      }
+    };
+    this._onDeliveryWorld = null; // set via setDeliveryCallback(fn)
 
     // Dust cloud (tinted to planet glow)
     this.dustCloud = new DustCloud(planetDef.glow);
@@ -248,8 +270,25 @@ export class SolarSystem {
     this.orbitGroup.add(this.label);
   }
 
+  /**
+   * Wire a callback that fires (with world-space station pos + amount)
+   * whenever a robot delivers cargo. Used to trigger ClickFeedback.deliveryBurst().
+   * @param {(worldPos: THREE.Vector3, amount: number) => void} fn
+   */
+  setDeliveryCallback(fn) {
+    this._onDeliveryWorld = fn;
+  }
+
   get clickTarget() {
     return this.planet.clickTarget;
+  }
+
+  get stationClickTarget() {
+    return this.station.hitboxMesh;
+  }
+
+  get stationWorldPosition() {
+    return this.station.stationWorldPosition;
   }
 
   /** System center (sun position) */
@@ -291,11 +330,12 @@ export class SolarSystem {
       this.planet.update(time);
     }
 
-    // Station
-    const stationVisible = distance < 80;
+    // Station — only visible on colonized planets
+    const _ps = gameState.getPlanetState(this.id);
+    const stationVisible = distance < 80 && !!_ps?.hasBase;
     this.station.group.visible = stationVisible;
     if (stationVisible) {
-      this.station.update(time);
+      this.station.update(time, dt);
       if (time - this._lastStationSync > 0.2) {
         this._lastStationSync = time;
         this.robotManager.setStationPosition(this.station.group.position);
@@ -307,6 +347,7 @@ export class SolarSystem {
     this.robotManager.group.visible = robotsVisible;
     if (robotsVisible && dt !== undefined) {
       this.robotManager.update(dt, time);
+      this.miningBurst.update(dt);
     }
 
     // Asteroid belt — fade out 180→220
@@ -398,6 +439,7 @@ export class SolarSystem {
     this.planet.dispose();
     this.station.dispose();
     this.robotManager.dispose();
+    this.miningBurst.dispose();
     this.dustCloud.dispose();
     this.nebulaVolume.dispose();
     this.nebulaVolume2.dispose();

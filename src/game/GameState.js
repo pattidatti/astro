@@ -3,6 +3,10 @@ import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult
 
 const SAVE_VERSION = 2;
 
+const COLONY_SHIP_BUILD_COST = { ore: 300 };
+const COLONY_SHIP_BUILD_TIME = 20;   // seconds
+const COLONY_SHIP_TRAVEL_TIME = 6;   // seconds
+
 class EventEmitter {
   constructor() { this._listeners = {}; }
   on(evt, fn) { (this._listeners[evt] ||= []).push(fn); }
@@ -30,6 +34,7 @@ function makePlanetState(planetDef) {
     deposits: JSON.parse(JSON.stringify(planetDef.deposits)),
     upgradeLevels: {},
     buildQueue: [],
+    colonyShipBuildQueue: [], // [{ progress: 0 }] — builds one at a time
     // Scout deposit unlock progress (seconds needed to unlock one zone)
     depositProgress: { ore: 0, crystal: 0, energy: 0 },
   };
@@ -48,20 +53,20 @@ class GameState extends EventEmitter {
     this.focusedPlanet = 'xerion';
     this.routes = [];
     this.activeShips = []; // NOT serialized — runtime only
+    this.colonyShipsInOrbit = []; // [{ id, fromPlanetId }]
     this.tutorialStep = 0;
     this.lastSaved = Date.now();
 
-    // Bootstrap Xerion with a free base
+    // Bootstrap Xerion with starter energy (player must build base manually)
     const xerionDef = PLANETS.find(p => p.id === 'xerion');
     const ps = makePlanetState(xerionDef);
-    ps.hasBase = true;
+    ps.silos.energy.amount = 50;
     this.planetState['xerion'] = ps;
   }
 
   reset() {
     this._initFresh();
     this.emit('stateLoaded');
-    this.emit('robotHired', { planetId: 'xerion' });
   }
 
   // ─── Getters ──────────────────────────────────────────────────────────────
@@ -143,39 +148,78 @@ class GameState extends EventEmitter {
     return silo && silo.capacity > 0 && silo.amount < silo.capacity;
   }
 
-  // ─── Planet management ────────────────────────────────────────────────────
+  // ─── Colony ship system ───────────────────────────────────────────────────
 
-  /**
-   * Colonize a new planet by sending a colony ship from fromPlanet.
-   * Deducts baseCost from fromPlanet's silos.
-   */
-  colonizePlanet(fromPlanetId, toPlanetId) {
-    if (this.ownedPlanets.includes(toPlanetId)) return false;
-    if (!this.ownedPlanets.includes(fromPlanetId)) return false;
+  /** Queue a colony ship build on the given planet. Costs COLONY_SHIP_BUILD_COST. */
+  queueColonyShipBuild(planetId) {
+    if (!this.ownedPlanets.includes(planetId)) return false;
+    const ps = this.getPlanetState(planetId);
+    if (!ps) return false;
+    const { ore = 0, energy = 0 } = COLONY_SHIP_BUILD_COST;
+    if (ore > 0 && !this.siloHas(planetId, 'ore', ore)) return false;
+    if (energy > 0 && !this.siloHas(planetId, 'energy', energy)) return false;
+    if (ore > 0) this.deductFromSilo(planetId, 'ore', ore);
+    if (energy > 0) this.deductFromSilo(planetId, 'energy', energy);
+    ps.colonyShipBuildQueue.push({ progress: 0 });
+    this.emit('colonyShipQueued', planetId);
+    return true;
+  }
 
-    const toDef = PLANETS.find(p => p.id === toPlanetId);
+  /** Advance colony ship build queues. Called each frame by ProductionSystem. */
+  tickColonyShipBuilds(dt) {
+    for (const planetId of this.ownedPlanets) {
+      const ps = this.getPlanetState(planetId);
+      if (!ps?.colonyShipBuildQueue?.length) continue;
+      const item = ps.colonyShipBuildQueue[0];
+      item.progress += dt;
+      if (item.progress >= COLONY_SHIP_BUILD_TIME) {
+        ps.colonyShipBuildQueue.shift();
+        const id = `cs-${planetId}-${Date.now()}`;
+        this.colonyShipsInOrbit.push({ id, fromPlanetId: planetId });
+        this.emit('colonyShipBuilt', { id, fromPlanetId: planetId });
+      }
+    }
+  }
+
+  /** Launch a colony ship in orbit toward a target planet. Deducts baseCost at launch. */
+  launchColonyShip(shipId, targetPlanetId) {
+    const shipIdx = this.colonyShipsInOrbit.findIndex(s => s.id === shipId);
+    if (shipIdx < 0) return false;
+    if (this.ownedPlanets.includes(targetPlanetId)) return false;
+
+    const toDef = PLANETS.find(p => p.id === targetPlanetId);
     if (!toDef) return false;
 
-    const { ore: oreCost, energy: energyCost } = toDef.baseCost;
-
-    // Check affordability
+    const { fromPlanetId } = this.colonyShipsInOrbit[shipIdx];
+    const { ore: oreCost = 0, energy: energyCost = 0 } = toDef.baseCost;
     if (oreCost > 0 && !this.siloHas(fromPlanetId, 'ore', oreCost)) return false;
     if (energyCost > 0 && !this.siloHas(fromPlanetId, 'energy', energyCost)) return false;
-
-    // Deduct costs
     if (oreCost > 0) this.deductFromSilo(fromPlanetId, 'ore', oreCost);
     if (energyCost > 0) this.deductFromSilo(fromPlanetId, 'energy', energyCost);
 
-    // Initialize planet state
+    this.colonyShipsInOrbit.splice(shipIdx, 1);
+    this._finalizeColonization(fromPlanetId, targetPlanetId);
+    this.emit('colonyShipDeparted', {
+      id: shipId,
+      fromPlanetId,
+      toPlanetId: targetPlanetId,
+      duration: COLONY_SHIP_TRAVEL_TIME,
+      t: 0,
+    });
+    return true;
+  }
+
+  /** Internal: initialize new planet as owned with a base. */
+  _finalizeColonization(fromPlanetId, toPlanetId) {
+    const toDef = PLANETS.find(p => p.id === toPlanetId);
+    if (!toDef) return;
     const ps = makePlanetState(toDef);
     ps.hasBase = true;
     this.planetState[toPlanetId] = ps;
     this.ownedPlanets.push(toPlanetId);
-
     this.focusedPlanet = toPlanetId;
     this.emit('planetColonized', toPlanetId);
     this.emit('focusedPlanet', toPlanetId);
-    return true;
   }
 
   /** Switch focused planet (must be owned) */
@@ -184,6 +228,23 @@ class GameState extends EventEmitter {
     this.focusedPlanet = planetId;
     this.emit('focusedPlanet', planetId);
     this.emit('planetChanged', planetId); // backward compat for Skybox/Game.js
+    return true;
+  }
+
+  // ─── Build base ───────────────────────────────────────────────────────────
+
+  buildBase(planetId) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps || ps.hasBase) return false;
+    const def = PLANETS.find(p => p.id === planetId);
+    if (!def) return false;
+    const { ore: oreCost = 0, energy: energyCost = 0 } = def.baseCost;
+    if (oreCost > 0 && !this.siloHas(planetId, 'ore', oreCost)) return false;
+    if (energyCost > 0 && !this.siloHas(planetId, 'energy', energyCost)) return false;
+    if (oreCost > 0) this.deductFromSilo(planetId, 'ore', oreCost);
+    if (energyCost > 0) this.deductFromSilo(planetId, 'energy', energyCost);
+    ps.hasBase = true;
+    this.emit('baseBuilt', planetId);
     return true;
   }
 
@@ -309,6 +370,7 @@ class GameState extends EventEmitter {
       ownedPlanets: this.ownedPlanets.slice(),
       focusedPlanet: this.focusedPlanet,
       routes: JSON.parse(JSON.stringify(this.routes)),
+      colonyShipsInOrbit: JSON.parse(JSON.stringify(this.colonyShipsInOrbit)),
       tutorialStep: this.tutorialStep,
       lastSaved: Date.now(),
     };
@@ -323,11 +385,12 @@ class GameState extends EventEmitter {
       return;
     }
 
-    this.planetState    = data.planetState ?? {};
-    this.ownedPlanets   = data.ownedPlanets ?? ['xerion'];
-    this.focusedPlanet  = data.focusedPlanet ?? 'xerion';
-    this.routes         = data.routes ?? [];
-    this.activeShips    = []; // reconstructed by RouteSystem
+    this.planetState         = data.planetState ?? {};
+    this.ownedPlanets        = data.ownedPlanets ?? ['xerion'];
+    this.focusedPlanet       = data.focusedPlanet ?? 'xerion';
+    this.routes              = data.routes ?? [];
+    this.activeShips         = []; // reconstructed by RouteSystem
+    this.colonyShipsInOrbit  = data.colonyShipsInOrbit ?? [];
     this.tutorialStep   = data.tutorialStep ?? -1; // assume tutorial complete for existing saves
     this.lastSaved      = data.lastSaved ?? Date.now();
 
@@ -336,6 +399,11 @@ class GameState extends EventEmitter {
       const ps = makePlanetState(PLANETS.find(p => p.id === 'xerion'));
       ps.hasBase = true;
       this.planetState['xerion'] = ps;
+    }
+
+    // Backwards compat: ensure colonyShipBuildQueue exists on all planet states
+    for (const ps of Object.values(this.planetState)) {
+      if (!ps.colonyShipBuildQueue) ps.colonyShipBuildQueue = [];
     }
 
     this.emit('stateLoaded');

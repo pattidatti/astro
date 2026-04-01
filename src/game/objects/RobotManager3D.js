@@ -17,6 +17,8 @@ export class RobotManager3D {
     this.group = new THREE.Group();
     this.robots = [];
     this.targetCount = 0;
+    this.onDelivery    = null; // (stationLocalPos: THREE.Vector3) => void
+    this.onMiningBurst = null; // (localPos: THREE.Vector3, normal: THREE.Vector3) => void
   }
 
   /**
@@ -45,6 +47,14 @@ export class RobotManager3D {
       if (this._stationPos) {
         robot.stationPos.copy(this._stationPos);
       }
+      // Wire delivery and burst callbacks through to manager-level handlers
+      robot.onDelivery = () => {
+        if (this.onDelivery) this.onDelivery(robot.stationPos);
+      };
+      robot.onMiningBurst = (localPos, normal) => {
+        if (this.onMiningBurst) this.onMiningBurst(localPos, normal);
+      };
+
       this.robots.push(robot);
       this.group.add(robot.group);
       this.group.add(robot.trail);

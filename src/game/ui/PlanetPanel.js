@@ -1,6 +1,6 @@
 import { gameState } from '../GameState.js';
 import { PLANETS } from '../data/planets.js';
-import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES } from '../data/upgrades.js';
+import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult } from '../data/upgrades.js';
 import { createRoute, SHIPPABLE_RESOURCES } from '../data/routes.js';
 import * as THREE from 'three';
 import { AudioManager } from '../audio/AudioManager.js';
@@ -27,6 +27,7 @@ export class PlanetPanel {
     this._visible = false;
     this._planetId = null;
     this._renderTimer = 0;
+    this._tooltipEl = document.getElementById('upg-tooltip');
 
     // Close button
     document.getElementById('panel-close')?.addEventListener('pointerdown', () => {
@@ -35,13 +36,28 @@ export class PlanetPanel {
 
     // Listen for relevant state changes to trigger re-render
     const rerender = () => { if (this._visible) this._renderAll(); };
+    gameState.on('baseBuilt',        rerender);
     gameState.on('baseUpgraded',     rerender);
     gameState.on('robotHired',       rerender);
     gameState.on('robotUpgraded',    rerender);
     gameState.on('routeAdded',       rerender);
     gameState.on('routeRemoved',     rerender);
     gameState.on('depositUnlocked',  rerender);
-    gameState.on('productionTick',   () => { if (this._visible) this._renderSilos(); });
+    gameState.on('productionTick', () => {
+      if (!this._visible) return;
+      this._renderSilos();
+      const now = performance.now();
+      if (now - this._renderTimer > 1000) {
+        this._renderTimer = now;
+        const ps = gameState.getPlanetState(this._planetId);
+        const def = PLANETS.find(p => p.id === this._planetId);
+        if (ps && def) {
+          this._renderBase(ps, def);
+          this._renderHire(ps, def);
+          this._renderRobotUpgrades(ps);
+        }
+      }
+    });
   }
 
   /** Show panels for a given planet */
@@ -61,14 +77,11 @@ export class PlanetPanel {
     this._rightEl.classList.remove('visible');
   }
 
-  /** Call each frame to reposition panels to match planet's screen Y */
-  update(camera, galaxy) {
-    if (!this._visible || !this._planetId) return;
+  /** Call each frame to reposition panels to match the camera's look-at target screen Y */
+  update(camera, anchorPos) {
+    if (!this._visible || !this._planetId || !anchorPos) return;
 
-    const worldPos = galaxy.getPlanetWorldPosition(this._planetId);
-    if (!worldPos) return;
-
-    _ndc.copy(worldPos).project(camera);
+    _ndc.copy(anchorPos).project(camera);
     // Only reposition if planet is reasonably on screen
     if (_ndc.z > 1.0) return;
 
@@ -104,19 +117,46 @@ export class PlanetPanel {
     if (!el) return;
 
     if (!ps || !ps.hasBase) {
-      // Show build base button
-      const { ore: oreCost, energy: energyCost } = def.baseCost;
+      const { ore: oreCost = 0, energy: energyCost = 0 } = def.baseCost;
       const canAfford = gameState.siloHas(this._planetId, 'ore', oreCost) &&
                         gameState.siloHas(this._planetId, 'energy', energyCost);
 
-      // For colonies (other planets), the base is built via colony ship
-      // Xerion starts with base built
-      el.innerHTML = `
-        <div class="panel-section-title">SPACE BASE</div>
-        <div style="font-size:11px;color:var(--dune-text-dim);text-align:center;padding:8px 0">
-          Send colony ship to establish base
-        </div>
-      `;
+      const isOwned = gameState.ownedPlanets.includes(this._planetId);
+      if (isOwned) {
+        // Show clickable build base button
+        let costStr = '';
+        if (oreCost > 0) costStr += `⬡ ${fmt(oreCost)} ORE`;
+        if (energyCost > 0) costStr += (costStr ? '  ' : '') + `⚡ ${fmt(energyCost)} ENERGY`;
+
+        el.innerHTML = `<div class="panel-section-title">SPACE BASE</div>`;
+        const btn = document.createElement('button');
+        btn.className = 'build-base-btn' + (canAfford ? '' : ' cant-afford');
+        btn.disabled = !canAfford;
+        btn.innerHTML = `
+          <span>🏗 BUILD BASE</span>
+          ${costStr ? `<span class="base-upg-cost ${canAfford ? '' : 'cant'}">${costStr}</span>` : '<span style="font-size:10px;color:var(--dune-text-dim)">FREE</span>'}
+        `;
+        if (canAfford) {
+          btn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            AudioManager.play('UI_CLICK');
+            gameState.buildBase(this._planetId);
+          });
+        } else {
+          btn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            AudioManager.play('UI_CLICK_DENIED');
+          });
+        }
+        el.appendChild(btn);
+      } else {
+        el.innerHTML = `
+          <div class="panel-section-title">SPACE BASE</div>
+          <div style="font-size:11px;color:var(--dune-text-dim);text-align:center;padding:8px 0">
+            Send colony ship to establish base
+          </div>
+        `;
+      }
       return;
     }
 
@@ -153,6 +193,24 @@ export class PlanetPanel {
           AudioManager.play('UI_CLICK_DENIED');
         });
       }
+
+      btn.addEventListener('mouseenter', () => {
+        let effectLine = '';
+        if (!maxed) {
+          if (upg.effect === 'storage')        effectLine = `→ +${fmt(upg.capacityBonus[lv])} capacity`;
+          else if (upg.effect === 'passiveEnergy') effectLine = `→ ${upg.passiveRate[lv]} energy/s passive`;
+          else if (upg.effect === 'shipSpeed')     effectLine = `→ +20% ship speed`;
+          else if (upg.effect === 'shipSlots')     effectLine = `→ +1 docking slot`;
+        }
+        this._showTooltip(btn, `
+          <div class="utt-name">${upg.name}</div>
+          <div class="utt-level">${maxed ? 'MAXED OUT' : `LV ${lv} / ${upg.maxLevel}`}</div>
+          <div class="utt-desc">${upg.desc}</div>
+          ${!maxed ? `<div class="utt-cost">⚡ ${fmt(upg.energyCost[lv])}  ${effectLine}</div>` : ''}
+        `);
+      });
+      btn.addEventListener('mouseleave', () => this._hideTooltip());
+
       grid.appendChild(btn);
     }
 
@@ -319,6 +377,16 @@ export class PlanetPanel {
           AudioManager.play('UI_CLICK_DENIED');
         });
       }
+
+      btn.addEventListener('mouseenter', () => {
+        this._showTooltip(btn, `
+          <div class="utt-name">${action.name}</div>
+          <div class="utt-desc">${action.desc}</div>
+          <div class="utt-cost">⚡ ${fmt(energyCost)} ENERGY</div>
+        `);
+      });
+      btn.addEventListener('mouseleave', () => this._hideTooltip());
+
       grid.appendChild(btn);
     }
 
@@ -338,12 +406,18 @@ export class PlanetPanel {
 
     for (const [type, robot] of Object.entries(ps.robots)) {
       if (robot.count === 0) continue;
+      const spdLv  = robot.speedLevel ?? 0;
+      const loadLv = robot.loadLevel  ?? 0;
+      const statsHtml = (spdLv > 0 || loadLv > 0)
+        ? `<span class="robot-row-stats">${spdLv > 0 ? `💨${spdLv}` : ''}${loadLv > 0 ? ` 📦${loadLv}` : ''}</span>`
+        : '';
       const row = document.createElement('div');
       row.className = 'robot-row';
       row.innerHTML = `
         <span class="robot-row-icon">${ROBOT_ICONS[type]}</span>
         <span class="robot-row-name">${ROBOT_NAMES[type]}</span>
         <span class="robot-row-count">${robot.count}</span>
+        ${statsHtml}
       `;
       el.appendChild(row);
     }
@@ -368,12 +442,29 @@ export class PlanetPanel {
       const cost = maxed ? null : { energy: upg.energyCost[lv] };
       const canAfford = cost && gameState.siloHas(this._planetId, 'energy', cost.energy);
 
+      const isSpeed = upg.effect === 'speedLevel';
+      const effectTag = isSpeed ? '+SPD' : '+LOAD';
+      const getMult = isSpeed ? getSpeedMult : getLoadMult;
+      const pctPerLevel = isSpeed ? 20 : 30;
+
       const row = document.createElement('div');
       row.className = 'robot-upg-row';
       row.innerHTML = `
-        <span class="robot-upg-name">${upg.name}</span>
+        <span class="robot-upg-name">${upg.name}<span class="upg-effect-tag">${effectTag}</span></span>
         <span class="robot-upg-level">${maxed ? 'MAX' : `${lv}/${upg.maxLevel}`}</span>
       `;
+
+      row.addEventListener('mouseenter', () => {
+        const curMult = getMult(lv);
+        const nextMult = !maxed ? getMult(lv + 1) : null;
+        this._showTooltip(row, `
+          <div class="utt-name">${upg.name}</div>
+          <div class="utt-level">${maxed ? 'MAXED OUT' : `LV ${lv} / ${upg.maxLevel}`}</div>
+          <div class="utt-desc">${isSpeed ? 'Increases movement speed' : 'Increases cargo capacity'} (+${pctPerLevel}% per level)</div>
+          <div class="utt-cost">${lv > 0 ? `Current: ×${curMult.toFixed(1)}` : 'No bonus yet'}${!maxed ? `  →  Next: ×${nextMult.toFixed(1)}` : ''}</div>
+        `);
+      });
+      row.addEventListener('mouseleave', () => this._hideTooltip());
 
       const btn = document.createElement('button');
       btn.className = 'robot-upg-btn';
@@ -395,5 +486,29 @@ export class PlanetPanel {
       row.appendChild(btn);
       el.appendChild(row);
     }
+  }
+
+  // ─── Tooltip helpers ──────────────────────────────────────────────────────
+
+  _showTooltip(anchorEl, html) {
+    const tt = this._tooltipEl;
+    if (!tt) return;
+    tt.innerHTML = html;
+    tt.classList.add('visible');
+    const r   = anchorEl.getBoundingClientRect();
+    const ttW = tt.offsetWidth  || 220;
+    const ttH = tt.offsetHeight || 80;
+    let left  = r.right + 8;
+    if (left + ttW > window.innerWidth - 4) left = r.left - ttW - 8;
+    left = Math.max(4, left);
+    let top = r.top;
+    if (top + ttH > window.innerHeight - 4) top = window.innerHeight - ttH - 4;
+    top = Math.max(4, top);
+    tt.style.left = left + 'px';
+    tt.style.top  = top  + 'px';
+  }
+
+  _hideTooltip() {
+    this._tooltipEl?.classList.remove('visible');
   }
 }
