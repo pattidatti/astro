@@ -15,8 +15,8 @@
     #game-container { position: fixed; inset: 0; z-index: 1; }
     #game-container canvas { display: block; width: 100% !important; height: 100% !important; }
   </style>
-  <script type="module" crossorigin src="/assets/index-Ch_C2PPC.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-BkSe8i4k.css">
+  <script type="module" crossorigin src="/assets/index-dGwtD5zi.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-D1S2W5VV.css">
 </head>
 <body>
   <div id="game-container"></div>
@@ -59,7 +59,7 @@
     <!-- Left panel: Upgrades -->
     <div id="left-panel" class="stellaris-panel">
       <div class="panel-header">
-        <span class="panel-title">&#x2B21; UPGRADES</span>
+        <span class="panel-title">&#x2B21; UPGRADES</span><span class="panel-key-hint">[Q]</span>
         <div id="multrow">
           <button class="mbtn on" id="m1">&times;1</button>
           <button class="mbtn" id="m10">&times;10</button>
@@ -74,7 +74,7 @@
     <!-- Right panel: Operations -->
     <div id="right-panel" class="stellaris-panel">
       <div class="panel-header">
-        <span class="panel-title">&#x2299; OPERATIONS</span>
+        <span class="panel-title">&#x2299; OPERATIONS</span><span class="panel-key-hint">[E]</span>
       </div>
       <div class="panel-body">
         <div id="planet-detail">
@@ -103,6 +103,10 @@
         </div>
       </div>
     </div>
+
+    <!-- Panel toggle tabs -->
+    <button id="left-toggle" class="panel-toggle-tab" title="Toggle Upgrades [Q]">&#x25C0;</button>
+    <button id="right-toggle" class="panel-toggle-tab" title="Toggle Operations [E]">&#x25B6;</button>
 
     <!-- Bottom bar: Planet navigation -->
     <div id="bottom-bar">
