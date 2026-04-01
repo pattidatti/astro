@@ -84,6 +84,10 @@ export const FRESNEL_GLSL = /* glsl */`
 `;
 
 export const COMMON_VERTEX = /* glsl */`
+  #ifdef USE_LOGDEPTHBUF
+    uniform float logDepthBufFC;
+  #endif
+
   varying vec2 vUv;
   varying vec3 vNormal;
   varying vec3 vPosition;
@@ -98,10 +102,18 @@ export const COMMON_VERTEX = /* glsl */`
     vWorldPosition = worldPos.xyz;
     vViewDir = normalize(cameraPosition - worldPos.xyz);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #ifdef USE_LOGDEPTHBUF
+      gl_Position.z = log2(max(1e-6, gl_Position.w + 1.0)) * logDepthBufFC - 1.0;
+      gl_Position.z *= gl_Position.w;
+    #endif
   }
 `;
 
 export const ATMOSPHERE_VERTEX = /* glsl */`
+  #ifdef USE_LOGDEPTHBUF
+    uniform float logDepthBufFC;
+  #endif
+
   varying vec3 vNormal;
   varying vec3 vViewDir;
 
@@ -110,5 +122,9 @@ export const ATMOSPHERE_VERTEX = /* glsl */`
     vec4 worldPos = modelMatrix * vec4(position, 1.0);
     vViewDir = normalize(cameraPosition - worldPos.xyz);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #ifdef USE_LOGDEPTHBUF
+      gl_Position.z = log2(max(1e-6, gl_Position.w + 1.0)) * logDepthBufFC - 1.0;
+      gl_Position.z *= gl_Position.w;
+    #endif
   }
 `;

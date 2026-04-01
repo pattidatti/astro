@@ -80,6 +80,29 @@ export class SolarSystem {
     this.nebulaVolume2.mesh.rotation.z = Math.PI / 4;
     this.orbitGroup.add(this.nebulaVolume2.mesh);
 
+    // Third nebula — side angle, smaller
+    this.nebulaVolume3 = new NebulaVolume(
+      nebColors[2] || nebColors[0],
+      nebColors[4] || nebColors[2],
+      nebColors[0],
+      55
+    );
+    this.nebulaVolume3.mesh.position.set(-14, 7, -12);
+    this.nebulaVolume3.mesh.rotation.z = -Math.PI / 5;
+    this.orbitGroup.add(this.nebulaVolume3.mesh);
+
+    // Fourth nebula — deep background, compact
+    this.nebulaVolume4 = new NebulaVolume(
+      nebColors[0],
+      nebColors[2] || nebColors[1],
+      nebColors[3] || nebColors[2],
+      42
+    );
+    this.nebulaVolume4.mesh.position.set(10, -5, -42);
+    this.nebulaVolume4.mesh.rotation.z = Math.PI / 3;
+    this.nebulaVolume4.mesh.rotation.x = Math.PI / 8;
+    this.orbitGroup.add(this.nebulaVolume4.mesh);
+
     // Asteroid belt (all planet types except star)
     this.asteroidBelt = null;
     if (planetDef.type !== 'star') {
@@ -263,11 +286,17 @@ export class SolarSystem {
     const nebFade = THREE.MathUtils.smoothstep(350, 300, distance);
     this.nebulaVolume.mesh.visible = nebFade > 0;
     this.nebulaVolume2.mesh.visible = nebFade > 0;
+    this.nebulaVolume3.mesh.visible = nebFade > 0;
+    this.nebulaVolume4.mesh.visible = nebFade > 0;
     if (nebFade > 0 && camera) {
       this.nebulaVolume.material.uniforms.uOpacity.value = nebFade;
       this.nebulaVolume.update(time, camera);
       this.nebulaVolume2.material.uniforms.uOpacity.value = nebFade * 0.7;
       this.nebulaVolume2.update(time, camera);
+      this.nebulaVolume3.material.uniforms.uOpacity.value = nebFade * 0.9;
+      this.nebulaVolume3.update(time, camera);
+      this.nebulaVolume4.material.uniforms.uOpacity.value = nebFade * 0.8;
+      this.nebulaVolume4.update(time, camera);
     }
 
     // Lens flare (star-type only) — fade out 390→450
@@ -323,6 +352,8 @@ export class SolarSystem {
     this.dustCloud.dispose();
     this.nebulaVolume.dispose();
     this.nebulaVolume2.dispose();
+    this.nebulaVolume3.dispose();
+    this.nebulaVolume4.dispose();
     if (this.asteroidBelt) this.asteroidBelt.dispose();
     if (this.orbitLine) {
       this.orbitLine.geometry.dispose();

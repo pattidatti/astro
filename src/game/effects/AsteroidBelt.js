@@ -21,12 +21,25 @@ export class AsteroidBelt {
 
     const rockGeo = new THREE.IcosahedronGeometry(1, 1);
     const mat = new THREE.MeshStandardMaterial({
-      roughness: 0.92,
-      metalness: 0.04,
+      roughness: 0.65,
+      metalness: 0.08,
       color:     new THREE.Color(color),
-      transparent: true,
-      opacity: 1.0,
+      emissive:  new THREE.Color(0.06, 0.038, 0.014),
     });
+
+    // Fresnel rim — makes asteroids visible from all angles, not just when backlit
+    mat.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <output_fragment>',
+        /* glsl */`
+        vec3 rimViewDir = normalize(-vViewPosition);
+        float rim = 1.0 - max(dot(rimViewDir, normal), 0.0);
+        rim = pow(rim, 2.0) * 1.8;
+        outgoingLight += diffuseColor.rgb * rim;
+        #include <output_fragment>
+        `
+      );
+    };
 
     this.mesh = new THREE.InstancedMesh(rockGeo, mat, ASTEROID_COUNT);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -58,10 +71,10 @@ export class AsteroidBelt {
       dummy.updateMatrix();
       this.mesh.setMatrixAt(i, dummy.matrix);
 
-      // Per-instance earthy color variation
+      // Per-instance earthy color variation — brighter so rim effect reads well
       const hue  = 0.06 + Math.random() * 0.05;
       const sat  = 0.12 + Math.random() * 0.25;
-      const lit  = 0.18 + Math.random() * 0.22;
+      const lit  = 0.28 + Math.random() * 0.28;
       colorVariant.setHSL(hue, sat, lit);
       this.mesh.setColorAt(i, colorVariant);
     }

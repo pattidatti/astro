@@ -58,10 +58,17 @@ export class Hyperlane {
     // Gaussian soft-sprite particle material
     this.particleMaterial = new THREE.ShaderMaterial({
       vertexShader: /* glsl */`
+        #ifdef USE_LOGDEPTHBUF
+          uniform float logDepthBufFC;
+        #endif
         void main() {
           vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
           gl_PointSize = 4.5 * (150.0 / -mvPos.z);
           gl_Position  = projectionMatrix * mvPos;
+          #ifdef USE_LOGDEPTHBUF
+            gl_Position.z = log2(max(1e-6, gl_Position.w + 1.0)) * logDepthBufFC - 1.0;
+            gl_Position.z *= gl_Position.w;
+          #endif
         }
       `,
       fragmentShader: /* glsl */`

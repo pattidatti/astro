@@ -49,9 +49,9 @@ export const GodRayShader = {
       for (int i = 0; i < NUM_SAMPLES; i++) {
         texCoord -= deltaTexCoord;
         vec2 clamped = clamp(texCoord, 0.0, 1.0);
-        vec4 sample  = texture2D(tDiffuse, clamped);
-        sample      *= illuminationDecay * uWeight;
-        accum       += sample;
+        vec4 samp  = texture2D(tDiffuse, clamped);
+        samp      *= illuminationDecay * uWeight;
+        accum     += samp;
         illuminationDecay *= uDecay;
       }
 

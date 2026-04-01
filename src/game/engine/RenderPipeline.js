@@ -5,7 +5,6 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ColorGradeShader } from '../shaders/effects/ColorGradeShader.js';
-import { FilmGrainShader } from '../shaders/effects/FilmGrainShader.js';
 
 export class RenderPipeline {
   constructor(container) {
@@ -31,7 +30,6 @@ export class RenderPipeline {
     this.bloomPass = null;
     this.godRayPass = null;
     this.colorGradePass = null;
-    this.grainPass = null;
   }
 
   setupPostProcessing(scene, camera) {
@@ -51,18 +49,11 @@ export class RenderPipeline {
     this.colorGradePass = new ShaderPass(ColorGradeShader);
     this.composer.addPass(this.colorGradePass);
 
-    // Film grain: very subtle, breaks digital flatness
-    this.grainPass = new ShaderPass(FilmGrainShader);
-    this.composer.addPass(this.grainPass);
-
     this.composer.addPass(new OutputPass());
   }
 
   /** Called by Game.js each frame to advance time-based uniforms. */
   tick(time) {
-    if (this.grainPass) {
-      this.grainPass.uniforms.uTime.value = time;
-    }
   }
 
   /**
@@ -76,7 +67,6 @@ export class RenderPipeline {
     // Dispose old passes to free WebGL render targets before rebuilding
     if (this.bloomPass)      this.bloomPass.dispose();
     if (this.colorGradePass) this.colorGradePass.dispose();
-    if (this.grainPass)      this.grainPass.dispose();
 
     // Rebuild composer with god ray pass inserted after bloom
     const scene = this.composer.passes[0].scene;
@@ -96,9 +86,6 @@ export class RenderPipeline {
 
     this.colorGradePass = new ShaderPass(ColorGradeShader);
     this.composer.addPass(this.colorGradePass);
-
-    this.grainPass = new ShaderPass(FilmGrainShader);
-    this.composer.addPass(this.grainPass);
 
     this.composer.addPass(new OutputPass());
   }

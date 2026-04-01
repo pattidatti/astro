@@ -4,6 +4,7 @@ import { CENTRAL_STAR } from '../data/galaxyLayout.js';
 import { getAllWorldPositions } from '../utils/CoordinateMapper.js';
 import { SolarSystem } from './SolarSystem.js';
 import { Star3D } from '../objects/Star3D.js';
+import { NebulaVolume } from '../effects/NebulaVolume.js';
 
 /**
  * Galaxy — one solar system: a central star with 8 orbiting planets.
@@ -23,6 +24,26 @@ export class Galaxy {
     this.group.add(this.centralStar.group);
 
     this._createSystems();
+    this._createCosmicNebulas();
+  }
+
+  _createCosmicNebulas() {
+    const configs = [
+      { pos: [ 280,  60, -150], size: 380, c: ['#05011a', '#2211bb', '#004466'] },  // electric blue-purple
+      { pos: [-320, -80,  200], size: 320, c: ['#1a0005', '#881133', '#001833'] },  // deep crimson
+      { pos: [ 180, 120,  380], size: 420, c: ['#040010', '#331199', '#002244'] },  // royal blue
+      { pos: [-250,  30, -400], size: 350, c: ['#080010', '#220077', '#441188'] },  // violet
+      { pos: [ 500, -60,  100], size: 300, c: ['#100004', '#662211', '#001122'] },  // dark ember
+      { pos: [-180, 100, -280], size: 260, c: ['#000a18', '#113377', '#003322'] },  // navy teal
+    ];
+
+    this._cosmicNebulas = configs.map(({ pos, size, c }) => {
+      const neb = new NebulaVolume(c[0], c[1], c[2], size);
+      neb.mesh.position.set(...pos);
+      neb.material.uniforms.uOpacity.value = 1.0;
+      this.group.add(neb.mesh);
+      return neb;
+    });
   }
 
   _createSystems() {
@@ -74,6 +95,11 @@ export class Galaxy {
     // Update central star
     this.centralStar.update(time);
 
+    // Update cosmic background nebulas
+    for (const neb of this._cosmicNebulas) {
+      neb.update(time, camera);
+    }
+
     // Update each planet system's LOD — distance measured to planet, not center
     for (const id in this.systems) {
       const system = this.systems[id];
@@ -96,6 +122,9 @@ export class Galaxy {
     this.centralStar.dispose();
     for (const id in this.systems) {
       this.systems[id].dispose();
+    }
+    for (const neb of this._cosmicNebulas) {
+      neb.dispose();
     }
   }
 }

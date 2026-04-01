@@ -1,9 +1,16 @@
 export const HyperlaneShader = {
   vertex: /* glsl */`
+    #ifdef USE_LOGDEPTHBUF
+      uniform float logDepthBufFC;
+    #endif
     varying vec2 vUv;
     void main() {
       vUv = uv;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      #ifdef USE_LOGDEPTHBUF
+        gl_Position.z = log2(max(1e-6, gl_Position.w + 1.0)) * logDepthBufFC - 1.0;
+        gl_Position.z *= gl_Position.w;
+      #endif
     }
   `,
   fragment: /* glsl */`
