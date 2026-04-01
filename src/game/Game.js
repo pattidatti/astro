@@ -7,7 +7,7 @@ export function createGame() {
   return new Phaser.Game({
     type: Phaser.CANVAS,
     parent: 'game-container',
-    backgroundColor: '#020509',
+    backgroundColor: '#0a0e14',
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,

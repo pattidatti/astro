@@ -6,7 +6,7 @@ export default class Spider extends BaseRobot {
   draw(g, x, y, t, cargo) {
     const walk = Math.sin(t * 6) * 0.3;
 
-    // Legs
+    // Legs — keep purple for contrast
     g.lineStyle(1.2, 0x8833cc, 1);
     for (let i = 0; i < 4; i++) {
       const side = i < 2 ? -1 : 1;

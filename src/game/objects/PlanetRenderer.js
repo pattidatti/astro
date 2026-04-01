@@ -1,3 +1,4 @@
+import Phaser from 'phaser';
 import { PLANET_COLORS } from '../data/planets.js';
 
 /**
@@ -11,7 +12,7 @@ export function generatePlanetTexture(scene, planetDef, size) {
   const s = size * 2; // double for retina
   const canvas = scene.textures.createCanvas(key, s, s);
   const ctx = canvas.context;
-  const R = s * 0.45;
+  const R = s * 0.40; // slightly smaller to give more room for atmosphere
   const cx = s / 2;
   const cy = s / 2;
 
@@ -28,11 +29,17 @@ export function generatePlanetTexture(scene, planetDef, size) {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, s, s);
 
-  // Surface bands
-  ctx.globalAlpha = 0.09;
-  for (let i = 0; i < 6; i++) {
-    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,.4)' : 'rgba(0,0,0,.4)';
-    ctx.fillRect(cx - R, cy - R + (R * 2 / 5.5) * i + Math.sin(i * 1.3) * 6, R * 2, 10 + Math.sin(i * 2.1) * 3);
+  // Surface bands (noise-like with varied widths)
+  ctx.globalAlpha = 0.07;
+  for (let i = 0; i < 8; i++) {
+    const noise = Math.sin(i * 2.7 + 0.3) * 0.5 + Math.cos(i * 1.3) * 0.3;
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.35)';
+    const bandY = cy - R + (R * 2 / 7) * i + noise * 8;
+    const bandH = 6 + Math.sin(i * 1.7) * 4 + Math.cos(i * 3.1) * 2;
+    // Curved band using elliptical path
+    ctx.beginPath();
+    ctx.ellipse(cx, bandY, R * (0.9 + Math.sin(i) * 0.1), bandH, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // Type-specific surface effects
@@ -40,13 +47,13 @@ export function generatePlanetTexture(scene, planetDef, size) {
   drawSurfaceEffects(ctx, planetDef.type, cx, cy, R);
 
   // Clouds
-  ctx.globalAlpha = 0.12;
+  ctx.globalAlpha = 0.1;
   for (let i = 0; i < 5; i++) {
     const a = 0.3 + i * (Math.PI * 2 / 5);
     const ex = cx + Math.cos(a) * R * 0.52;
     const ey = cy + Math.sin(a) * R * 0.2;
     const cg = ctx.createRadialGradient(ex, ey, 0, ex, ey, R * 0.28);
-    cg.addColorStop(0, 'rgba(255,255,255,.55)');
+    cg.addColorStop(0, 'rgba(255,255,255,.45)');
     cg.addColorStop(1, 'transparent');
     ctx.fillStyle = cg;
     ctx.beginPath();
@@ -55,15 +62,16 @@ export function generatePlanetTexture(scene, planetDef, size) {
   }
   ctx.globalAlpha = 1;
 
-  // Specular highlight
-  const sp = ctx.createRadialGradient(cx - R * 0.38, cy - R * 0.4, 0, cx - R * 0.18, cy - R * 0.2, R * 0.72);
-  sp.addColorStop(0, 'rgba(255,255,255,.26)');
-  sp.addColorStop(0.25, 'rgba(255,255,255,.08)');
+  // Specular highlight (softer, broader)
+  const sp = ctx.createRadialGradient(cx - R * 0.38, cy - R * 0.4, 0, cx - R * 0.15, cy - R * 0.15, R * 0.85);
+  sp.addColorStop(0, 'rgba(255,255,255,.22)');
+  sp.addColorStop(0.15, 'rgba(255,255,255,.08)');
+  sp.addColorStop(0.4, 'rgba(255,255,255,.02)');
   sp.addColorStop(1, 'transparent');
   ctx.fillStyle = sp;
   ctx.fillRect(0, 0, s, s);
 
-  // Shadow terminator (softer for better visibility)
+  // Shadow terminator
   const sh = ctx.createRadialGradient(cx + R * 0.55, cy + R * 0.15, 0, cx + R * 0.55, cy + R * 0.15, R * 1.4);
   sh.addColorStop(0, 'transparent');
   sh.addColorStop(0.45, 'transparent');
@@ -73,29 +81,40 @@ export function generatePlanetTexture(scene, planetDef, size) {
 
   ctx.restore();
 
-  // Atmosphere rim glow (outside clip)
-  const atm = ctx.createRadialGradient(cx, cy, R * 0.85, cx, cy, R * 1.18);
-  atm.addColorStop(0, planetDef.glow + '00');
-  atm.addColorStop(0.3, planetDef.glow + '99');
-  atm.addColorStop(1, planetDef.glow + '00');
-  ctx.beginPath();
-  ctx.arc(cx, cy, R * 1.06, 0, Math.PI * 2);
-  ctx.strokeStyle = atm;
-  ctx.lineWidth = R * 0.18;
-  ctx.stroke();
+  // ── ATMOSPHERE ── Multi-layered soft glow (no hard edges)
+  // Layer 1: Inner atmosphere glow (closest to planet surface)
+  for (let i = 0; i < 6; i++) {
+    const innerR = R + R * 0.02 * (i + 1);
+    const outerR = R + R * 0.08 * (i + 1);
+    const alpha = (0.12 - i * 0.018);
+    if (alpha <= 0) break;
+    const atm = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+    atm.addColorStop(0, planetDef.glow + alphaHex(alpha));
+    atm.addColorStop(1, planetDef.glow + '00');
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+    ctx.fillStyle = atm;
+    ctx.fill();
+  }
 
-  // Outer halo (stronger glow)
-  const ah = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R * 1.45);
-  ah.addColorStop(0, planetDef.glow + '30');
-  ah.addColorStop(0.5, planetDef.glow + '12');
-  ah.addColorStop(1, 'transparent');
+  // Layer 2: Outer halo (very diffuse)
+  const oh = ctx.createRadialGradient(cx, cy, R * 0.95, cx, cy, R * 1.45);
+  oh.addColorStop(0, planetDef.glow + '18');
+  oh.addColorStop(0.3, planetDef.glow + '0c');
+  oh.addColorStop(0.7, planetDef.glow + '04');
+  oh.addColorStop(1, 'transparent');
   ctx.beginPath();
   ctx.arc(cx, cy, R * 1.45, 0, Math.PI * 2);
-  ctx.fillStyle = ah;
+  ctx.fillStyle = oh;
   ctx.fill();
 
   canvas.refresh();
   return key;
+}
+
+/** Convert 0-1 alpha to 2-char hex */
+function alphaHex(a) {
+  return Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
 }
 
 function drawSurfaceEffects(ctx, type, cx, cy, R) {
@@ -199,24 +218,46 @@ function drawSurfaceEffects(ctx, type, cx, cy, R) {
 
 /**
  * Draw planetary rings for gas/star/void types (called each frame on the Graphics object).
+ * Now with smoother gradients, more layers, and perspective.
  */
-export function drawPlanetRings(graphics, planetDef, cx, cy, R, time) {
+export function drawPlanetRings(graphics, planetDef, cx, cy, R, time, globalAlpha = 1) {
   if (!['gas', 'star', 'void'].includes(planetDef.type)) return;
+  if (globalAlpha <= 0) return;
+
   const color = Phaser.Display.Color.HexStringToColor(planetDef.glow);
-  for (let i = 0; i < 4; i++) {
-    const rr = R * (1.4 + i * 0.19);
-    const alpha = 0.25 - i * 0.04;
-    graphics.lineStyle(13 - i * 2, color.color, alpha);
+  const steps = 80; // smoother ellipse
+
+  // Multiple thin rings with varying opacity for gradient effect
+  for (let i = 0; i < 8; i++) {
+    const rr = R * (1.35 + i * 0.095);
+    // Opacity fades in then out (bell curve)
+    const t = i / 7;
+    const alpha = (0.22 * Math.sin(t * Math.PI)) * globalAlpha;
+    if (alpha < 0.01) continue;
+
+    const thickness = 3 - Math.abs(i - 3.5) * 0.3;
+    graphics.lineStyle(Math.max(1, thickness), color.color, alpha);
     graphics.beginPath();
-    // Draw ellipse for ring tilt
-    const steps = 64;
     for (let s = 0; s <= steps; s++) {
       const a = (s / steps) * Math.PI * 2;
       const rx = cx + Math.cos(a) * rr;
-      const ry = cy + Math.sin(a) * rr * 0.19;
+      const ry = cy + Math.sin(a) * rr * 0.18;
       if (s === 0) graphics.moveTo(rx, ry);
       else graphics.lineTo(rx, ry);
     }
     graphics.strokePath();
   }
+
+  // Subtle ring gap (dark ring in the middle)
+  const gapR = R * 1.55;
+  graphics.lineStyle(2, 0x000000, 0.08 * globalAlpha);
+  graphics.beginPath();
+  for (let s = 0; s <= steps; s++) {
+    const a = (s / steps) * Math.PI * 2;
+    const rx = cx + Math.cos(a) * gapR;
+    const ry = cy + Math.sin(a) * gapR * 0.18;
+    if (s === 0) graphics.moveTo(rx, ry);
+    else graphics.lineTo(rx, ry);
+  }
+  graphics.strokePath();
 }

@@ -17,7 +17,6 @@ export default class HUDScene extends Phaser.Scene {
   }
 
   create() {
-    this.curTab = 'u';
     this.updateTimer = 0;
 
     // Cache DOM refs
@@ -38,11 +37,10 @@ export default class HUDScene extends Phaser.Scene {
       upgGrid: document.getElementById('upgGrid'),
       pList: document.getElementById('pList'),
       toast: document.getElementById('toast'),
+      pdName: document.getElementById('pd-name'),
+      pdType: document.getElementById('pd-type'),
+      pdBonus: document.getElementById('pd-bonus'),
     };
-
-    // Tab buttons
-    document.getElementById('tu').addEventListener('pointerdown', () => this.setTab('u'));
-    document.getElementById('tg').addEventListener('pointerdown', () => this.setTab('g'));
 
     // Multiplier buttons
     document.getElementById('m1').addEventListener('pointerdown', () => this.setMult(1));
@@ -62,6 +60,11 @@ export default class HUDScene extends Phaser.Scene {
     gameState.on('planetColonized', (id) => {
       const p = PLANETS.find(x => x.id === id);
       this.toast('\u{1F30D} COLONIZED: ' + (p ? p.name : id));
+      this.renderPlanetDetail();
+    });
+    gameState.on('planetChanged', () => {
+      this.renderPlanetDetail();
+      this.renderPlanets();
     });
     gameState.on('stateLoaded', () => {
       if (gameState.crystalUnlocked) {
@@ -71,10 +74,12 @@ export default class HUDScene extends Phaser.Scene {
       if (gameState.energyUnlocked) {
         this.dom.rcEnrg.style.display = '';
       }
+      this.renderPlanetDetail();
     });
 
     this.renderUpgrades();
     this.renderPlanets();
+    this.renderPlanetDetail();
 
     // Show offline earnings or welcome
     if (gameState._offlineEarnings) {
@@ -85,7 +90,7 @@ export default class HUDScene extends Phaser.Scene {
       this.toast(`OFFLINE ${timeStr}: +${fmt(oe.earned)} ORE`);
       delete gameState._offlineEarnings;
     } else {
-      this.toast('WELCOME, COMMANDER \u2014 TAP THE PLANET');
+      this.toast('WELCOME, COMMANDER \u2014 CLICK THE PLANET');
     }
   }
 
@@ -118,23 +123,25 @@ export default class HUDScene extends Phaser.Scene {
     if (this.updateTimer >= 0.35) {
       this.updateTimer = 0;
       this.renderUpgrades();
-      if (this.curTab === 'g') this.renderPlanets();
+      this.renderPlanets();
     }
-  }
-
-  setTab(t) {
-    this.curTab = t;
-    document.getElementById('tabU').style.display = t === 'u' ? 'block' : 'none';
-    document.getElementById('tabG').style.display = t === 'g' ? 'block' : 'none';
-    document.getElementById('tu').classList.toggle('on', t === 'u');
-    document.getElementById('tg').classList.toggle('on', t === 'g');
-    if (t === 'g') this.renderPlanets();
   }
 
   setMult(m) {
     gameState.buyMult = m;
     [1, 10, 100].forEach(v => document.getElementById('m' + v).classList.toggle('on', v === m));
     this.renderUpgrades();
+  }
+
+  renderPlanetDetail() {
+    const def = gameState.activePlanetDef;
+    this.dom.pdName.textContent = def.name;
+    this.dom.pdType.textContent = def.desc;
+    if (def.mb > 0) {
+      this.dom.pdBonus.textContent = `+${(def.mb * 100).toFixed(0)}% extraction bonus`;
+    } else {
+      this.dom.pdBonus.textContent = 'Base extraction rate';
+    }
   }
 
   renderUpgrades() {
@@ -149,46 +156,37 @@ export default class HUDScene extends Phaser.Scene {
       return true;
     });
 
-    for (let i = 0; i < visible.length; i += 2) {
-      const row = document.createElement('div');
-      row.className = 'uprow';
+    for (const u of visible) {
+      const cost = gameState.upgradeCost(u.id);
+      const can = gameState.canAfford(u.id);
+      const lv = gameState.upgradeLevels[u.id] || 0;
 
-      [visible[i], visible[i + 1]].forEach(u => {
-        if (!u) {
-          const spacer = document.createElement('div');
-          spacer.style.flex = '1';
-          row.appendChild(spacer);
-          return;
-        }
+      let costStr = '';
+      if (cost.ore > 0) costStr += '\u2B21' + fmt(cost.ore);
+      if (cost.crystal > 0) costStr += (costStr ? ' ' : '') + '\u25C8' + fmt(cost.crystal);
+      if (cost.mult > 1) costStr += ` \u00D7${cost.mult}`;
 
-        const cost = gameState.upgradeCost(u.id);
-        const can = gameState.canAfford(u.id);
-        const lv = gameState.upgradeLevels[u.id] || 0;
+      const d = document.createElement('div');
+      d.className = 'upg ' + (can ? 'can' : 'no');
+      d.innerHTML = `
+        <div class="upg-top">
+          <span class="upg-icon">${u.icon}</span>
+          <span class="upg-name">${u.name}</span>
+          ${lv > 0 ? `<span class="upg-lv">LV${lv}</span>` : ''}
+        </div>
+        <div class="upg-bottom">
+          <span class="upg-desc">${u.desc}</span>
+          <span class="upg-cost">${costStr}</span>
+        </div>`;
 
-        let costStr = '';
-        if (cost.ore > 0) costStr += '\u2B21' + fmt(cost.ore);
-        if (cost.crystal > 0) costStr += (costStr ? ' ' : '') + '\u25C8' + fmt(cost.crystal);
-        if (cost.mult > 1) costStr += ` \u00D7${cost.mult}`;
-
-        const d = document.createElement('div');
-        d.className = 'upg ' + (can ? 'can' : 'no');
-        d.innerHTML = `${lv > 0 ? `<div class="upg-lv">LV${lv}</div>` : ''}
-          <div class="upg-icon">${u.icon}</div>
-          <div class="upg-name">${u.name}</div>
-          <div class="upg-desc">${u.desc}</div>
-          <div class="upg-cost">${costStr}</div>`;
-
-        if (can) {
-          d.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-            gameState.buyUpgrade(u.id);
-            this.renderUpgrades();
-          });
-        }
-        row.appendChild(d);
-      });
-
-      grid.appendChild(row);
+      if (can) {
+        d.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          gameState.buyUpgrade(u.id);
+          this.renderUpgrades();
+        });
+      }
+      grid.appendChild(d);
     }
   }
 
@@ -203,27 +201,25 @@ export default class HUDScene extends Phaser.Scene {
       const locked = !owned && !canBuy;
 
       const d = document.createElement('div');
-      d.className = 'plcard' + (isAct ? ' act' : canBuy ? ' buy' : locked ? ' lck' : '');
+      d.className = 'pl-chip' + (isAct ? ' act' : canBuy ? ' buy' : locked ? ' lck' : '');
       d.innerHTML = `
-        <div class="pldot" style="background:radial-gradient(circle at 35% 35%,${p.col}cc,${p.col}44);box-shadow:0 0 16px ${p.glow}66"></div>
-        <div class="pli">
-          <div class="pln">${p.name}${isAct ? '<span class="plm">\u25CF ACTIVE</span>' : ''}</div>
-          <div class="pld">${p.desc}</div>
-          ${!owned && p.cost > 0 ? `<div class="plc">\u2B21 ${fmt(p.cost)} to colonize</div>` : ''}
-          ${owned && p.mb > 0 ? `<div class="plb">+${(p.mb * 100).toFixed(0)}% extraction bonus</div>` : ''}
+        <div class="pl-dot" style="background:radial-gradient(circle at 35% 35%,${p.col}cc,${p.col}44);box-shadow:0 0 12px ${p.glow}44"></div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <span class="pl-name">${p.name}</span>
+          ${isAct ? '<span class="pl-status">\u25CF ACTIVE</span>' : ''}
+          ${!owned && p.cost > 0 ? `<span class="pl-cost">\u2B21 ${fmt(p.cost)}</span>` : ''}
+          ${owned && !isAct ? `<span class="pl-bonus">+${(p.mb * 100).toFixed(0)}%</span>` : ''}
         </div>
-        ${!owned ? '<span style="opacity:.2;font-size:20px">\u{1F512}</span>' : ''}`;
+        ${!owned ? '<span class="pl-lock">\u{1F512}</span>' : ''}`;
 
       if (owned) {
         d.addEventListener('pointerdown', () => {
           gameState.switchPlanet(p.id);
           this.toast('WARPING TO ' + p.name);
-          this.renderPlanets();
         });
       } else if (canBuy) {
         d.addEventListener('pointerdown', () => {
           gameState.colonizePlanet(p.id);
-          this.renderPlanets();
         });
       }
       list.appendChild(d);

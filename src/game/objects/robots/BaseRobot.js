@@ -57,7 +57,7 @@ export default class BaseRobot extends Phaser.GameObjects.Container {
   }
 
   // Override in subclasses
-  get trailColor() { return 0x00e5ff; }
+  get trailColor() { return 0xc8a84e; }
   draw(g, x, y, t, cargo) {}
 
   destroy() {

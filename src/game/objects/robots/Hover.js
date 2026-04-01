@@ -1,18 +1,18 @@
 import BaseRobot from './BaseRobot.js';
 
 export default class Hover extends BaseRobot {
-  get trailColor() { return 0xffdd00; }
+  get trailColor() { return 0xe8c85e; }
 
   draw(g, x, y, t, cargo) {
     // Bob offset
     const bobY = y + Math.sin(t * 2.5) * 2;
 
-    // Thruster glow
-    g.fillStyle(0xffdc00, 0.06 + cargo * 0.03);
+    // Thruster glow — gold
+    g.fillStyle(0xc8a84e, 0.06 + cargo * 0.03);
     g.fillCircle(x, bobY, 12);
 
     // Spinning ring 1
-    g.lineStyle(1.2, 0xffc800, 0.5);
+    g.lineStyle(1.2, 0xc8a84e, 0.5);
     g.beginPath();
     const steps = 32;
     for (let i = 0; i <= steps; i++) {
@@ -25,7 +25,7 @@ export default class Hover extends BaseRobot {
     g.strokePath();
 
     // Spinning ring 2
-    g.lineStyle(1, 0xffa000, 0.4);
+    g.lineStyle(1, 0x8a7a4e, 0.4);
     g.beginPath();
     for (let i = 0; i <= steps; i++) {
       const a = (i / steps) * Math.PI * 2 - t * 3;
@@ -37,8 +37,8 @@ export default class Hover extends BaseRobot {
     g.strokePath();
 
     // Body disc
-    g.fillStyle(0x221100, 1);
-    g.lineStyle(1.5, 0xffaa00, 1);
+    g.fillStyle(0x1a1408, 1);
+    g.lineStyle(1.5, 0xc8a84e, 1);
     g.fillEllipse(x, bobY, 12, 6);
     g.beginPath();
     for (let i = 0; i <= steps; i++) {
@@ -51,8 +51,8 @@ export default class Hover extends BaseRobot {
     g.strokePath();
 
     // Dome top (half circle)
-    g.fillStyle(0x332200, 1);
-    g.lineStyle(1, 0xffcc00, 1);
+    g.fillStyle(0x2a2210, 1);
+    g.lineStyle(1, 0xe8c85e, 1);
     g.beginPath();
     for (let i = 0; i <= 16; i++) {
       const a = Math.PI + (i / 16) * Math.PI;
@@ -64,15 +64,15 @@ export default class Hover extends BaseRobot {
     g.fillPath();
     g.strokePath();
 
-    // Orbiting lights
+    // Orbiting lights — green
     for (let i = 0; i < 3; i++) {
       const a = t * 2 + i * (Math.PI * 2 / 3);
-      g.fillStyle(0xffff64, 0.5 + Math.sin(a) * 0.4);
+      g.fillStyle(0x7cb85e, 0.5 + Math.sin(a) * 0.4);
       g.fillCircle(x + Math.cos(a) * 5, bobY + Math.sin(a) * 2.5, 0.8);
     }
 
     if (cargo > 1.5) {
-      g.lineStyle(1, 0xffd700, 0.6);
+      g.lineStyle(1, 0xe8c85e, 0.6);
       g.beginPath();
       for (let i = 0; i <= steps; i++) {
         const a = (i / steps) * Math.PI * 2;

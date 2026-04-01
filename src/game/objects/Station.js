@@ -18,19 +18,19 @@ export default class Station extends Phaser.GameObjects.Container {
     const g = this.graphics;
     g.clear();
 
-    // Outer halo glow
-    g.fillStyle(0x00f0ff, 0.12 + Math.sin(t * 2) * 0.06);
+    // Outer halo glow — warm gold
+    g.fillStyle(0xc8a84e, 0.10 + Math.sin(t * 2) * 0.05);
     g.fillCircle(0, 0, 44);
 
     // Rotate the whole station
     this.rotation = t * 0.32;
 
-    // Outer ring
-    g.lineStyle(2.2, 0x00e5ff, 1);
+    // Outer ring — gold
+    g.lineStyle(2.2, 0xc8a84e, 0.9);
     g.strokeCircle(0, 0, 20);
 
-    // Inner ring
-    g.lineStyle(1, 0x00c8ff, 0.4);
+    // Inner ring — dimmer gold
+    g.lineStyle(1, 0x8a7a4e, 0.4);
     g.strokeCircle(0, 0, 13);
 
     // Spokes + panels
@@ -40,7 +40,7 @@ export default class Station extends Phaser.GameObjects.Container {
       const sin = Math.sin(a);
 
       // Spoke
-      g.lineStyle(1.5, 0x00c8ff, 0.55);
+      g.lineStyle(1.5, 0x8a7a4e, 0.55);
       g.beginPath();
       g.moveTo(0, 0);
       g.lineTo(cos * 20, sin * 20);
@@ -49,26 +49,26 @@ export default class Station extends Phaser.GameObjects.Container {
       // Panel
       const px = cos * 14;
       const py = sin * 14;
-      g.fillStyle(0x002864, 0.9);
+      g.fillStyle(0x2a2210, 0.9);
       g.fillRect(px - 5.5, py - 2, 11, 4);
-      g.lineStyle(0.8, 0x00b4ff, 0.6);
+      g.lineStyle(0.8, 0xc8a84e, 0.5);
       g.strokeRect(px - 5.5, py - 2, 11, 4);
-      g.fillStyle(0x0078ff, 0.3);
+      g.fillStyle(0x7cb85e, 0.3);
       g.fillRect(px - 4, py - 1.2, 3.5, 2.4);
     }
 
-    // Hub
-    g.fillStyle(0x003355, 1);
+    // Hub — dark with gold border
+    g.fillStyle(0x1a1508, 1);
     g.fillCircle(0, 0, 8);
-    g.lineStyle(2, 0x00e5ff, 1);
+    g.lineStyle(2, 0xc8a84e, 1);
     g.strokeCircle(0, 0, 8);
 
-    // Pulse
-    g.fillStyle(0x00f0ff, 0.22 + Math.sin(t * 4) * 0.22);
+    // Pulse — gold
+    g.fillStyle(0xc8a84e, 0.18 + Math.sin(t * 4) * 0.18);
     g.fillCircle(0, 0, 12);
 
-    // Center dot
-    g.fillStyle(0x00e5ff, 1);
+    // Center dot — green
+    g.fillStyle(0x7cb85e, 1);
     g.fillCircle(0, 0, 2.5);
   }
 }
