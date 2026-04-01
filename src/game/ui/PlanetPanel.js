@@ -208,8 +208,7 @@ export class PlanetPanel {
       `;
       row.querySelector('.route-delete').addEventListener('pointerdown', (e) => {
         e.stopPropagation();
-        AudioManager.play('UI_CLICK');
-        gameState.removeRoute(route.id);
+        gameState.removeRoute(route.id); // routeRemoved event in HUDBridge plays the sound
       });
       el.appendChild(row);
     }
@@ -263,7 +262,6 @@ export class PlanetPanel {
 
     form.querySelector('#rf-confirm').addEventListener('pointerdown', (e) => {
       e.stopPropagation();
-      AudioManager.play('UI_CLICK');
       const to       = form.querySelector('#rf-to').value;
       const resource = form.querySelector('#rf-res').value;
       const amount   = parseFloat(form.querySelector('#rf-amt').value) || 100;
@@ -273,7 +271,7 @@ export class PlanetPanel {
     });
     form.querySelector('#rf-cancel').addEventListener('pointerdown', (e) => {
       e.stopPropagation();
-      AudioManager.play('UI_CLICK_DENIED');
+      AudioManager.play('UI_CLICK');
       form.remove();
       addBtn.style.display = '';
     });

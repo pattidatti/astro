@@ -20,6 +20,7 @@ export class HUDBridge {
     this._planetPanel = new PlanetPanel();
     this._panelsVisible = false;
     this._currentPlanetId = null;
+    this._suppressNextPlanetChanged = false;
 
     this.dom = {
       upgTooltip:    document.getElementById('upg-tooltip'),
