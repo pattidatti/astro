@@ -18,6 +18,7 @@ export default class HUDScene extends Phaser.Scene {
 
   create() {
     this.updateTimer = 0;
+    this.isGalaxyView = false;
 
     // Cache DOM refs
     this.dom = {
@@ -40,12 +41,24 @@ export default class HUDScene extends Phaser.Scene {
       pdName: document.getElementById('pd-name'),
       pdType: document.getElementById('pd-type'),
       pdBonus: document.getElementById('pd-bonus'),
+      galaxyToggle: document.getElementById('galaxyToggle'),
     };
 
     // Multiplier buttons
     document.getElementById('m1').addEventListener('pointerdown', () => this.setMult(1));
     document.getElementById('m10').addEventListener('pointerdown', () => this.setMult(10));
     document.getElementById('m100').addEventListener('pointerdown', () => this.setMult(100));
+
+    // Galaxy map toggle
+    this.dom.galaxyToggle.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this.toggleGalaxyMap();
+    });
+
+    // M key to toggle galaxy map
+    this.input.keyboard.on('keydown-M', () => {
+      this.toggleGalaxyMap();
+    });
 
     // Listen for unlock events
     gameState.on('crystalUnlocked', () => {
@@ -131,6 +144,38 @@ export default class HUDScene extends Phaser.Scene {
     gameState.buyMult = m;
     [1, 10, 100].forEach(v => document.getElementById('m' + v).classList.toggle('on', v === m));
     this.renderUpgrades();
+  }
+
+  /**
+   * Toggle between planet view and galaxy map.
+   * @param {boolean} [forceGalaxy] - if provided, force to galaxy (true) or planet (false)
+   */
+  toggleGalaxyMap(forceGalaxy) {
+    const goToGalaxy = forceGalaxy !== undefined ? forceGalaxy : !this.isGalaxyView;
+
+    if (goToGalaxy && !this.isGalaxyView) {
+      // Open galaxy map
+      this.scene.sleep('Planet');
+      const galaxyScene = this.scene.get('GalaxyMap');
+      if (galaxyScene.scene.isSleeping()) {
+        this.scene.wake('GalaxyMap');
+      } else if (!galaxyScene.scene.isActive()) {
+        this.scene.launch('GalaxyMap');
+      }
+      this.isGalaxyView = true;
+      this.dom.pList.style.display = 'none';
+      this.dom.galaxyToggle.textContent = '✦ PLANET VIEW';
+      this.dom.galaxyToggle.classList.add('active');
+    } else if (!goToGalaxy && this.isGalaxyView) {
+      // Return to planet view
+      this.scene.sleep('GalaxyMap');
+      this.scene.wake('Planet');
+      this.isGalaxyView = false;
+      this.dom.pList.style.display = '';
+      this.dom.galaxyToggle.textContent = '✦ GALAXY MAP';
+      this.dom.galaxyToggle.classList.remove('active');
+      this.renderPlanetDetail();
+    }
   }
 
   renderPlanetDetail() {

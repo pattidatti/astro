@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import BootScene from './scenes/Boot.js';
 import PlanetScene from './scenes/Planet.js';
 import HUDScene from './scenes/HUD.js';
+import GalaxyMapScene from './scenes/GalaxyMap.js';
 
 export function createGame() {
   return new Phaser.Game({
@@ -14,7 +15,7 @@ export function createGame() {
       width: window.innerWidth,
       height: window.innerHeight,
     },
-    scene: [BootScene, PlanetScene, HUDScene],
+    scene: [BootScene, PlanetScene, HUDScene, GalaxyMapScene],
     input: {
       touch: {
         capture: true

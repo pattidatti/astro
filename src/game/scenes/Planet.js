@@ -43,10 +43,23 @@ export default class PlanetScene extends Phaser.Scene {
 
     this.setupPlanet();
 
-    // Listen for planet changes — with transition
-    gameState.on('planetChanged', () => this.transitionToPlanet());
-    gameState.on('planetColonized', () => this.transitionToPlanet());
-    gameState.on('stateLoaded', () => this.setupPlanet());
+    // Listen for planet changes — with transition (only if scene is active)
+    gameState.on('planetChanged', () => {
+      if (this.scene.isActive()) this.transitionToPlanet();
+    });
+    gameState.on('planetColonized', () => {
+      if (this.scene.isActive()) this.transitionToPlanet();
+    });
+    gameState.on('stateLoaded', () => {
+      if (this.scene.isActive()) this.setupPlanet();
+    });
+
+    // Handle wake from galaxy map — update planet if changed while sleeping
+    this.events.on('wake', () => {
+      if (this.currentPlanetId !== gameState.activePlanet) {
+        this.transitionToPlanet();
+      }
+    });
 
     // Handle resize
     this.scale.on('resize', (gameSize) => {
