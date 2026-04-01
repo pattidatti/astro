@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { PLANETS } from '../data/planets.js';
 import { generatePlanetTexture } from '../objects/PlanetRenderer.js';
+import { generatePlanetNebula } from '../objects/NebulaRenderer.js';
 import { gameState } from '../GameState.js';
 import { loadFromLocal, startAutoSave } from '../../storage.js';
 import { initFirebase, isFirebaseConfigured } from '../../firebase.js';
@@ -18,6 +19,10 @@ export default class BootScene extends Phaser.Scene {
     for (const planet of PLANETS) {
       generatePlanetTexture(this, planet, size);
     }
+
+    // Pre-generate nebula for the starting planet (others generated lazily)
+    const startPlanet = PLANETS[0];
+    generatePlanetNebula(this, startPlanet, this.scale.width, this.scale.height);
 
     // Initialize Firebase (will warn if not configured)
     initFirebase();

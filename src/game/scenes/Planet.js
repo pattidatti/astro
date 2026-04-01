@@ -2,7 +2,9 @@ import Phaser from 'phaser';
 import { gameState } from '../GameState.js';
 import { PLANETS } from '../data/planets.js';
 import { generatePlanetTexture, drawPlanetRings } from '../objects/PlanetRenderer.js';
+import { generatePlanetNebula } from '../objects/NebulaRenderer.js';
 import Starfield from '../objects/Starfield.js';
+import SpaceCamera from '../objects/SpaceCamera.js';
 import Station from '../objects/Station.js';
 import RobotManager from '../objects/RobotManager.js';
 
@@ -19,18 +21,25 @@ export default class PlanetScene extends Phaser.Scene {
 
   create() {
     this.starfield = new Starfield(this);
+    this.spaceCamera = new SpaceCamera(this);
     this.ringGraphics = this.add.graphics().setDepth(0);
     this.tetherGraphics = this.add.graphics().setDepth(1);
     this.planetImage = null;
     this.currentPlanetId = null;
     this.station = null;
     this.robotManager = new RobotManager(this);
-    this.shootingStarTime = 0;
+    this.shootingStars = [];
     this.shootingStarGraphics = this.add.graphics().setDepth(5);
     this.transitioning = false;
 
     // Deep space glow behind planet
     this.glowGraphics = this.add.graphics().setDepth(-1);
+
+    // Set initial nebula
+    const def = gameState.activePlanetDef;
+    this._ensureNebula(def);
+    this.starfield.setNebula(`nebula_${def.id}`);
+    this._tintDust(def);
 
     this.setupPlanet();
 
@@ -44,6 +53,21 @@ export default class PlanetScene extends Phaser.Scene {
       this.starfield.resize(gameSize.width, gameSize.height);
       this.setupPlanet();
     });
+  }
+
+  /** Ensure nebula texture exists for a planet (lazy generation) */
+  _ensureNebula(planetDef) {
+    const key = `nebula_${planetDef.id}`;
+    if (!this.textures.exists(key)) {
+      generatePlanetNebula(this, planetDef, this.scale.width, this.scale.height);
+    }
+  }
+
+  /** Tint dust particles to match planet's glow color */
+  _tintDust(planetDef) {
+    const hex = planetDef.glow.replace('#', '');
+    const color = parseInt(hex, 16);
+    this.starfield.setDustColor(color);
   }
 
   /** Calculate the visible center area between panels */
@@ -84,11 +108,16 @@ export default class PlanetScene extends Phaser.Scene {
         Phaser.Geom.Circle.Contains
       );
 
-    // Click/tap handler
+    // Click/tap handler — suppress if SpaceCamera detected a drag
     this.planetImage.on('pointerdown', (pointer) => {
       if (this.transitioning) return;
-      gameState.addOre(gameState.clickPow);
-      this.showClickFeedback(pointer.x, pointer.y);
+      // Delay the click check slightly so pointermove can set wasDrag
+      this.time.delayedCall(50, () => {
+        if (this.spaceCamera.totalDragDist < 8) {
+          gameState.addOre(gameState.clickPow);
+          this.showClickFeedback(pointer.x, pointer.y);
+        }
+      });
     });
 
     // Station position — right side of planet
@@ -144,6 +173,12 @@ export default class PlanetScene extends Phaser.Scene {
       duration: 500,
       ease: 'Power2',
     });
+
+    // Crossfade nebula to new planet's palette
+    const newDef = gameState.activePlanetDef;
+    this._ensureNebula(newDef);
+    this.starfield.fadeToNebula(`nebula_${newDef.id}`, 600);
+    this._tintDust(newDef);
 
     // After fade out, set up new planet
     this.time.delayedCall(550, () => {
@@ -250,7 +285,15 @@ export default class PlanetScene extends Phaser.Scene {
 
   update(time, delta) {
     const t = time / 1000;
-    this.starfield.update(delta);
+
+    // Update space camera (parallax pan)
+    this.spaceCamera.update(delta);
+    const panX = this.spaceCamera.offsetX;
+    const panY = this.spaceCamera.offsetY;
+
+    // Update starfield with parallax offsets
+    this.starfield.update(delta, panX, panY);
+
     this.station.update(time, delta);
     this.robotManager.update(t, delta);
 
@@ -263,21 +306,69 @@ export default class PlanetScene extends Phaser.Scene {
     // Draw tether beam
     this.drawTether(t);
 
-    // Deep space glow (layered for richer look)
-    this.glowGraphics.clear();
-    const color = Phaser.Display.Color.HexStringToColor(def.glow);
-    this.glowGraphics.fillStyle(color.color, 0.025);
-    this.glowGraphics.fillCircle(this.planetCx, this.planetCy, this.planetR * 3.5);
-    this.glowGraphics.fillStyle(color.color, 0.05);
-    this.glowGraphics.fillCircle(this.planetCx, this.planetCy, this.planetR * 2.2);
-    this.glowGraphics.fillStyle(color.color, 0.07);
-    this.glowGraphics.fillCircle(this.planetCx, this.planetCy, this.planetR * 1.5);
+    // Deep space glow — enhanced multi-layer with offset
+    this.drawEnhancedGlow(def, t);
 
-    // Shooting star
-    this.drawShootingStar(t);
+    // Shooting stars
+    this.updateShootingStars(t);
 
     // Station bob
     this.station.y = this.stationY + Math.sin(t) * 8;
+
+    // Nebula breathing — very subtle alpha oscillation
+    if (this.starfield.nebulaImage) {
+      this.starfield.nebulaImage.setAlpha(0.97 + Math.sin(t * 0.2) * 0.03);
+    }
+  }
+
+  drawEnhancedGlow(def, t) {
+    const g = this.glowGraphics;
+    g.clear();
+
+    const cx = this.planetCx;
+    const cy = this.planetCy;
+    const R = this.planetR;
+    const color = Phaser.Display.Color.HexStringToColor(def.glow);
+
+    // Very large ambient light pool
+    g.fillStyle(color.color, 0.012);
+    g.fillCircle(cx - R * 0.1, cy - R * 0.1, R * 5);
+
+    // Outer glow (offset slightly toward light source)
+    g.fillStyle(color.color, 0.025);
+    g.fillCircle(cx - R * 0.08, cy - R * 0.08, R * 3.5);
+
+    // Mid glow
+    g.fillStyle(color.color, 0.05);
+    g.fillCircle(cx - R * 0.05, cy - R * 0.05, R * 2.2);
+
+    // Inner glow
+    g.fillStyle(color.color, 0.07);
+    g.fillCircle(cx, cy, R * 1.5);
+
+    // Lens flare for star-type planets
+    if (def.type === 'star') {
+      const flareAngle = -Math.PI / 4; // diagonal
+      for (let i = 1; i <= 3; i++) {
+        const fx = cx + Math.cos(flareAngle) * R * (1.8 + i * 0.9);
+        const fy = cy + Math.sin(flareAngle) * R * (1.8 + i * 0.9);
+        const fAlpha = 0.04 - i * 0.008;
+        const fSize = R * (0.15 + i * 0.05);
+        if (fAlpha > 0) {
+          g.fillStyle(color.color, fAlpha);
+          // Hexagonal flare (approximated with 6-sided polygon)
+          g.beginPath();
+          for (let s = 0; s <= 6; s++) {
+            const a = (s / 6) * Math.PI * 2 + t * 0.1;
+            const px = fx + Math.cos(a) * fSize;
+            const py = fy + Math.sin(a) * fSize * 0.7;
+            if (s === 0) g.moveTo(px, py);
+            else g.lineTo(px, py);
+          }
+          g.fillPath();
+        }
+      }
+    }
   }
 
   drawTether(t) {
@@ -307,22 +398,62 @@ export default class PlanetScene extends Phaser.Scene {
     g.strokePath();
   }
 
-  drawShootingStar(t) {
+  // --- Improved shooting stars with gradient trails ---
+
+  updateShootingStars(t) {
     const g = this.shootingStarGraphics;
     g.clear();
 
-    const ss = Math.sin(t * 0.06) * Math.cos(t * 0.11);
-    if (ss > 0.97) {
-      const W = this.scale.width, H = this.scale.height;
-      const a = (ss - 0.97) * 33;
-      const ssx = W * (0.05 + ((t * 19) % 1) * 0.9);
-      const ssy = H * (0.04 + ((t * 13) % 1) * 0.25);
+    const W = this.scale.width;
+    const H = this.scale.height;
 
-      g.lineStyle(1.5, 0xffffff, a * 0.9);
-      g.beginPath();
-      g.moveTo(ssx, ssy);
-      g.lineTo(ssx - 55, ssy + 20);
-      g.strokePath();
+    // Spawn new shooting stars more frequently
+    if (Math.random() < 0.003) {
+      this.shootingStars.push({
+        x: Math.random() * W * 0.8 + W * 0.1,
+        y: Math.random() * H * 0.3,
+        vx: -(3 + Math.random() * 4),
+        vy: 1 + Math.random() * 2,
+        life: 1,
+        decay: 0.015 + Math.random() * 0.01,
+        len: 40 + Math.random() * 50,
+      });
+    }
+
+    // Update and draw
+    for (let i = this.shootingStars.length - 1; i >= 0; i--) {
+      const ss = this.shootingStars[i];
+      ss.x += ss.vx;
+      ss.y += ss.vy;
+      ss.life -= ss.decay;
+
+      if (ss.life <= 0) {
+        this.shootingStars.splice(i, 1);
+        continue;
+      }
+
+      // Gradient trail: draw multiple segments with decreasing alpha
+      const segments = 6;
+      const speed = Math.sqrt(ss.vx * ss.vx + ss.vy * ss.vy);
+      const dx = ss.vx / speed;
+      const dy = ss.vy / speed;
+
+      for (let s = 0; s < segments; s++) {
+        const frac = s / segments;
+        const alpha = ss.life * (1 - frac) * 0.9;
+        const segLen = ss.len / segments;
+        const x1 = ss.x - dx * segLen * s;
+        const y1 = ss.y - dy * segLen * s;
+        const x2 = ss.x - dx * segLen * (s + 1);
+        const y2 = ss.y - dy * segLen * (s + 1);
+        const width = (1 - frac * 0.7) * 1.5;
+
+        g.lineStyle(width, 0xffffff, alpha);
+        g.beginPath();
+        g.moveTo(x1, y1);
+        g.lineTo(x2, y2);
+        g.strokePath();
+      }
     }
   }
 }

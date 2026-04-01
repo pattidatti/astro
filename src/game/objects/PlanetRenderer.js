@@ -79,14 +79,33 @@ export function generatePlanetTexture(scene, planetDef, size) {
   ctx.fillStyle = sh;
   ctx.fillRect(0, 0, s, s);
 
+  // Bright rim highlight on lit side (thin arc)
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.globalAlpha = 0.2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  // Arc on the upper-left (lit side)
+  ctx.arc(cx, cy, R - 0.5, -Math.PI * 0.85, -Math.PI * 0.15);
+  ctx.stroke();
+  ctx.globalAlpha = 0.1;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R - 1, -Math.PI * 0.75, -Math.PI * 0.25);
+  ctx.stroke();
+  ctx.restore();
+
   ctx.restore();
 
   // ── ATMOSPHERE ── Multi-layered soft glow (no hard edges)
-  // Layer 1: Inner atmosphere glow (closest to planet surface)
-  for (let i = 0; i < 6; i++) {
-    const innerR = R + R * 0.02 * (i + 1);
-    const outerR = R + R * 0.08 * (i + 1);
-    const alpha = (0.12 - i * 0.018);
+  // Layer 1: Inner atmosphere glow (closest to planet surface) — 8 layers for smoother falloff
+  for (let i = 0; i < 8; i++) {
+    const innerR = R + R * 0.015 * (i + 1);
+    const outerR = R + R * 0.07 * (i + 1);
+    const alpha = (0.12 - i * 0.013);
     if (alpha <= 0) break;
     const atm = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
     atm.addColorStop(0, planetDef.glow + alphaHex(alpha));
@@ -97,14 +116,15 @@ export function generatePlanetTexture(scene, planetDef, size) {
     ctx.fill();
   }
 
-  // Layer 2: Outer halo (very diffuse)
-  const oh = ctx.createRadialGradient(cx, cy, R * 0.95, cx, cy, R * 1.45);
+  // Layer 2: Outer halo (very diffuse, larger)
+  const oh = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R * 1.55);
   oh.addColorStop(0, planetDef.glow + '18');
-  oh.addColorStop(0.3, planetDef.glow + '0c');
-  oh.addColorStop(0.7, planetDef.glow + '04');
+  oh.addColorStop(0.2, planetDef.glow + '10');
+  oh.addColorStop(0.5, planetDef.glow + '08');
+  oh.addColorStop(0.8, planetDef.glow + '03');
   oh.addColorStop(1, 'transparent');
   ctx.beginPath();
-  ctx.arc(cx, cy, R * 1.45, 0, Math.PI * 2);
+  ctx.arc(cx, cy, R * 1.55, 0, Math.PI * 2);
   ctx.fillStyle = oh;
   ctx.fill();
 
