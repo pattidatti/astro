@@ -10,67 +10,104 @@
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #020509; }
-    body { font-family: 'Share Tech Mono', monospace; color: #c8e8ff; height: 100dvh; display: flex; flex-direction: column; touch-action: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0e14; }
+    body { font-family: 'Share Tech Mono', monospace; color: #e8dcc8; height: 100dvh; touch-action: none; }
     #game-container { position: fixed; inset: 0; z-index: 1; }
     #game-container canvas { display: block; width: 100% !important; height: 100% !important; }
   </style>
-  <script type="module" crossorigin src="/assets/index-Ab10XF_U.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-BK3J3TV8.css">
+  <script type="module" crossorigin src="/assets/index-DdUgiXpm.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-dKMpLB2A.css">
 </head>
 <body>
   <div id="game-container"></div>
 
-  <!-- HUD Overlay -->
+  <!-- HUD Overlay — CSS Grid desktop layout -->
   <div id="hud-overlay">
     <!-- Top resource bar -->
-    <div id="hud">
-      <div id="logo">ASTRO HARVEST<span>GALACTIC EXTRACTION v4.2</span></div>
+    <div id="top-bar">
+      <div id="logo">ASTRO<span class="logo-sub">HARVEST</span><span class="logo-ver">GALACTIC EXTRACTION v4.2</span></div>
       <div id="resources">
         <div class="rc">
-          <div class="rc-val" id="vOre">0</div>
-          <div class="rc-lbl">&#x2B21; ORE</div>
+          <div class="rc-icon">&#x2B21;</div>
+          <div class="rc-info">
+            <div class="rc-lbl">ORE</div>
+            <div class="rc-val" id="vOre">0</div>
+          </div>
           <div class="rc-rate" id="rOre">+0/s</div>
         </div>
         <div class="rc-sep"></div>
         <div class="rc" id="rcCrys" style="display:none">
-          <div class="rc-val" id="vCrys">0</div>
-          <div class="rc-lbl">&#x25C8; CRYST</div>
+          <div class="rc-icon">&#x25C8;</div>
+          <div class="rc-info">
+            <div class="rc-lbl">CRYSTAL</div>
+            <div class="rc-val" id="vCrys">0</div>
+          </div>
           <div class="rc-rate" id="rCrys">+0/s</div>
         </div>
         <div class="rc-sep" id="sepCrys" style="display:none"></div>
         <div class="rc" id="rcEnrg" style="display:none">
-          <div class="rc-val" id="vEnrg">0</div>
-          <div class="rc-lbl">&#9889; ENRG</div>
+          <div class="rc-icon">&#9889;</div>
+          <div class="rc-info">
+            <div class="rc-lbl">ENERGY</div>
+            <div class="rc-val" id="vEnrg">0</div>
+          </div>
           <div class="rc-rate" id="rEnrg">+0/s</div>
         </div>
       </div>
     </div>
 
-    <!-- Bottom panel -->
-    <div id="panel">
-      <div id="tabbar">
-        <button class="tabbtn on" id="tu">&#x2B21; UPGRADES</button>
-        <button class="tabbtn" id="tg">&#x2299; GALAXY</button>
+    <!-- Left panel: Upgrades -->
+    <div id="left-panel" class="stellaris-panel">
+      <div class="panel-header">
+        <span class="panel-title">&#x2B21; UPGRADES</span>
+        <div id="multrow">
+          <button class="mbtn on" id="m1">&times;1</button>
+          <button class="mbtn" id="m10">&times;10</button>
+          <button class="mbtn" id="m100">&times;100</button>
+        </div>
       </div>
-      <div id="stats">
-        <div class="sv"><div class="sv-n" id="sRob">0</div><div class="sv-l">DRONES</div></div>
-        <div class="sv"><div class="sv-n" id="sWld">1</div><div class="sv-l">WORLDS</div></div>
-        <div class="sv"><div class="sv-n" id="sClk">1</div><div class="sv-l">CLICK</div></div>
-        <div class="sv"><div class="sv-n" id="sRate">0</div><div class="sv-l">ORE/S</div></div>
+      <div class="panel-body" id="upgScroll">
+        <div id="upgGrid"></div>
       </div>
-      <div id="scroll">
-        <div id="tabU">
-          <div id="multrow">
-            <button class="mbtn on" id="m1">&times;1</button>
-            <button class="mbtn" id="m10">&times;10</button>
-            <button class="mbtn" id="m100">&times;100</button>
+    </div>
+
+    <!-- Right panel: Operations -->
+    <div id="right-panel" class="stellaris-panel">
+      <div class="panel-header">
+        <span class="panel-title">&#x2299; OPERATIONS</span>
+      </div>
+      <div class="panel-body">
+        <div id="planet-detail">
+          <div id="pd-name">XERION</div>
+          <div id="pd-type">Home world</div>
+          <div id="pd-bonus"></div>
+        </div>
+        <div class="panel-divider"></div>
+        <div id="stats">
+          <div class="sv">
+            <div class="sv-l">DRONES</div>
+            <div class="sv-n" id="sRob">0</div>
           </div>
-          <div id="upgGrid"></div>
+          <div class="sv">
+            <div class="sv-l">WORLDS</div>
+            <div class="sv-n" id="sWld">1</div>
+          </div>
+          <div class="sv">
+            <div class="sv-l">CLICK PWR</div>
+            <div class="sv-n" id="sClk">1</div>
+          </div>
+          <div class="sv">
+            <div class="sv-l">ORE/SEC</div>
+            <div class="sv-n" id="sRate">0</div>
+          </div>
         </div>
-        <div id="tabG" style="display:none">
-          <div id="pList"></div>
-        </div>
+      </div>
+    </div>
+
+    <!-- Bottom bar: Planet navigation -->
+    <div id="bottom-bar">
+      <div id="bottom-bar-inner">
+        <div id="pList"></div>
       </div>
     </div>
   </div>
