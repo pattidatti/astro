@@ -106,7 +106,7 @@ export function createGame() {
   // Per-frame update
   animationLoop.onUpdate((dt, time) => {
     galaxy.update(camera, dt, time);
-    skybox.update(time);
+    skybox.update(time, camera);
     clickFeedback.update(dt);
     renderPipeline.tick(time);
 

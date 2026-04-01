@@ -60,11 +60,15 @@ export class SolarSystem {
     const nebColors = planetDef.nebulaPalette?.colors || ['#110022', '#220044', '#003344', '#220055', '#004455'];
     const nebCol3 = nebColors[4] || nebColors[2] || '#003344';
 
+    // Seed-baserte timeOffsets → hvert volum per planet skifter farge unikt
+    const seed = planetDef.nebulaPalette?.seed || 42;
+    const baseOff = (seed % 100) / 100 * Math.PI * 6;
+
     this.nebulaVolume = new NebulaVolume(
       nebColors[1] || nebColors[0],
       nebColors[3] || nebColors[1],
       nebCol3,
-      80
+      80, baseOff
     );
     this.nebulaVolume.mesh.position.set(0, 0, -20);
     this.orbitGroup.add(this.nebulaVolume.mesh);
@@ -74,7 +78,7 @@ export class SolarSystem {
       nebColors[3] || nebColors[0],
       nebColors[0],
       nebColors[2] || nebColors[1],
-      70
+      70, baseOff + 1.1
     );
     this.nebulaVolume2.mesh.position.set(5, 3, -30);
     this.nebulaVolume2.mesh.rotation.z = Math.PI / 4;
@@ -85,7 +89,7 @@ export class SolarSystem {
       nebColors[2] || nebColors[0],
       nebColors[4] || nebColors[2],
       nebColors[0],
-      55
+      55, baseOff + 2.3
     );
     this.nebulaVolume3.mesh.position.set(-14, 7, -12);
     this.nebulaVolume3.mesh.rotation.z = -Math.PI / 5;
@@ -96,12 +100,43 @@ export class SolarSystem {
       nebColors[0],
       nebColors[2] || nebColors[1],
       nebColors[3] || nebColors[2],
-      42
+      42, baseOff + 3.7
     );
     this.nebulaVolume4.mesh.position.set(10, -5, -42);
     this.nebulaVolume4.mesh.rotation.z = Math.PI / 3;
     this.nebulaVolume4.mesh.rotation.x = Math.PI / 8;
     this.orbitGroup.add(this.nebulaVolume4.mesh);
+
+    // Komplementær + triadisk accentfarge — kontrast mot planetens dominante hue
+    const dominantColor = new THREE.Color(nebColors[4] || nebColors[3]);
+    const hsl = {};
+    dominantColor.getHSL(hsl);
+    const accentBright = new THREE.Color().setHSL((hsl.h + 0.5) % 1.0, 0.85, 0.55);
+    const accentDark   = new THREE.Color().setHSL((hsl.h + 0.5) % 1.0, 0.6,  0.12);
+    const triBright    = new THREE.Color().setHSL((hsl.h + 0.33) % 1.0, 0.80, 0.50);
+    const triDark      = new THREE.Color().setHSL((hsl.h + 0.33) % 1.0, 0.5,  0.10);
+
+    // Fifth nebula — komplementærfarge (f.eks. teal rundt rød planet)
+    this.nebulaVolume5 = new NebulaVolume(
+      '#' + accentDark.getHexString(),
+      '#' + accentBright.getHexString(),
+      nebColors[2] || nebColors[1],
+      50, Math.PI * 1.2
+    );
+    this.nebulaVolume5.mesh.position.set(-9, 11, -20);
+    this.nebulaVolume5.mesh.rotation.z = Math.PI / 6;
+    this.orbitGroup.add(this.nebulaVolume5.mesh);
+
+    // Sixth nebula — triadisk accent (f.eks. gull rundt lilla planet)
+    this.nebulaVolume6 = new NebulaVolume(
+      '#' + triDark.getHexString(),
+      '#' + triBright.getHexString(),
+      nebColors[4] || nebColors[3],
+      38, Math.PI * 1.9
+    );
+    this.nebulaVolume6.mesh.position.set(15, -7, -16);
+    this.nebulaVolume6.mesh.rotation.x = Math.PI / 7;
+    this.orbitGroup.add(this.nebulaVolume6.mesh);
 
     // Asteroid belt (all planet types except star)
     this.asteroidBelt = null;
@@ -184,9 +219,17 @@ export class SolarSystem {
     canvas.width = 256;
     canvas.height = 64;
     const ctx = canvas.getContext('2d');
-    ctx.font = 'bold 32px Orbitron, monospace';
+    ctx.font = 'bold 28px Orbitron, monospace';
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#c8a84e';
+
+    // Mørk dropshadow i flere lag for kontrast uten synlig ramme
+    ctx.shadowColor = 'rgba(0, 0, 0, 1)';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#000';
+    for (let i = 0; i < 3; i++) ctx.fillText(name, 128, 42);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#e8d070';
     ctx.fillText(name, 128, 42);
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -288,6 +331,8 @@ export class SolarSystem {
     this.nebulaVolume2.mesh.visible = nebFade > 0;
     this.nebulaVolume3.mesh.visible = nebFade > 0;
     this.nebulaVolume4.mesh.visible = nebFade > 0;
+    this.nebulaVolume5.mesh.visible = nebFade > 0;
+    this.nebulaVolume6.mesh.visible = nebFade > 0;
     if (nebFade > 0 && camera) {
       this.nebulaVolume.material.uniforms.uOpacity.value = nebFade;
       this.nebulaVolume.update(time, camera);
@@ -297,6 +342,10 @@ export class SolarSystem {
       this.nebulaVolume3.update(time, camera);
       this.nebulaVolume4.material.uniforms.uOpacity.value = nebFade * 0.8;
       this.nebulaVolume4.update(time, camera);
+      this.nebulaVolume5.material.uniforms.uOpacity.value = nebFade * 0.75;
+      this.nebulaVolume5.update(time, camera);
+      this.nebulaVolume6.material.uniforms.uOpacity.value = nebFade * 0.65;
+      this.nebulaVolume6.update(time, camera);
     }
 
     // Lens flare (star-type only) — fade out 390→450
@@ -354,6 +403,8 @@ export class SolarSystem {
     this.nebulaVolume2.dispose();
     this.nebulaVolume3.dispose();
     this.nebulaVolume4.dispose();
+    this.nebulaVolume5.dispose();
+    this.nebulaVolume6.dispose();
     if (this.asteroidBelt) this.asteroidBelt.dispose();
     if (this.orbitLine) {
       this.orbitLine.geometry.dispose();

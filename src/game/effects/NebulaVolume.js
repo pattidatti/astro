@@ -10,7 +10,7 @@ import { NOISE_GLSL } from '../utils/ShaderLib.js';
  * @param {number} size - Billboard size in world units
  */
 export class NebulaVolume {
-  constructor(color1 = 0x220044, color2 = 0x440088, color3 = 0x003344, size = 80) {
+  constructor(color1 = 0x220044, color2 = 0x440088, color3 = 0x003344, size = 80, timeOffset = 0) {
     const c1 = new THREE.Color(color1);
     const c2 = new THREE.Color(color2);
     const c3 = new THREE.Color(color3);
@@ -28,6 +28,7 @@ export class NebulaVolume {
 
         uniform float uTime;
         uniform float uOpacity;
+        uniform float uTimeOffset;
         uniform vec3  uColor1;
         uniform vec3  uColor2;
         uniform vec3  uColor3;
@@ -54,31 +55,38 @@ export class NebulaVolume {
           density = pow(density, 1.2);
           density *= falloff;
 
-          // Three-channel color blend
-          vec3 color = mix(uColor1, uColor2, n1);
+          // Sakte fargesyklus — hver instans har unik fase, skifter uavhengig
+          float colorCycle = sin(uTime * 0.08 + uTimeOffset) * 0.5 + 0.5;
+          vec3 c1 = mix(uColor1, uColor3 * 0.7 + uColor2 * 0.3, colorCycle * 0.45);
+          vec3 c2 = mix(uColor2, uColor1 * 0.5 + uColor3 * 0.5, colorCycle * 0.35);
+
+          vec3 color = mix(c1, c2, n1);
           color = mix(color, uColor3, n2 * 0.4);
 
           // Emission hotspots — 2 scattered bright cores
           float h1 = smoothstep(0.35, 0.0, length(p - vec2( 0.20,  0.15)));
           float h2 = smoothstep(0.25, 0.0, length(p - vec2(-0.18, -0.22)));
-          color += (uColor1 * 1.8 + vec3(0.4)) * (h1 + h2) * 0.5;
+          color += (c1 * 1.8 + vec3(0.4)) * (h1 + h2) * 0.5;
 
           // Bright inner core glow
           float core = smoothstep(0.45, 0.0, dist);
-          color += uColor2 * core * 0.4;
+          color += c2 * core * 0.4;
 
-          float alpha = density * 0.40 * uOpacity;
+          // Subtil pulsering — skyene "puster" litt
+          float pulse = 0.92 + 0.08 * sin(uTime * 0.18 + uTimeOffset * 1.7);
+          float alpha = density * 0.40 * uOpacity * pulse;
           if (alpha < 0.005) discard;
 
           gl_FragColor = vec4(color, alpha);
         }
       `,
       uniforms: {
-        uTime:    { value: 0 },
-        uOpacity: { value: 1.0 },
-        uColor1:  { value: new THREE.Vector3(c1.r, c1.g, c1.b) },
-        uColor2:  { value: new THREE.Vector3(c2.r, c2.g, c2.b) },
-        uColor3:  { value: new THREE.Vector3(c3.r, c3.g, c3.b) },
+        uTime:       { value: 0 },
+        uOpacity:    { value: 1.0 },
+        uTimeOffset: { value: timeOffset },
+        uColor1:     { value: new THREE.Vector3(c1.r, c1.g, c1.b) },
+        uColor2:     { value: new THREE.Vector3(c2.r, c2.g, c2.b) },
+        uColor3:     { value: new THREE.Vector3(c3.r, c3.g, c3.b) },
       },
       transparent: true,
       depthWrite:  false,

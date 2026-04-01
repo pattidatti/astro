@@ -19,12 +19,20 @@ export class Skybox {
     this._createNebulaBackground();
 
     // Target nebula colors (lerped toward on planet change)
-    this._targetNeb1 = new THREE.Vector3(0.18, 0.05, 0.40); // deep purple
-    this._targetNeb2 = new THREE.Vector3(0.65, 0.35, 0.08); // orange/gold
-    this._targetNeb3 = new THREE.Vector3(0.05, 0.45, 0.55); // teal/cyan
-    this._targetMilkyWay = 0.55;
+    this._targetNeb1 = new THREE.Vector3(0.50, 0.08, 0.85); // vivid purple
+    this._targetNeb2 = new THREE.Vector3(0.90, 0.45, 0.08); // bright amber
+    this._targetNeb3 = new THREE.Vector3(0.08, 0.70, 0.80); // bright teal
+    this._targetMilkyWay = 0.70;
 
-    this.targetDensity = 0.55;
+    // Current (lerp base) — separert fra uniform slik at oscillasjon kan legges på toppen
+    this._currentNeb1 = this._targetNeb1.clone();
+    this._currentNeb2 = this._targetNeb2.clone();
+    this._currentNeb3 = this._targetNeb3.clone();
+
+    // For syklering av emisjonsfargen (4. kanal)
+    this._emitColor = new THREE.Color();
+
+    this.targetDensity = 0.75;
   }
 
   _createStarCubemap() {
@@ -214,8 +222,17 @@ export class Skybox {
     this.nebulaMaterial = new THREE.ShaderMaterial({
       vertexShader: /* glsl */`
         varying vec2 vUv;
+        varying vec3 vWorldDir;
+        uniform mat4 uCameraMatrixWorld;
+        uniform mat4 uProjectionMatrixInverse;
+
         void main() {
           vUv = uv;
+          // Reconstruct world-space view ray so nebula moves with camera
+          vec4 view = uProjectionMatrixInverse * vec4(position.xy, 1.0, 1.0);
+          view.xyz /= view.w;
+          view.w = 0.0; // direction, not position — strips translation
+          vWorldDir = normalize((uCameraMatrixWorld * view).xyz);
           gl_Position = vec4(position.xy, 0.9999, 1.0);
         }
       `,
@@ -227,84 +244,88 @@ export class Skybox {
         uniform float uDensity;
         uniform float uOpacity;
 
-        // Three-channel nebula colors
-        uniform vec3 uNebulaColor1;   // deep purple/blue
-        uniform vec3 uNebulaColor2;   // orange/gold
-        uniform vec3 uNebulaColor3;   // teal/cyan
+        // Nebula color channels
+        uniform vec3 uNebulaColor1;
+        uniform vec3 uNebulaColor2;
+        uniform vec3 uNebulaColor3;
+        uniform vec3 uNebulaColor4; // skiftende emisjonsfilamenter
         uniform float uMilkyWayStrength;
 
         varying vec2 vUv;
+        varying vec3 vWorldDir;
 
-        // Domain-warped FBM: q offsets uv by an fbm field before sampling
-        float warpedFbm(vec2 uv, float warpScale, int oct) {
-          vec2 q = vec2(
-            fbm(uv,                       oct),
-            fbm(uv + vec2(5.2, 1.3),      oct)
+        // 3D domain-warped FBM — no seams, works directly on world direction
+        float warpedFbm3(vec3 p, float warpScale, int oct) {
+          vec3 q = vec3(
+            fbm3(p,                           oct),
+            fbm3(p + vec3(5.2, 1.3, 2.7),    oct),
+            fbm3(p + vec3(1.7, 9.2, 4.5),    oct)
           );
-          return fbm(uv + q * warpScale, oct);
+          return fbm3(p + q * warpScale, oct);
         }
 
         void main() {
-          vec2 uv = vUv;
-          uv.x *= uResolution.x / uResolution.y;
-          float t = uTime * 0.004; // very slow drift
+          vec3 dir = normalize(vWorldDir);
+          float t  = uTime * 0.004;
 
-          // Channel 1 — deep purple/blue structure (dominant large forms)
-          float n1 = warpedFbm(uv * 1.8 + t, 1.8, 6);
-          n1 = pow(max(0.0, n1 - (1.0 - uDensity)), 1.3);
+          // Channel 1 — large dominant forms
+          float n1 = warpedFbm3(dir * 0.55 + vec3(t, 0.0, t * 0.5), 1.8, 6);
+          n1 = max(0.0, n1 - 0.12) * uDensity * 1.8;
 
-          // Channel 2 — orange/gold wisps (medium-scale filaments)
-          float n2 = warpedFbm(uv * 2.4 - t * 0.7 + vec2(3.1, 1.7), 1.4, 5);
-          n2 = pow(max(0.0, n2 - 0.45), 1.6);
+          // Channel 2 — medium wisps
+          float n2 = warpedFbm3(dir * 0.90 + vec3(3.1, 1.7, 0.9) - vec3(t * 0.7, 0.0, 0.0), 1.4, 5);
+          n2 = pow(max(0.0, n2 - 0.22), 1.3);
 
-          // Channel 3 — teal/cyan tendrils (fine detail)
-          float n3 = warpedFbm(uv * 3.1 + t * 0.5 + vec2(7.3, 4.1), 1.2, 4);
-          n3 = pow(max(0.0, n3 - 0.50), 1.8);
+          // Channel 3 — fine tendrils
+          float n3 = warpedFbm3(dir * 1.50 + vec3(7.3, 4.1, 2.5) + vec3(t * 0.5, 0.0, 0.0), 1.2, 4);
+          n3 = pow(max(0.0, n3 - 0.22), 1.4);
+
+          // Channel 4 — sparse emission filaments (skifter farge over tid via uniform)
+          float n4 = fbm3(dir * 2.5 + vec3(11.3, 7.8, 3.1) + vec3(t * 0.35, 0.0, 0.0), 3);
+          n4 = pow(max(0.0, n4 - 0.42), 2.8);
 
           vec3 nebColor = uNebulaColor1 * n1
-                        + uNebulaColor2 * n2 * 0.7
-                        + uNebulaColor3 * n3 * 0.5;
-          float totalDensity = n1 + n2 * 0.6 + n3 * 0.4;
+                        + uNebulaColor2 * n2 * 0.85
+                        + uNebulaColor3 * n3 * 0.65
+                        + uNebulaColor4 * n4 * 0.90;
+          float totalDensity = n1 + n2 * 0.7 + n3 * 0.5 + n4 * 0.35;
 
-          // Milky Way band — gaussian strip with structured noise inside
-          float bandY    = (vUv.y - 0.45) * 3.5;
-          float mwBand   = exp(-bandY * bandY);
-          float mwNoise  = fbm(vec2(uv.x * 4.0 + t * 0.3, uv.y * 8.0), 4);
+          // Milky Way band — gaussian strip along world Y=0, noise along it
+          float mwBand    = exp(-dir.y * dir.y * 12.0);
+          float mwNoise   = fbm3(dir * 2.0 + vec3(t * 0.3, 0.0, 0.0), 4);
           float mwDensity = mwBand * mwNoise * uMilkyWayStrength;
           nebColor     += vec3(0.60, 0.65, 0.85) * mwDensity;
           totalDensity += mwDensity * 0.5;
 
-          // Bright emission hotspots (5 scattered nebula cores)
-          vec2 p = vUv;
+          // Emission hotspots — angular distance in 3D, zero seams
           float h = 0.0;
-          h += exp(-dot(p - vec2(0.25,0.60), p - vec2(0.25,0.60)) * 25.0) * 0.5;
-          h += exp(-dot(p - vec2(0.75,0.40), p - vec2(0.75,0.40)) * 25.0) * 0.5;
-          h += exp(-dot(p - vec2(0.50,0.25), p - vec2(0.50,0.25)) * 25.0) * 0.4;
-          h += exp(-dot(p - vec2(0.15,0.35), p - vec2(0.15,0.35)) * 25.0) * 0.3;
-          h += exp(-dot(p - vec2(0.85,0.70), p - vec2(0.85,0.70)) * 25.0) * 0.3;
+          h += exp(-(1.0 - dot(dir, normalize(vec3(-0.8,  0.4,  0.5)))) * 18.0) * 0.5;
+          h += exp(-(1.0 - dot(dir, normalize(vec3( 0.9, -0.2,  0.4)))) * 18.0) * 0.5;
+          h += exp(-(1.0 - dot(dir, normalize(vec3( 0.1,  0.9,  0.3)))) * 15.0) * 0.4;
+          h += exp(-(1.0 - dot(dir, normalize(vec3(-0.7, -0.5, -0.6)))) * 15.0) * 0.3;
+          h += exp(-(1.0 - dot(dir, normalize(vec3( 0.6,  0.5, -0.8)))) * 15.0) * 0.3;
           nebColor += (uNebulaColor1 * 1.5 + vec3(0.3)) * h;
 
-          // Vignette
-          float vig = 1.0 - length(vUv - 0.5) * 0.65;
-          vig = clamp(vig, 0.0, 1.0);
-
-          float alpha = clamp(totalDensity * 0.35, 0.0, 0.35) * vig * uOpacity;
+          float alpha = clamp(totalDensity * 0.45, 0.0, 0.55) * uOpacity;
           if (alpha < 0.003) discard;
 
           gl_FragColor = vec4(nebColor, alpha);
         }
       `,
       uniforms: {
-        uTime:             { value: 0 },
-        uResolution:       { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-        uDensity:          { value: 0.55 },
+        uTime:                    { value: 0 },
+        uResolution:              { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        uCameraMatrixWorld:       { value: new THREE.Matrix4() },
+        uProjectionMatrixInverse: { value: new THREE.Matrix4() },
+        uDensity:                 { value: 0.75 },
         uOpacity:          { value: 1.0 },
-        uNebulaColor1:     { value: new THREE.Vector3(0.18, 0.05, 0.40) },
-        uNebulaColor2:     { value: new THREE.Vector3(0.65, 0.35, 0.08) },
-        uNebulaColor3:     { value: new THREE.Vector3(0.05, 0.45, 0.55) },
-        uMilkyWayStrength: { value: 0.55 },
+        uNebulaColor1:     { value: new THREE.Vector3(0.50, 0.08, 0.85) },
+        uNebulaColor2:     { value: new THREE.Vector3(0.90, 0.45, 0.08) },
+        uNebulaColor3:     { value: new THREE.Vector3(0.08, 0.70, 0.80) },
+        uNebulaColor4:     { value: new THREE.Vector3(0.95, 0.15, 0.65) }, // shifting emission filaments
+        uMilkyWayStrength: { value: 0.70 },
       },
-      transparent: true,
+      transparent: false,
       depthWrite:  false,
       depthTest:   false,
       blending:    THREE.AdditiveBlending,
@@ -324,38 +345,60 @@ export class Skybox {
     if (!planetDef?.nebulaPalette) return;
     const { colors, density } = planetDef.nebulaPalette;
 
-    // Map nebula palette colors to the 3 channel targets
-    if (colors[0]) {
-      const c = new THREE.Color(colors[0]);
-      this._targetNeb1.set(c.r * 0.7, c.g * 0.4, c.b);
-    }
-    if (colors[2]) {
-      const c = new THREE.Color(colors[2]);
-      // Shift toward warm if planet is warm-toned, cool otherwise
-      this._targetNeb2.set(
-        c.r + 0.15,
-        c.g * 0.8,
-        c.b * 0.3
-      );
-    }
-    if (colors[4]) {
-      const c = new THREE.Color(colors[4]);
-      this._targetNeb3.set(c.r * 0.2, c.g * 0.6 + 0.2, c.b * 0.8 + 0.1);
-    }
+    // Use the brighter palette entries (index 3 & 4) and boost them significantly
+    // so the nebula is vivid and saturated like the planet's visual identity
+    const boost = (hex, mult, bias = 0) => {
+      const c = new THREE.Color(hex);
+      return [
+        Math.min(c.r * mult + bias, 1.0),
+        Math.min(c.g * mult + bias, 1.0),
+        Math.min(c.b * mult + bias, 1.0),
+      ];
+    };
 
-    this.targetDensity = density || 0.55;
-    this._targetMilkyWay = 0.40 + Math.random() * 0.25;
+    if (colors[4]) this._targetNeb1.set(...boost(colors[4], 2.5, 0.05));
+    if (colors[3]) this._targetNeb2.set(...boost(colors[3], 3.0, 0.12));
+    if (colors[2]) this._targetNeb3.set(...boost(colors[2], 2.2, 0.10));
+
+    this.targetDensity = Math.max(density || 0.75, 0.55);
+    this._targetMilkyWay = 0.55 + Math.random() * 0.25;
   }
 
-  update(time) {
+  update(time, camera) {
     const u = this.nebulaMaterial.uniforms;
     u.uTime.value = time;
+    if (camera) {
+      u.uCameraMatrixWorld.value.copy(camera.matrixWorld);
+      u.uProjectionMatrixInverse.value.copy(camera.projectionMatrixInverse);
+    }
 
-    // Smooth nebula color channel transitions
+    // Smooth nebula color channel transitions — lerp internt, oscillasjon på toppen
     const lerpSpeed = 0.012;
-    u.uNebulaColor1.value.lerp(this._targetNeb1, lerpSpeed);
-    u.uNebulaColor2.value.lerp(this._targetNeb2, lerpSpeed);
-    u.uNebulaColor3.value.lerp(this._targetNeb3, lerpSpeed);
+    this._currentNeb1.lerp(this._targetNeb1, lerpSpeed);
+    this._currentNeb2.lerp(this._targetNeb2, lerpSpeed);
+    this._currentNeb3.lerp(this._targetNeb3, lerpSpeed);
+
+    // Uavhengig oscillasjon per RGB-kanal → organisk levende fargeskift
+    const t = time;
+    u.uNebulaColor1.value.set(
+      this._currentNeb1.x * (0.82 + 0.18 * Math.sin(t * 0.045)),
+      this._currentNeb1.y * (0.78 + 0.22 * Math.sin(t * 0.038 + 1.4)),
+      this._currentNeb1.z * (0.75 + 0.25 * Math.sin(t * 0.031 + 2.8))
+    );
+    u.uNebulaColor2.value.set(
+      this._currentNeb2.x * (0.80 + 0.20 * Math.sin(t * 0.028 + 0.7)),
+      this._currentNeb2.y * (0.83 + 0.17 * Math.sin(t * 0.052 + 3.1)),
+      this._currentNeb2.z * (0.85 + 0.15 * Math.sin(t * 0.041 + 1.9))
+    );
+    u.uNebulaColor3.value.set(
+      this._currentNeb3.x * (0.78 + 0.22 * Math.sin(t * 0.061 + 2.3)),
+      this._currentNeb3.y * (0.80 + 0.20 * Math.sin(t * 0.034 + 0.5)),
+      this._currentNeb3.z * (0.82 + 0.18 * Math.sin(t * 0.047 + 4.1))
+    );
+
+    // Emisjonskanal sykler sakte gjennom HII/OIII/SII-farger (pink → teal → gull)
+    this._emitColor.setHSL((t * 0.006) % 1.0, 0.95, 0.65);
+    u.uNebulaColor4.value.set(this._emitColor.r, this._emitColor.g, this._emitColor.b);
 
     // Density transition
     u.uDensity.value += (this.targetDensity - u.uDensity.value) * lerpSpeed;
