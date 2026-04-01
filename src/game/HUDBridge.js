@@ -1,7 +1,6 @@
-import Phaser from 'phaser';
-import { gameState } from '../GameState.js';
-import { UPGRADES, COST_SCALE } from '../data/upgrades.js';
-import { PLANETS } from '../data/planets.js';
+import { gameState } from './GameState.js';
+import { UPGRADES } from './data/upgrades.js';
+import { PLANETS } from './data/planets.js';
 
 const fmt = (n) => {
   if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
@@ -11,14 +10,10 @@ const fmt = (n) => {
   return Math.floor(n) + '';
 };
 
-export default class HUDScene extends Phaser.Scene {
-  constructor() {
-    super('HUD');
-  }
-
-  create() {
+export class HUDBridge {
+  constructor(game) {
+    this.game = game;
     this.updateTimer = 0;
-    this.isGalaxyView = false;
 
     // Cache DOM refs
     this.dom = {
@@ -42,25 +37,57 @@ export default class HUDScene extends Phaser.Scene {
       pdType: document.getElementById('pd-type'),
       pdBonus: document.getElementById('pd-bonus'),
       galaxyToggle: document.getElementById('galaxyToggle'),
+      leftPanel: document.getElementById('left-panel'),
+      rightPanel: document.getElementById('right-panel'),
+      leftToggle: document.getElementById('left-toggle'),
+      rightToggle: document.getElementById('right-toggle'),
     };
 
-    // Multiplier buttons
-    document.getElementById('m1').addEventListener('pointerdown', () => this.setMult(1));
-    document.getElementById('m10').addEventListener('pointerdown', () => this.setMult(10));
-    document.getElementById('m100').addEventListener('pointerdown', () => this.setMult(100));
+    this.leftPanelOpen = true;
+    this.rightPanelOpen = true;
 
-    // Galaxy map toggle
+    this._setupButtons();
+    this._setupKeyboard();
+    this._setupEvents();
+    this._initialRender();
+
+    // Register with animation loop for per-frame updates
+    game.animationLoop.onUpdate((dt) => this.update(dt));
+  }
+
+  _setupButtons() {
+    document.getElementById('m1').addEventListener('pointerdown', () => this._setMult(1));
+    document.getElementById('m10').addEventListener('pointerdown', () => this._setMult(10));
+    document.getElementById('m100').addEventListener('pointerdown', () => this._setMult(100));
+
     this.dom.galaxyToggle.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
-      this.toggleGalaxyMap();
+      // Galaxy toggle will be wired up when galaxy view is implemented
     });
 
-    // M key to toggle galaxy map
-    this.input.keyboard.on('keydown-M', () => {
-      this.toggleGalaxyMap();
+    this.dom.leftToggle.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this._toggleLeftPanel();
     });
+    this.dom.rightToggle.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this._toggleRightPanel();
+    });
+  }
 
-    // Listen for unlock events
+  _setupKeyboard() {
+    this._keydownHandler = (e) => {
+      if (e.code === 'KeyQ') this._toggleLeftPanel();
+      if (e.code === 'KeyE') this._toggleRightPanel();
+    };
+    window.addEventListener('keydown', this._keydownHandler);
+  }
+
+  dispose() {
+    window.removeEventListener('keydown', this._keydownHandler);
+  }
+
+  _setupEvents() {
     gameState.on('crystalUnlocked', () => {
       this.dom.rcCrys.style.display = '';
       this.dom.sepCrys.style.display = '';
@@ -73,11 +100,11 @@ export default class HUDScene extends Phaser.Scene {
     gameState.on('planetColonized', (id) => {
       const p = PLANETS.find(x => x.id === id);
       this.toast('\u{1F30D} COLONIZED: ' + (p ? p.name : id));
-      this.renderPlanetDetail();
+      this._renderPlanetDetail();
     });
     gameState.on('planetChanged', () => {
-      this.renderPlanetDetail();
-      this.renderPlanets();
+      this._renderPlanetDetail();
+      this._renderPlanets();
     });
     gameState.on('stateLoaded', () => {
       if (gameState.crystalUnlocked) {
@@ -87,14 +114,15 @@ export default class HUDScene extends Phaser.Scene {
       if (gameState.energyUnlocked) {
         this.dom.rcEnrg.style.display = '';
       }
-      this.renderPlanetDetail();
+      this._renderPlanetDetail();
     });
+  }
 
-    this.renderUpgrades();
-    this.renderPlanets();
-    this.renderPlanetDetail();
+  _initialRender() {
+    this._renderUpgrades();
+    this._renderPlanets();
+    this._renderPlanetDetail();
 
-    // Show offline earnings or welcome
     if (gameState._offlineEarnings) {
       const oe = gameState._offlineEarnings;
       const hrs = Math.floor(oe.elapsed / 3600);
@@ -107,12 +135,7 @@ export default class HUDScene extends Phaser.Scene {
     }
   }
 
-  update(time, delta) {
-    const dt = delta / 1000;
-
-    // Tick game state
-    gameState.tick(dt);
-
+  update(dt) {
     // Update HUD values every frame
     this.dom.vOre.textContent = fmt(gameState.ore);
     this.dom.rOre.textContent = '+' + fmt(gameState.oreRate) + '/s';
@@ -131,54 +154,22 @@ export default class HUDScene extends Phaser.Scene {
     this.dom.sClk.textContent = fmt(gameState.clickPow);
     this.dom.sRate.textContent = fmt(gameState.oreRate);
 
-    // Render upgrades/planets periodically
+    // Periodic renders
     this.updateTimer += dt;
     if (this.updateTimer >= 0.35) {
       this.updateTimer = 0;
-      this.renderUpgrades();
-      this.renderPlanets();
+      this._renderUpgrades();
+      this._renderPlanets();
     }
   }
 
-  setMult(m) {
+  _setMult(m) {
     gameState.buyMult = m;
     [1, 10, 100].forEach(v => document.getElementById('m' + v).classList.toggle('on', v === m));
-    this.renderUpgrades();
+    this._renderUpgrades();
   }
 
-  /**
-   * Toggle between planet view and galaxy map.
-   * @param {boolean} [forceGalaxy] - if provided, force to galaxy (true) or planet (false)
-   */
-  toggleGalaxyMap(forceGalaxy) {
-    const goToGalaxy = forceGalaxy !== undefined ? forceGalaxy : !this.isGalaxyView;
-
-    if (goToGalaxy && !this.isGalaxyView) {
-      // Open galaxy map
-      this.scene.sleep('Planet');
-      const galaxyScene = this.scene.get('GalaxyMap');
-      if (galaxyScene.scene.isSleeping()) {
-        this.scene.wake('GalaxyMap');
-      } else if (!galaxyScene.scene.isActive()) {
-        this.scene.launch('GalaxyMap');
-      }
-      this.isGalaxyView = true;
-      this.dom.pList.style.display = 'none';
-      this.dom.galaxyToggle.textContent = '✦ PLANET VIEW';
-      this.dom.galaxyToggle.classList.add('active');
-    } else if (!goToGalaxy && this.isGalaxyView) {
-      // Return to planet view
-      this.scene.sleep('GalaxyMap');
-      this.scene.wake('Planet');
-      this.isGalaxyView = false;
-      this.dom.pList.style.display = '';
-      this.dom.galaxyToggle.textContent = '✦ GALAXY MAP';
-      this.dom.galaxyToggle.classList.remove('active');
-      this.renderPlanetDetail();
-    }
-  }
-
-  renderPlanetDetail() {
+  _renderPlanetDetail() {
     const def = gameState.activePlanetDef;
     this.dom.pdName.textContent = def.name;
     this.dom.pdType.textContent = def.desc;
@@ -189,7 +180,7 @@ export default class HUDScene extends Phaser.Scene {
     }
   }
 
-  renderUpgrades() {
+  _renderUpgrades() {
     const grid = this.dom.upgGrid;
     grid.innerHTML = '';
 
@@ -228,14 +219,14 @@ export default class HUDScene extends Phaser.Scene {
         d.addEventListener('pointerdown', (e) => {
           e.stopPropagation();
           gameState.buyUpgrade(u.id);
-          this.renderUpgrades();
+          this._renderUpgrades();
         });
       }
       grid.appendChild(d);
     }
   }
 
-  renderPlanets() {
+  _renderPlanets() {
     const list = this.dom.pList;
     list.innerHTML = '';
 
@@ -269,6 +260,22 @@ export default class HUDScene extends Phaser.Scene {
       }
       list.appendChild(d);
     });
+  }
+
+  _toggleLeftPanel(forceState) {
+    const open = forceState !== undefined ? forceState : !this.leftPanelOpen;
+    this.leftPanelOpen = open;
+    this.dom.leftPanel.classList.toggle('collapsed', !open);
+    this.dom.leftToggle.classList.toggle('panel-hidden', !open);
+    this.dom.leftToggle.innerHTML = open ? '&#x25C0;' : '&#x25B6;';
+  }
+
+  _toggleRightPanel(forceState) {
+    const open = forceState !== undefined ? forceState : !this.rightPanelOpen;
+    this.rightPanelOpen = open;
+    this.dom.rightPanel.classList.toggle('collapsed', !open);
+    this.dom.rightToggle.classList.toggle('panel-hidden', !open);
+    this.dom.rightToggle.innerHTML = open ? '&#x25B6;' : '&#x25C0;';
   }
 
   toast(msg) {

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "firebase": "^11.6.0",
-    "phaser": "^3.88.2"
+    "three": "^0.170.0"
   },
   "devDependencies": {
     "vite": "^6.3.1"
