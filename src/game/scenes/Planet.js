@@ -43,11 +43,11 @@ export default class PlanetScene extends Phaser.Scene {
     const def = gameState.activePlanetDef;
     const W = this.scale.width;
     const H = this.scale.height;
-    // Planet occupies top ~48% of screen
-    const sceneH = H * 0.48;
+    // Planet occupies top ~62% of screen (above the bottom panel)
+    const sceneH = H * 0.62;
     const cx = W / 2;
-    const cy = sceneH / 2;
-    const R = Math.min(W, sceneH) * 0.36;
+    const cy = sceneH * 0.45;
+    const R = Math.min(W, sceneH) * 0.32;
 
     this.planetCx = cx;
     this.planetCy = cy;
@@ -145,11 +145,15 @@ export default class PlanetScene extends Phaser.Scene {
     // Draw tether beam
     this.drawTether(t);
 
-    // Deep space glow
+    // Deep space glow (layered for richer look)
     this.glowGraphics.clear();
     const color = Phaser.Display.Color.HexStringToColor(def.glow);
+    this.glowGraphics.fillStyle(color.color, 0.03);
+    this.glowGraphics.fillCircle(this.planetCx, this.planetCy, this.planetR * 3.5);
     this.glowGraphics.fillStyle(color.color, 0.06);
-    this.glowGraphics.fillCircle(this.planetCx, this.planetCy, this.planetR * 2.8);
+    this.glowGraphics.fillCircle(this.planetCx, this.planetCy, this.planetR * 2.2);
+    this.glowGraphics.fillStyle(color.color, 0.08);
+    this.glowGraphics.fillCircle(this.planetCx, this.planetCy, this.planetR * 1.5);
 
     // Shooting star
     this.drawShootingStar(t);

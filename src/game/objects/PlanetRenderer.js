@@ -63,30 +63,31 @@ export function generatePlanetTexture(scene, planetDef, size) {
   ctx.fillStyle = sp;
   ctx.fillRect(0, 0, s, s);
 
-  // Shadow terminator
-  const sh = ctx.createRadialGradient(cx + R * 0.48, cy + R * 0.1, 0, cx + R * 0.48, cy + R * 0.1, R * 1.35);
+  // Shadow terminator (softer for better visibility)
+  const sh = ctx.createRadialGradient(cx + R * 0.55, cy + R * 0.15, 0, cx + R * 0.55, cy + R * 0.15, R * 1.4);
   sh.addColorStop(0, 'transparent');
-  sh.addColorStop(0.38, 'transparent');
-  sh.addColorStop(1, 'rgba(0,0,8,.85)');
+  sh.addColorStop(0.45, 'transparent');
+  sh.addColorStop(1, 'rgba(0,0,8,.65)');
   ctx.fillStyle = sh;
   ctx.fillRect(0, 0, s, s);
 
   ctx.restore();
 
   // Atmosphere rim glow (outside clip)
-  const atm = ctx.createRadialGradient(cx, cy, R * 0.87, cx, cy, R * 1.15);
+  const atm = ctx.createRadialGradient(cx, cy, R * 0.85, cx, cy, R * 1.18);
   atm.addColorStop(0, planetDef.glow + '00');
-  atm.addColorStop(0.35, planetDef.glow + '70');
+  atm.addColorStop(0.3, planetDef.glow + '99');
   atm.addColorStop(1, planetDef.glow + '00');
   ctx.beginPath();
-  ctx.arc(cx, cy, R * 1.04, 0, Math.PI * 2);
+  ctx.arc(cx, cy, R * 1.06, 0, Math.PI * 2);
   ctx.strokeStyle = atm;
-  ctx.lineWidth = R * 0.15;
+  ctx.lineWidth = R * 0.18;
   ctx.stroke();
 
-  // Outer halo
-  const ah = ctx.createRadialGradient(cx, cy, R * 1.05, cx, cy, R * 1.45);
-  ah.addColorStop(0, planetDef.glow + '18');
+  // Outer halo (stronger glow)
+  const ah = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R * 1.45);
+  ah.addColorStop(0, planetDef.glow + '30');
+  ah.addColorStop(0.5, planetDef.glow + '12');
   ah.addColorStop(1, 'transparent');
   ctx.beginPath();
   ctx.arc(cx, cy, R * 1.45, 0, Math.PI * 2);

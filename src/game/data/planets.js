@@ -10,12 +10,12 @@ export const PLANETS = [
 ];
 
 export const PLANET_COLORS = {
-  terr:  ['#66bbff', '#1a55cc', '#0a2288', '#000b33'],
-  lava:  ['#ffaa44', '#dd3300', '#991100', '#330000'],
-  cryst: ['#ee99ff', '#bb44ff', '#770099', '#220033'],
-  gas:   ['#ffee88', '#ffaa00', '#cc6600', '#331100'],
-  ice:   ['#ffffff', '#bbddff', '#4499cc', '#002255'],
-  neb:   ['#ff88cc', '#ff3388', '#990044', '#110011'],
-  star:  ['#ffffff', '#ffee44', '#ff8800', '#440800'],
-  void:  ['#bb44cc', '#660088', '#330055', '#000000'],
+  terr:  ['#88ddff', '#3388ee', '#1a55cc', '#0a2266'],
+  lava:  ['#ffcc66', '#ff5522', '#cc2200', '#551100'],
+  cryst: ['#ffbbff', '#dd66ff', '#9933cc', '#440066'],
+  gas:   ['#ffff99', '#ffcc33', '#ee8800', '#553300'],
+  ice:   ['#ffffff', '#cceeff', '#66bbee', '#113366'],
+  neb:   ['#ffaadd', '#ff5599', '#cc2266', '#330022'],
+  star:  ['#ffffee', '#ffee66', '#ffaa22', '#663300'],
+  void:  ['#dd66ee', '#9933bb', '#553388', '#110022'],
 };

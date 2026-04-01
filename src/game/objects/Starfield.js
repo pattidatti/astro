@@ -1,17 +1,17 @@
 import Phaser from 'phaser';
 
 export default class Starfield {
-  constructor(scene, count = 220) {
+  constructor(scene, count = 280) {
     this.scene = scene;
     this.graphics = scene.add.graphics().setDepth(-10);
     this.stars = Array.from({ length: count }, () => ({
       x: Math.random() * scene.scale.width,
       y: Math.random() * scene.scale.height,
-      r: Math.random() * 1.3 + 0.2,
+      r: Math.random() * 1.5 + 0.3,
       phase: Math.random() * Math.PI * 2,
       speed: Math.random() * 0.004 + 0.001,
-      baseAlpha: Math.random() * 0.85 + 0.1,
-      warm: Math.random() < 0.2
+      baseAlpha: Math.random() * 0.7 + 0.25,
+      warm: Math.random() < 0.25
     }));
     this.time = 0;
 
@@ -24,12 +24,24 @@ export default class Starfield {
     const g = this.nebulaGraphics;
     const w = this.scene.scale.width;
     const h = this.scene.scale.height;
-    // Blue nebula
-    g.fillStyle(0x003ca0, 0.12);
-    g.fillCircle(w * 0.2, h * 0.3, w * 0.4);
-    // Purple nebula
-    g.fillStyle(0x6400a0, 0.1);
-    g.fillCircle(w * 0.8, h * 0.6, w * 0.35);
+    // Layered nebula for depth
+    // Blue nebula — large diffuse
+    g.fillStyle(0x002266, 0.08);
+    g.fillCircle(w * 0.15, h * 0.25, w * 0.55);
+    g.fillStyle(0x004499, 0.1);
+    g.fillCircle(w * 0.2, h * 0.3, w * 0.32);
+    g.fillStyle(0x0066bb, 0.06);
+    g.fillCircle(w * 0.3, h * 0.2, w * 0.18);
+    // Purple nebula — large diffuse
+    g.fillStyle(0x440066, 0.07);
+    g.fillCircle(w * 0.85, h * 0.55, w * 0.45);
+    g.fillStyle(0x6600aa, 0.09);
+    g.fillCircle(w * 0.8, h * 0.6, w * 0.28);
+    g.fillStyle(0x8833cc, 0.05);
+    g.fillCircle(w * 0.75, h * 0.65, w * 0.15);
+    // Warm accent
+    g.fillStyle(0x331100, 0.05);
+    g.fillCircle(w * 0.5, h * 0.8, w * 0.3);
   }
 
   update(delta) {
