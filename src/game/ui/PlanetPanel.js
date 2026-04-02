@@ -18,6 +18,25 @@ const RESOURCE_LABELS = { ore: 'ORE', energy: 'ENERGY', crystal: 'CRYSTAL' };
 const ROBOT_ICONS = { miner: '⛏', energyBot: '🔋', builder: '🔧', scout: '📡' };
 const ROBOT_NAMES = { miner: 'MINER', energyBot: 'ENERGY', builder: 'BUILDER', scout: 'SCOUT' };
 
+/** Flash a button green + show a floating cost label that drifts upward. */
+function flashButton(btn, successClass, costText) {
+  btn.classList.add(successClass);
+  btn.addEventListener('animationend', () => btn.classList.remove(successClass), { once: true });
+
+  if (costText) {
+    const span = document.createElement('span');
+    span.className = 'floating-cost';
+    span.textContent = costText;
+    // Position relative to the button
+    const rect = btn.getBoundingClientRect();
+    span.style.left = rect.left + rect.width / 2 + 'px';
+    span.style.top  = rect.top + 'px';
+    span.style.position = 'fixed';
+    document.body.appendChild(span);
+    span.addEventListener('animationend', () => span.remove(), { once: true });
+  }
+}
+
 const _ndc = new THREE.Vector3();
 
 export class PlanetPanel {
@@ -28,6 +47,7 @@ export class PlanetPanel {
     this._planetId = null;
     this._renderTimer = 0;
     this._tooltipEl = document.getElementById('upg-tooltip');
+    this._prevSiloAmounts = {}; // track previous amounts for drain flash
 
     // Close button
     document.getElementById('panel-close')?.addEventListener('pointerdown', () => {
@@ -185,7 +205,8 @@ export class PlanetPanel {
         btn.addEventListener('pointerdown', (e) => {
           e.stopPropagation();
           AudioManager.play('UI_CLICK');
-          gameState.buyBaseUpgrade(this._planetId, upg.id);
+          const ok = gameState.buyBaseUpgrade(this._planetId, upg.id);
+          if (ok) flashButton(btn, 'base-upg-btn--success', `-${fmt(upg.energyCost[lv])} ⚡`);
         });
       } else if (!maxed) {
         btn.addEventListener('pointerdown', (e) => {
@@ -232,12 +253,16 @@ export class PlanetPanel {
 
       const pct = silo.capacity > 0 ? (silo.amount / silo.capacity) * 100 : 0;
       const full = pct >= 99.5;
+      const prevKey = this._planetId + '_' + resource;
+      const prev = this._prevSiloAmounts[prevKey];
+      const drained = prev !== undefined && silo.amount < prev - 1;
+      this._prevSiloAmounts[prevKey] = silo.amount;
 
       const row = document.createElement('div');
       row.className = 'silo-bar-row';
       row.innerHTML = `
         <span class="silo-label">${RESOURCE_LABELS[resource]}</span>
-        <div class="silo-track">
+        <div class="silo-track${drained ? ' silo-track--drain' : ''}">
           <div class="silo-fill ${resource}${full ? ' full' : ''}" style="width:${pct.toFixed(1)}%"></div>
         </div>
         <span class="silo-amount">${fmt(silo.amount)}/${fmt(silo.capacity)}</span>
@@ -369,7 +394,8 @@ export class PlanetPanel {
         btn.addEventListener('pointerdown', (e) => {
           e.stopPropagation();
           AudioManager.play('UI_CLICK');
-          gameState.hireRobot(this._planetId, robotType);
+          const ok = gameState.hireRobot(this._planetId, robotType);
+          if (ok) flashButton(btn, 'hire-btn--success', `-${fmt(energyCost)} ⚡`);
         });
       } else {
         btn.addEventListener('pointerdown', (e) => {
@@ -475,7 +501,8 @@ export class PlanetPanel {
         btn.addEventListener('pointerdown', (e) => {
           e.stopPropagation();
           AudioManager.play('UI_CLICK');
-          gameState.buyRobotUpgrade(this._planetId, upg.id);
+          const ok = gameState.buyRobotUpgrade(this._planetId, upg.id);
+          if (ok) flashButton(btn, 'robot-upg-btn--success', `-${fmt(cost.energy)} ⚡`);
         });
       } else if (!maxed) {
         btn.addEventListener('pointerdown', (e) => {

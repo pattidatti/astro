@@ -167,6 +167,17 @@ export class CameraController {
   }
 
   /** Get approximate zoom level category */
+  /**
+   * Subtle zoom-in punch that bounces back via damping.
+   * @param {number} strength - 0.03 = subtle, 0.08 = strong
+   */
+  zoomPunch(strength = 0.03) {
+    if (this.freeMode) return;
+    this._punchRestore = this.targetSpherical.radius;
+    this.targetSpherical.radius *= (1 - strength);
+    this._punchFrame = true;
+  }
+
   getZoomLevel() {
     const d = this.spherical.radius;
     if (d > 200) return 'galaxy';
@@ -212,6 +223,14 @@ export class CameraController {
       if (this._trackFn) {
         const pos = this._trackFn();
         if (pos) this.targetTarget.copy(pos);
+      }
+
+      // Restore zoom after punch (1 frame delay so damping catches the dip)
+      if (this._punchFrame) {
+        this._punchFrame = false;
+      } else if (this._punchRestore) {
+        this.targetSpherical.radius = this._punchRestore;
+        this._punchRestore = null;
       }
 
       // Smooth orbital interpolation (frame-rate independent)
