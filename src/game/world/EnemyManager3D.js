@@ -118,7 +118,7 @@ export class EnemyManager3D {
       if (this._mothershipPool.length > 0 && !this._activeMotherships.has(attack.id)) {
         const ms = this._mothershipPool.pop();
         const msPos = planetPos.clone();
-        msPos.y += 22;
+        msPos.y += 11;
         if (attack.restored) {
           // Restored from save — place directly
           ms.group.position.copy(msPos);
