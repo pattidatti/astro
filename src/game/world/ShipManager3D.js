@@ -72,6 +72,7 @@ export class ShipManager3D {
       this._inputManager.addClickable(ship3d._fuselage, () => {
         gameState.emit('cargoShipClicked', { shipId });
       });
+      ship3d._fuselage.userData.shipId = shipId;
     }
 
     // Register colony ships in flight as clickable
@@ -80,6 +81,7 @@ export class ShipManager3D {
       this._inputManager.addClickable(ship3d.hitbox, () => {
         gameState.emit('colonyShipInFlightClicked', { shipId });
       });
+      ship3d.hitbox.userData.shipId = shipId;
     }
   }
 
@@ -90,6 +92,7 @@ export class ShipManager3D {
     // Unregister clickable before deactivating
     if (!data.isColony && this._inputManager) {
       this._inputManager.removeClickable(entry.ship3d._fuselage);
+      entry.ship3d._fuselage.userData.shipId = null;
     }
 
     entry.ship3d.deactivate();
@@ -107,6 +110,7 @@ export class ShipManager3D {
       if (entry.data.isColony && entry.data.toPlanet === data.toPlanetId) {
         if (this._inputManager && entry.ship3d.hitbox) {
           this._inputManager.removeClickable(entry.ship3d.hitbox);
+          entry.ship3d.hitbox.userData.shipId = null;
         }
         entry.ship3d.deactivate();
         this._colonyPool.push(entry.ship3d);
@@ -135,6 +139,14 @@ export class ShipManager3D {
           orbitTime: 0,
         },
       });
+      // Register arriving colony ships as clickable
+      if (this._inputManager && ship3d.hitbox) {
+        const shipId = ship.id;
+        ship3d.hitbox.userData.shipId = shipId;
+        this._inputManager.addClickable(ship3d.hitbox, () => {
+          gameState.emit('colonyShipInFlightClicked', { shipId });
+        });
+      }
     }
   }
 

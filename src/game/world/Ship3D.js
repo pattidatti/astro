@@ -16,7 +16,7 @@ const RESOURCE_CARGO_COLORS = {
 
 /**
  * A 3D cargo ship that travels between planets on a resource route.
- * Heavy Freighter design adhering to the "Golden Nebula" aesthetic.
+ * Heavy Freighter V2: Extreme Procedural Detail
  */
 export class Ship3D {
   constructor() {
@@ -32,7 +32,7 @@ export class Ship3D {
     this._createTrail();
     this._createEngineGlow();
     
-    // Scale 1.25 gives a visible footprint about half the size of the old model
+    // Scale 1.25 gives a visible footprint about half the size of the original Ship3D model
     this.group.scale.setScalar(1.25);
   }
 
@@ -60,11 +60,40 @@ export class Ship3D {
       metalness:         0.4,
       roughness:         0.7
     });
+    
+    // Running lights
+    const navRedMat = new THREE.MeshBasicMaterial({ color: 0xff1111 });
+    const navGreenMat = new THREE.MeshBasicMaterial({ color: 0x11ff11 });
+    const navWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+    this._cargoMat = new THREE.MeshStandardMaterial({
+      color:     RESOURCE_CARGO_COLORS.ore,
+      metalness: 0.6,
+      roughness: 0.3,
+      emissive:  RESOURCE_CARGO_COLORS.ore.clone().multiplyScalar(0.4)
+    });
+    const podCapMat = new THREE.MeshStandardMaterial({
+      color:     0x06080a, 
+      metalness: 0.9, 
+      roughness: 0.2
+    });
 
     // ── Main Spine ──
     const spineGeo = new THREE.BoxGeometry(0.8, 0.4, 3.8);
     this._fuselage = new THREE.Mesh(spineGeo, hullMatDark);
     this.group.add(this._fuselage);
+
+    // Greebles on spine (Procedural details)
+    const greebleGeo = new THREE.BoxGeometry(0.1, 0.08, 0.15);
+    for(let i=0; i<14; i++) {
+        // Pseudo-random but deterministic placement
+        const px = (Math.sin(i * 3.4) * 0.3);
+        const pz = -1.5 + (i * 0.22);
+        const mesh = new THREE.Mesh(greebleGeo, hullMatGrey);
+        mesh.position.set(px, 0.22, pz);
+        mesh.rotation.y = (i % 2 === 0) ? 0 : 0.2;
+        this.group.add(mesh);
+    }
 
     // ── Command Bridge (Front, elevated, blocky) ──
     const bridgeGeo = new THREE.BoxGeometry(1.2, 0.6, 0.8);
@@ -72,7 +101,7 @@ export class Ship3D {
     this._bridge.position.set(0, 0.4, 1.4);
     this.group.add(this._bridge);
 
-    const bridgeWindowGeo = new THREE.BoxGeometry(1.25, 0.2, 0.4);
+    const bridgeWindowGeo = new THREE.BoxGeometry(1.25, 0.15, 0.4);
     const windowMat = new THREE.MeshStandardMaterial({
       color:             0x111111,
       metalness:         0.9,
@@ -84,79 +113,165 @@ export class Ship3D {
     this._bridgeWindow.position.set(0, 0.5, 1.62);
     this.group.add(this._bridgeWindow);
 
-    // ── Cargo Pods (Sides, 6 pods total) ──
-    this._cargoMat = new THREE.MeshStandardMaterial({
-      color:     RESOURCE_CARGO_COLORS.ore,
-      metalness: 0.6,
-      roughness: 0.3,
-      emissive:  RESOURCE_CARGO_COLORS.ore.clone().multiplyScalar(0.4)
-    });
-    
+    // Asymmetric Radar / Comm Mast (Left side only)
+    const mastGeo = new THREE.CylinderGeometry(0.02, 0.04, 0.8, 6);
+    const mast = new THREE.Mesh(mastGeo, detailMat);
+    mast.position.set(-0.5, 0.9, 1.3);
+    mast.rotation.z = -0.2;
+    mast.rotation.x = 0.2;
+    this.group.add(mast);
+
+    const dishGeo = new THREE.CylinderGeometry(0.2, 0.05, 0.05, 8);
+    dishGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    const dish = new THREE.Mesh(dishGeo, trimMatGold);
+    dish.position.set(-0.6, 1.2, 1.25);
+    dish.rotation.y = 0.5;
+    dish.rotation.x = -0.3;
+    this.group.add(dish);
+
+    // ── Cargo Pods (Sides, 8 pods total) ──
     this._cargoPods = [];
-    const podGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.8, 6);
+    const podGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.7, 8);
     podGeo.applyMatrix4(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+    const capGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.05, 8);
+    capGeo.applyMatrix4(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+    const strapGeo = new THREE.TorusGeometry(0.23, 0.03, 4, 8);
+    strapGeo.applyMatrix4(new THREE.Matrix4().makeRotationY(Math.PI / 2));
     
-    for (let i = 0; i < 3; i++) {
-        const zPos = 0.2 - i * 0.9;
+    for (let i = 0; i < 4; i++) {
+        const zPos = 0.4 - i * 0.75; 
         
+        // Left pod
         const podL = new THREE.Mesh(podGeo, this._cargoMat);
-        podL.position.set(-0.6, 0, zPos);
+        podL.position.set(-0.65, 0, zPos);
         this.group.add(podL);
         this._cargoPods.push(podL);
+        
+        // Left caps & straps
+        const capL1 = new THREE.Mesh(capGeo, podCapMat);
+        capL1.position.set(-0.35, 0, zPos);
+        this.group.add(capL1);
+        const capL2 = new THREE.Mesh(capGeo, podCapMat);
+        capL2.position.set(-0.95, 0, zPos);
+        this.group.add(capL2);
+        
+        const strapL = new THREE.Mesh(strapGeo, trimMatGold);
+        strapL.position.set(-0.65, 0, zPos);
+        this.group.add(strapL);
 
+        // Right pod
         const podR = new THREE.Mesh(podGeo, this._cargoMat);
-        podR.position.set(0.6, 0, zPos);
+        podR.position.set(0.65, 0, zPos);
         this.group.add(podR);
         this._cargoPods.push(podR);
 
-        // Gold clamps holding pods
-        const clampGeo = new THREE.BoxGeometry(0.1, 0.55, 0.85);
-        const clampL = new THREE.Mesh(clampGeo, trimMatGold);
-        clampL.position.set(-0.35, 0, zPos);
-        this.group.add(clampL);
+        // Right caps & straps
+        const capR1 = new THREE.Mesh(capGeo, podCapMat);
+        capR1.position.set(0.35, 0, zPos);
+        this.group.add(capR1);
+        const capR2 = new THREE.Mesh(capGeo, podCapMat);
+        capR2.position.set(0.95, 0, zPos);
+        this.group.add(capR2);
 
-        const clampR = new THREE.Mesh(clampGeo, trimMatGold);
-        clampR.position.set(0.35, 0, zPos);
-        this.group.add(clampR);
+        const strapR = new THREE.Mesh(strapGeo, trimMatGold);
+        strapR.position.set(0.65, 0, zPos);
+        this.group.add(strapR);
+
+        // Mount arms (connecting pod to spine)
+        const mountGeo = new THREE.BoxGeometry(0.3, 0.1, 0.15);
+        const mountL = new THREE.Mesh(mountGeo, hullMatGrey);
+        mountL.position.set(-0.4, 0, zPos);
+        this.group.add(mountL);
+        const mountR = new THREE.Mesh(mountGeo, hullMatGrey);
+        mountR.position.set(0.4, 0, zPos);
+        this.group.add(mountR);
     }
 
-    // ── Massive Engine Block (Rear) ──
-    const engineBlockGeo = new THREE.BoxGeometry(1.6, 0.8, 1.0);
+    // ── Massive Engine Block & Cooling Ribs ──
+    const engineBlockGeo = new THREE.BoxGeometry(1.4, 0.8, 1.0);
     this._engineBlock = new THREE.Mesh(engineBlockGeo, hullMatGrey);
-    this._engineBlock.position.set(0, 0, -1.8);
+    this._engineBlock.position.set(0, 0, -2.0);
     this.group.add(this._engineBlock);
 
+    // Cooling ribs on the engine block top
+    const ribGeo = new THREE.BoxGeometry(1.2, 0.1, 0.05);
+    for(let r=0; r<10; r++) {
+        const rib = new THREE.Mesh(ribGeo, hullMatDark);
+        rib.position.set(0, 0.45, -1.6 - (r * 0.08));
+        this.group.add(rib);
+    }
+
+    // Heavy angled struts holding the side nacelles
+    const strutGeo = new THREE.BoxGeometry(0.8, 0.2, 0.3);
+    const strutL = new THREE.Mesh(strutGeo, hullMatGrey);
+    strutL.position.set(-0.9, 0, -1.7);
+    strutL.rotation.y = -0.4;
+    this.group.add(strutL);
+
+    const strutR = new THREE.Mesh(strutGeo, hullMatGrey);
+    strutR.position.set(0.9, 0, -1.7);
+    strutR.rotation.y = 0.4;
+    this.group.add(strutR);
+
     // ── Side Thrusters / Nacelles ──
-    const nacelleGeo = new THREE.BoxGeometry(0.5, 0.5, 1.4);
-    
+    const nacelleGeo = new THREE.BoxGeometry(0.6, 0.6, 1.6);
     this._nacelleL = new THREE.Mesh(nacelleGeo, hullMatDark);
-    this._nacelleL.position.set(-1.1, 0, -1.6);
+    this._nacelleL.position.set(-1.3, 0, -1.8);
     this.group.add(this._nacelleL);
 
     this._nacelleR = new THREE.Mesh(nacelleGeo, hullMatDark);
-    this._nacelleR.position.set(1.1, 0, -1.6);
+    this._nacelleR.position.set(1.3, 0, -1.8);
     this.group.add(this._nacelleR);
 
-    // ── Trim / Plating details ──
-    const plateGeo = new THREE.BoxGeometry(1.65, 0.05, 0.8);
-    const plateTop = new THREE.Mesh(plateGeo, trimMatGold);
-    plateTop.position.set(0, 0.42, -1.8);
-    this.group.add(plateTop);
+    // Extra nacelle detailing (intake scoops front)
+    const scoopGeo = new THREE.BoxGeometry(0.4, 0.4, 0.2);
+    const scoopL = new THREE.Mesh(scoopGeo, hullMatGrey);
+    scoopL.position.set(-1.3, 0, -0.9);
+    this.group.add(scoopL);
 
-    // ── Pipes / Antenna (Cool factor) ──
-    const pipeGeo = new THREE.CylinderGeometry(0.04, 0.04, 3.4, 4);
+    const scoopR = new THREE.Mesh(scoopGeo, hullMatGrey);
+    scoopR.position.set(1.3, 0, -0.9);
+    this.group.add(scoopR);
+
+    // ── Central Pipes running along spine ──
+    const pipeGeo = new THREE.CylinderGeometry(0.05, 0.05, 4.0, 5);
     pipeGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
     
-    this._pipeL = new THREE.Mesh(pipeGeo, detailMat);
-    this._pipeL.position.set(-0.3, 0.25, -0.2);
-    this.group.add(this._pipeL);
+    // Top offset asymmetric pipe
+    this._pipeTop = new THREE.Mesh(pipeGeo, trimMatGold);
+    this._pipeTop.position.set(0.2, 0.25, -0.5);
+    this.group.add(this._pipeTop);
+    
+    // Side lower pipe
+    this._pipeSide = new THREE.Mesh(pipeGeo, detailMat);
+    this._pipeSide.position.set(-0.45, -0.15, -0.5);
+    this.group.add(this._pipeSide);
 
-    this._pipeR = new THREE.Mesh(pipeGeo, detailMat);
-    this._pipeR.position.set(0.3, 0.25, -0.2);
-    this.group.add(this._pipeR);
+    // ── Navigation Lights (Runners) ──
+    const navLightGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+
+    // Port (Red) - Left Nacelle outside
+    const navPort = new THREE.Mesh(navLightGeo, navRedMat);
+    navPort.position.set(-1.6, 0, -1.5);
+    this.group.add(navPort);
+
+    // Starboard (Green) - Right Nacelle outside
+    const navStar = new THREE.Mesh(navLightGeo, navGreenMat);
+    navStar.position.set(1.6, 0, -1.5);
+    this.group.add(navStar);
+
+    // Aft (White) - Under engine block
+    const navAft = new THREE.Mesh(navLightGeo, navWhiteMat);
+    navAft.position.set(0, -0.4, -2.5);
+    this.group.add(navAft);
+
+    // Nose (White) - Top of bridge
+    const navNose = new THREE.Mesh(navLightGeo, navWhiteMat);
+    navNose.position.set(0, 0.75, 1.7);
+    this.group.add(navNose);
 
     // Store a reference to the main part of the ship for hitboxes
-    this._hitboxTarget = this._fuselage; // Fallback reference for InputManager
+    this._hitboxTarget = this._fuselage;
   }
 
   _createTrail() {
@@ -190,16 +305,21 @@ export class Ship3D {
     this._engineGlows = [];
 
     // 4 Thrusters: Left outer, left inner, right inner, right outer
-    const engineXPositions = [-1.1, -0.4, 0.4, 1.1];
+    const engines = [
+      { x: -1.3, z: -2.6 },
+      { x: -0.4, z: -2.5 },
+      { x:  0.4, z: -2.5 },
+      { x:  1.3, z: -2.6 },
+    ];
     
-    for (const x of engineXPositions) {
+    for (const pos of engines) {
         const plight = new THREE.PointLight(RESOURCE_ENGINE_COLORS.ore, 1.0, 5);
-        plight.position.set(x, 0, -2.5);
+        plight.position.set(pos.x, 0, pos.z);
         this.group.add(plight);
         this._engineLights.push(plight);
 
         const glowMesh = new THREE.Mesh(glowGeo, glowMat.clone());
-        glowMesh.position.set(x, 0, -2.4);
+        glowMesh.position.set(pos.x, 0, pos.z + 0.1); 
         this.group.add(glowMesh);
         this._engineGlows.push(glowMesh);
     }

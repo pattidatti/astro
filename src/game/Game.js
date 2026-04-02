@@ -82,16 +82,20 @@ export function createGame() {
   _shipTooltipEl.style.display = 'none';
   document.getElementById('hud-overlay').appendChild(_shipTooltipEl);
 
-  // --- Lock-on tooltip (for defense objects) ---
+  // --- Lock-on tooltip (for defense objects and ships) ---
   const _lockOnTooltipEl = document.getElementById('lockOn-tooltip');
+  let _lockOnSource = null; // 'defense' | 'shipHover' | null
   const _lockOnTooltip = {
     show(infoFn) {
       const info = typeof infoFn === 'function' ? infoFn() : infoFn;
       if (!_lockOnTooltipEl) return;
+      const subtitleLine = info.subtitle !== undefined
+        ? `<div class="lockon-level">${info.subtitle}</div>`
+        : `<div class="lockon-level">Level ${info.level}</div>`;
       _lockOnTooltipEl.innerHTML =
         `<div class="lockon-label">LOCK-ON</div>` +
         `<div class="lockon-type">${info.type.toUpperCase()}</div>` +
-        `<div class="lockon-level">Level ${info.level}</div>`;
+        subtitleLine;
       _lockOnTooltipEl.style.display = 'block';
     },
     hide() {
@@ -109,6 +113,7 @@ export function createGame() {
     _selectedShipId = null;
     _shipTooltipEl.style.display = 'none';
     _lockOnTooltip.hide();
+    _lockOnSource = null;
   };
 
   gameState.on('cargoShipClicked', ({ shipId }) => {
@@ -160,12 +165,51 @@ export function createGame() {
       _deselectShip();
       AudioManager.play('PLANET_CLICK_3D');
       cameraController.trackObject(target.getWorldPosition, 10);
+      _lockOnSource = 'defense';
       _lockOnTooltip.show(target.info);
     });
   }
 
   // --- Ships ---
   const shipManager = new ShipManager3D(sceneManager.scene, animationLoop, galaxy, inputManager);
+
+  // Register ship hover callback for lock-on tooltip
+  inputManager.onHoverShip((shipId) => {
+    if (!shipId) {
+      if (_lockOnSource === 'shipHover') {
+        _lockOnTooltip.hide();
+        _lockOnSource = null;
+      }
+      return;
+    }
+
+    // Is it a cargo ship?
+    const cargo = gameState.activeShips.find(s => s.id === shipId);
+    if (cargo) {
+      const fromDef = PLANETS.find(p => p.id === cargo.fromPlanet);
+      const toDef   = PLANETS.find(p => p.id === cargo.toPlanet);
+      _lockOnSource = 'shipHover';
+      _lockOnTooltip.show({ type: 'Cargo Ship', subtitle: `${fromDef?.name || cargo.fromPlanet} → ${toDef?.name || cargo.toPlanet}` });
+      return;
+    }
+
+    // Is it an arriving colony ship?
+    const arriving = gameState.colonyShipsArriving.find(s => s.id === shipId);
+    if (arriving) {
+      const toDef = PLANETS.find(p => p.id === arriving.toPlanetId);
+      _lockOnSource = 'shipHover';
+      _lockOnTooltip.show({ type: 'Colony Ship', subtitle: `→ ${toDef?.name || arriving.toPlanetId}` });
+      return;
+    }
+
+    // Is it an in-flight colony ship?
+    const inFlight = gameState.colonyShipsInFlight.find(s => s.id === shipId);
+    if (inFlight) {
+      const toDef = PLANETS.find(p => p.id === inFlight.toPlanetId);
+      _lockOnSource = 'shipHover';
+      _lockOnTooltip.show({ type: 'Colony Ship', subtitle: `→ ${toDef?.name || inFlight.toPlanetId}` });
+    }
+  });
 
   // --- Enemy ships + combat effects ---
   const enemyManager = new EnemyManager3D(sceneManager.scene, animationLoop, galaxy);
