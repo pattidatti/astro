@@ -6,10 +6,16 @@ import { ENEMY_TYPES } from './data/enemies.js';
 
 const SAVE_VERSION = 3;
 
-const COLONY_SHIP_BUILD_COST = { ore: 300 };
-const COLONY_SHIP_BUILD_TIME = 20;   // seconds
-const COLONY_LAUNCH_BASE_COST = 50;  // base energy cost for launch
-const COLONY_LAUNCH_DIST_MULT = 0.3; // energy per orbit-radius unit
+const COLONY_SHIP_BASE_BUILD_COST = 5000;  // ore
+const COLONY_SHIP_COST_SCALE = 1.5;        // exponential multiplier per planet colonized
+const COLONY_SHIP_BUILD_TIME = 20;          // seconds
+const COLONY_LAUNCH_BASE_COST = 50;         // base energy cost for launch
+const COLONY_LAUNCH_DIST_MULT = 0.3;        // energy per orbit-radius unit
+
+/** Ore cost to build a colony ship, scales exponentially with planetsColonized */
+export function getColonyShipBuildCost(planetsColonized = 0) {
+  return { ore: Math.round(COLONY_SHIP_BASE_BUILD_COST * Math.pow(COLONY_SHIP_COST_SCALE, planetsColonized)) };
+}
 
 /** Energy cost to launch a colony ship based on orbit-radius distance */
 export function colonyLaunchEnergyCost(distance) {
@@ -232,7 +238,7 @@ class GameState extends EventEmitter {
 
   // ─── Colony ship system ───────────────────────────────────────────────────
 
-  /** Queue a colony ship build on the given planet. Costs COLONY_SHIP_BUILD_COST. */
+  /** Queue a colony ship build on the given planet. Cost scales with planets colonized. */
   queueColonyShipBuild(planetId) {
     if (!this.ownedPlanets.includes(planetId)) return false;
     const ps = this.getPlanetState(planetId);
@@ -240,7 +246,7 @@ class GameState extends EventEmitter {
     // Max 1 colony ship per planet (building or in orbit)
     if (ps.colonyShipBuildQueue.length > 0) return false;
     if (this.colonyShipsInOrbit.some(s => s.fromPlanetId === planetId)) return false;
-    const { ore = 0, energy = 0 } = COLONY_SHIP_BUILD_COST;
+    const { ore = 0, energy = 0 } = getColonyShipBuildCost(this.stats.planetsColonized);
     if (ore > 0 && !this.siloHas(planetId, 'ore', ore)) return false;
     if (energy > 0 && !this.siloHas(planetId, 'energy', energy)) return false;
     if (ore > 0) this.deductFromSilo(planetId, 'ore', ore);
@@ -471,6 +477,7 @@ class GameState extends EventEmitter {
     if (resourceChanged) {
       this.activeShips = this.activeShips.filter(s => s.routeId !== routeId);
     }
+    this.emit('routeUpdated');
     this.emit('routeAdded');
     return true;
   }

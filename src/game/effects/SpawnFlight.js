@@ -23,13 +23,19 @@ export class SpawnFlight {
     this.camera = camera;
     this.galaxy = galaxy;
     this.activeFlights = [];
-    this.onArrival = null; // (worldPos: THREE.Vector3) => void
+    this.onArrival = null; // (worldPos: THREE.Vector3, planetId: string) => void
   }
 
   /**
    * Launch a 3D robot from the right edge of the screen toward the station.
    * @param {string} planetId
    * @param {string} robotType - miner|energyBot|builder|scout
+   */
+  /**
+   * Callback when robot arrives at station.
+   * @callback onArrival
+   * @param {THREE.Vector3} worldPos - arrival position
+   * @param {string} planetId - planet where robot arrived
    */
   launch(planetId, robotType) {
     const system = this.galaxy.getSystem(planetId);
@@ -92,6 +98,8 @@ export class SpawnFlight {
       controlPos,
       endPos,
       age: 0,
+      planetId,
+      system,
     });
   }
 
@@ -103,6 +111,9 @@ export class SpawnFlight {
       const rawT = Math.min(f.age / FLIGHT_DURATION, 1);
       // Ease-out cubic for smooth deceleration
       const t = 1 - Math.pow(1 - rawT, 3);
+
+      // Track station position as it orbits
+      f.endPos.copy(f.system.stationWorldPosition);
 
       // Quadratic bezier: B(t) = (1-t)^2*P0 + 2(1-t)t*P1 + t^2*P2
       const omt = 1 - t;
@@ -155,7 +166,7 @@ export class SpawnFlight {
         this.scene.remove(f.trail);
         f.robot.dispose();
         this.activeFlights.splice(i, 1);
-        if (this.onArrival) this.onArrival(f.endPos);
+        if (this.onArrival) this.onArrival(f.endPos, f.planetId);
       }
     }
   }

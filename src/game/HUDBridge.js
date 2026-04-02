@@ -184,6 +184,9 @@ export class HUDBridge {
     gameState.on('routeAdded', () => {
       AudioManager.play('UI_ROUTE_ADD');
     });
+    gameState.on('routeUpdated', () => {
+      this.toast('ROUTE SAVED', 'info');
+    });
     gameState.on('routeRemoved', () => {
       AudioManager.play('UI_CLICK_DENIED');
     });

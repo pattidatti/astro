@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 
-const TRAIL_LENGTH = 28;
+const TRAIL_LENGTH = 16;
 
 const RESOURCE_ENGINE_COLORS = {
-  ore:     new THREE.Color(0xffaa22),  // warm amber
-  energy:  new THREE.Color(0x44ddff),  // cyan
-  crystal: new THREE.Color(0xcc66ff),  // purple
+  ore:     new THREE.Color(0xd4a843),  // warm amber/gold
+  energy:  new THREE.Color(0x4af0ff),  // cyan
+  crystal: new THREE.Color(0xaa44ee),  // purple
 };
 
 const RESOURCE_CARGO_COLORS = {
@@ -16,7 +16,7 @@ const RESOURCE_CARGO_COLORS = {
 
 /**
  * A 3D cargo ship that travels between planets on a resource route.
- * Wide, flat cargo-hauler silhouette with resource-colored engine trail.
+ * Heavy Freighter design adhering to the "Golden Nebula" aesthetic.
  */
 export class Ship3D {
   constructor() {
@@ -31,93 +31,132 @@ export class Ship3D {
     this._buildMesh();
     this._createTrail();
     this._createEngineGlow();
-    this.group.scale.setScalar(5);
+    
+    // Scale 1.25 gives a visible footprint about half the size of the old model
+    this.group.scale.setScalar(1.25);
   }
 
   _buildMesh() {
-    const hullMat = new THREE.MeshStandardMaterial({
-      color:             0x3a4a5c,
+    const hullMatDark = new THREE.MeshStandardMaterial({
+      color:             0x0a0e14, // Obsidian
       metalness:         0.85,
-      roughness:         0.25,
-      emissive:          new THREE.Color(0x3366cc),
-      emissiveIntensity: 2.0,
+      roughness:         0.4,
+      emissive:          0x000000 
     });
-    const trimMat = new THREE.MeshStandardMaterial({
-      color:             0xd4a843,
+    const hullMatGrey = new THREE.MeshStandardMaterial({
+      color:             0x1c2430, // Graphite
+      metalness:         0.8,
+      roughness:         0.5
+    });
+    const trimMatGold = new THREE.MeshStandardMaterial({
+      color:             0xd4a843, // Gold
       metalness:         0.9,
-      roughness:         0.15,
-      emissive:          new THREE.Color(0xd4a843),
-      emissiveIntensity: 1.2,
+      roughness:         0.2,
+      emissive:          0xd4a843,
+      emissiveIntensity: 0.2
+    });
+    const detailMat = new THREE.MeshStandardMaterial({
+      color:             0xe8d5b0, // Sand
+      metalness:         0.4,
+      roughness:         0.7
     });
 
-    // ── Main fuselage — flat, wide cargo hauler ──
-    const fuseGeo = new THREE.BoxGeometry(1.0, 0.28, 2.2);
-    this._fuselage = new THREE.Mesh(fuseGeo, hullMat);
+    // ── Main Spine ──
+    const spineGeo = new THREE.BoxGeometry(0.8, 0.4, 3.8);
+    this._fuselage = new THREE.Mesh(spineGeo, hullMatDark);
     this.group.add(this._fuselage);
 
-    // ── Cockpit nose — tapered front ──
-    const cockpitGeo = new THREE.ConeGeometry(0.18, 0.55, 5);
-    cockpitGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-    const cockpitMat = new THREE.MeshStandardMaterial({
-      color:     0x2a3848,
-      metalness: 0.9,
-      roughness: 0.2,
-      emissive:  new THREE.Color(0x000408),
+    // ── Command Bridge (Front, elevated, blocky) ──
+    const bridgeGeo = new THREE.BoxGeometry(1.2, 0.6, 0.8);
+    this._bridge = new THREE.Mesh(bridgeGeo, hullMatGrey);
+    this._bridge.position.set(0, 0.4, 1.4);
+    this.group.add(this._bridge);
+
+    const bridgeWindowGeo = new THREE.BoxGeometry(1.25, 0.2, 0.4);
+    const windowMat = new THREE.MeshStandardMaterial({
+      color:             0x111111,
+      metalness:         0.9,
+      roughness:         0.1,
+      emissive:          0xd4a843,
+      emissiveIntensity: 1.0
     });
-    this._cockpit = new THREE.Mesh(cockpitGeo, cockpitMat);
-    this._cockpit.position.set(0, 0.05, 1.35);
-    this.group.add(this._cockpit);
+    this._bridgeWindow = new THREE.Mesh(bridgeWindowGeo, windowMat);
+    this._bridgeWindow.position.set(0, 0.5, 1.62);
+    this.group.add(this._bridgeWindow);
 
-    // ── Gold hull trim strips ──
-    const trimGeo = new THREE.BoxGeometry(1.05, 0.04, 0.06);
-    this._trimFront = new THREE.Mesh(trimGeo, trimMat);
-    this._trimFront.position.set(0, 0.16, 0.8);
-    this.group.add(this._trimFront);
-
-    this._trimMid = new THREE.Mesh(trimGeo.clone(), trimMat.clone());
-    this._trimMid.position.set(0, 0.16, -0.3);
-    this.group.add(this._trimMid);
-
-    // ── Cargo pod — raised center section, glows by resource ──
-    const cargoPodGeo = new THREE.BoxGeometry(0.62, 0.22, 0.9);
+    // ── Cargo Pods (Sides, 6 pods total) ──
     this._cargoMat = new THREE.MeshStandardMaterial({
       color:     RESOURCE_CARGO_COLORS.ore,
-      metalness: 0.3,
-      roughness: 0.6,
-      emissive:  RESOURCE_CARGO_COLORS.ore.clone().multiplyScalar(0.35),
+      metalness: 0.6,
+      roughness: 0.3,
+      emissive:  RESOURCE_CARGO_COLORS.ore.clone().multiplyScalar(0.4)
     });
-    this._cargoPod = new THREE.Mesh(cargoPodGeo, this._cargoMat);
-    this._cargoPod.position.set(0, 0.25, -0.2);
-    this.group.add(this._cargoPod);
+    
+    this._cargoPods = [];
+    const podGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.8, 6);
+    podGeo.applyMatrix4(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+    
+    for (let i = 0; i < 3; i++) {
+        const zPos = 0.2 - i * 0.9;
+        
+        const podL = new THREE.Mesh(podGeo, this._cargoMat);
+        podL.position.set(-0.6, 0, zPos);
+        this.group.add(podL);
+        this._cargoPods.push(podL);
 
-    // ── Engine nacelles — wide rear pods ──
-    const nacelleGeo = new THREE.CylinderGeometry(0.13, 0.17, 0.85, 8);
-    nacelleGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-    const nacelleMat = new THREE.MeshStandardMaterial({
-      color:             0x445566,
-      metalness:         0.9,
-      roughness:         0.15,
-      emissive:          new THREE.Color(0x2244aa),
-      emissiveIntensity: 2.5,
-    });
+        const podR = new THREE.Mesh(podGeo, this._cargoMat);
+        podR.position.set(0.6, 0, zPos);
+        this.group.add(podR);
+        this._cargoPods.push(podR);
 
-    this._nacelleL = new THREE.Mesh(nacelleGeo, nacelleMat);
-    this._nacelleL.position.set(-0.52, -0.04, -0.65);
+        // Gold clamps holding pods
+        const clampGeo = new THREE.BoxGeometry(0.1, 0.55, 0.85);
+        const clampL = new THREE.Mesh(clampGeo, trimMatGold);
+        clampL.position.set(-0.35, 0, zPos);
+        this.group.add(clampL);
+
+        const clampR = new THREE.Mesh(clampGeo, trimMatGold);
+        clampR.position.set(0.35, 0, zPos);
+        this.group.add(clampR);
+    }
+
+    // ── Massive Engine Block (Rear) ──
+    const engineBlockGeo = new THREE.BoxGeometry(1.6, 0.8, 1.0);
+    this._engineBlock = new THREE.Mesh(engineBlockGeo, hullMatGrey);
+    this._engineBlock.position.set(0, 0, -1.8);
+    this.group.add(this._engineBlock);
+
+    // ── Side Thrusters / Nacelles ──
+    const nacelleGeo = new THREE.BoxGeometry(0.5, 0.5, 1.4);
+    
+    this._nacelleL = new THREE.Mesh(nacelleGeo, hullMatDark);
+    this._nacelleL.position.set(-1.1, 0, -1.6);
     this.group.add(this._nacelleL);
 
-    this._nacelleR = new THREE.Mesh(nacelleGeo.clone(), nacelleMat.clone());
-    this._nacelleR.position.set( 0.52, -0.04, -0.65);
+    this._nacelleR = new THREE.Mesh(nacelleGeo, hullMatDark);
+    this._nacelleR.position.set(1.1, 0, -1.6);
     this.group.add(this._nacelleR);
 
-    // ── Wing struts connecting fuselage to nacelles ──
-    const strutGeo = new THREE.BoxGeometry(0.44, 0.06, 0.4);
-    this._strutL = new THREE.Mesh(strutGeo, hullMat.clone());
-    this._strutL.position.set(-0.32, -0.04, -0.5);
-    this.group.add(this._strutL);
+    // ── Trim / Plating details ──
+    const plateGeo = new THREE.BoxGeometry(1.65, 0.05, 0.8);
+    const plateTop = new THREE.Mesh(plateGeo, trimMatGold);
+    plateTop.position.set(0, 0.42, -1.8);
+    this.group.add(plateTop);
 
-    this._strutR = new THREE.Mesh(strutGeo.clone(), hullMat.clone());
-    this._strutR.position.set( 0.32, -0.04, -0.5);
-    this.group.add(this._strutR);
+    // ── Pipes / Antenna (Cool factor) ──
+    const pipeGeo = new THREE.CylinderGeometry(0.04, 0.04, 3.4, 4);
+    pipeGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    
+    this._pipeL = new THREE.Mesh(pipeGeo, detailMat);
+    this._pipeL.position.set(-0.3, 0.25, -0.2);
+    this.group.add(this._pipeL);
+
+    this._pipeR = new THREE.Mesh(pipeGeo, detailMat);
+    this._pipeR.position.set(0.3, 0.25, -0.2);
+    this.group.add(this._pipeR);
+
+    // Store a reference to the main part of the ship for hitboxes
+    this._hitboxTarget = this._fuselage; // Fallback reference for InputManager
   }
 
   _createTrail() {
@@ -137,16 +176,6 @@ export class Ship3D {
   }
 
   _createEngineGlow() {
-    // Left engine
-    this._engineLightL = new THREE.PointLight(RESOURCE_ENGINE_COLORS.ore, 1.2, 6);
-    this._engineLightL.position.set(-0.52, -0.04, -1.15);
-    this.group.add(this._engineLightL);
-
-    // Right engine
-    this._engineLightR = new THREE.PointLight(RESOURCE_ENGINE_COLORS.ore, 1.2, 6);
-    this._engineLightR.position.set( 0.52, -0.04, -1.15);
-    this.group.add(this._engineLightR);
-
     const glowMat = new THREE.MeshBasicMaterial({
       color:       RESOURCE_ENGINE_COLORS.ore,
       transparent: true,
@@ -154,17 +183,26 @@ export class Ship3D {
       blending:    THREE.AdditiveBlending,
       depthWrite:  false,
     });
-
-    const glowGeo = new THREE.ConeGeometry(0.08, 0.45, 8);
+    const glowGeo = new THREE.ConeGeometry(0.12, 0.6, 8);
     glowGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
 
-    this._engineGlowL = new THREE.Mesh(glowGeo, glowMat.clone());
-    this._engineGlowL.position.set(-0.52, -0.04, -1.08);
-    this.group.add(this._engineGlowL);
+    this._engineLights = [];
+    this._engineGlows = [];
 
-    this._engineGlowR = new THREE.Mesh(glowGeo.clone(), glowMat.clone());
-    this._engineGlowR.position.set( 0.52, -0.04, -1.08);
-    this.group.add(this._engineGlowR);
+    // 4 Thrusters: Left outer, left inner, right inner, right outer
+    const engineXPositions = [-1.1, -0.4, 0.4, 1.1];
+    
+    for (const x of engineXPositions) {
+        const plight = new THREE.PointLight(RESOURCE_ENGINE_COLORS.ore, 1.0, 5);
+        plight.position.set(x, 0, -2.5);
+        this.group.add(plight);
+        this._engineLights.push(plight);
+
+        const glowMesh = new THREE.Mesh(glowGeo, glowMat.clone());
+        glowMesh.position.set(x, 0, -2.4);
+        this.group.add(glowMesh);
+        this._engineGlows.push(glowMesh);
+    }
   }
 
   _applyResourceColors(resource) {
@@ -173,13 +211,12 @@ export class Ship3D {
     const cargoColor = RESOURCE_CARGO_COLORS[this._resource]  ?? RESOURCE_CARGO_COLORS.ore;
 
     this._trailMat.color.copy(engColor);
-    this._engineLightL.color.copy(engColor);
-    this._engineLightR.color.copy(engColor);
-    this._engineGlowL.material.color.copy(engColor);
-    this._engineGlowR.material.color.copy(engColor);
+    
+    for (const light of this._engineLights) light.color.copy(engColor);
+    for (const glow of this._engineGlows) glow.material.color.copy(engColor);
 
     this._cargoMat.color.copy(cargoColor);
-    this._cargoMat.emissive.copy(cargoColor).multiplyScalar(0.35);
+    this._cargoMat.emissive.copy(cargoColor).multiplyScalar(0.4);
   }
 
   /**
@@ -224,8 +261,7 @@ export class Ship3D {
 
     // Pulse engine glow intensity slightly
     const pulse = 0.9 + Math.sin(t * Math.PI * 40) * 0.1;
-    this._engineLightL.intensity = 1.2 * pulse;
-    this._engineLightR.intensity = 1.2 * pulse;
+    for (const light of this._engineLights) light.intensity = 1.0 * pulse;
 
     // Shift trail
     for (let i = TRAIL_LENGTH - 1; i > 0; i--) {

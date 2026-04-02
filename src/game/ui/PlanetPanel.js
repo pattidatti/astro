@@ -1,4 +1,4 @@
-import { gameState, colonyLaunchEnergyCost, colonyTravelDuration } from '../GameState.js';
+import { gameState, colonyLaunchEnergyCost, colonyTravelDuration, getColonyShipBuildCost } from '../GameState.js';
 import { PLANETS } from '../data/planets.js';
 import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult } from '../data/upgrades.js';
 import { createRoute, calcTravelDuration, SHIPPABLE_RESOURCES } from '../data/routes.js';
@@ -711,8 +711,9 @@ export class PlanetPanel {
       const cap = s?.capacity ?? 1000;
       const pct = parseInt(pctInput.value, 10);
       const amount = Math.max(1, Math.round(pct / 100 * cap));
-      gameState.updateRoute(route.id, { resource, amount });
+      AudioManager.play('UI_CLICK');
       close();
+      gameState.updateRoute(route.id, { resource, amount });
     });
 
     form.querySelector('#rei-cancel').addEventListener('pointerdown', (e) => {
@@ -920,7 +921,7 @@ export class PlanetPanel {
     }
 
     // Default: build button
-    const oreCost = 300;
+    const { ore: oreCost } = getColonyShipBuildCost(gameState.stats.planetsColonized);
     const canAfford = gameState.siloHas(this._planetId, 'ore', oreCost);
 
     el.innerHTML = `<div class="panel-section-title">COLONY SHIP</div>`;

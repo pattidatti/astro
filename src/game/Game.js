@@ -321,7 +321,10 @@ export function createGame() {
 
   // --- Spawn flight: robot flies from panel to station ---
   const spawnFlight = new SpawnFlight(sceneManager.scene, camera, galaxy);
-  spawnFlight.onArrival = () => {};
+  spawnFlight.onArrival = (worldPos, planetId) => {
+    const sys = galaxy.getSystem(planetId);
+    if (sys) sys.station.flashPurchase();
+  };
   gameState.on('robotHired', ({ planetId, robotType }) => {
     spawnFlight.launch(planetId, robotType);
     cameraController.zoomPunch(0.03);
