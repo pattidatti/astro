@@ -927,8 +927,8 @@
   margin-top: 4px;
 }
 
-/* ── Station targeting box ── */
-#station-target-box {
+/* ── Generic hover targeting box ── */
+#hover-target-box {
   position: fixed;
   z-index: 99;
   pointer-events: none;
@@ -937,19 +937,7 @@
   height: 56px;
   transform: translate(-50%, -50%);
 }
-#station-target-box.visible { display: block; }
-
-/* ── Colony ship targeting box ── */
-#colony-ship-target-box {
-  position: fixed;
-  z-index: 99;
-  pointer-events: none;
-  display: none;
-  width: 48px;
-  height: 48px;
-  transform: translate(-50%, -50%);
-}
-#colony-ship-target-box.visible { display: block; }
+#hover-target-box.visible { display: block; }
 
 .tb-corner {
   position: absolute;

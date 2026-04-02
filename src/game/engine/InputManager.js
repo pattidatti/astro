@@ -19,6 +19,8 @@ export class InputManager {
     this._onHoverColonyShipCallbacks = [];
     this._hoveredShip = null;
     this._onHoverShipCallbacks = [];
+    this._hoveredAnyMesh = null;
+    this._onHoverAnyCallbacks = [];
     this._onMissedClickCallbacks = [];
 
     // Click handler — only fire on pointerup if it wasn't a drag
@@ -55,6 +57,11 @@ export class InputManager {
   /** Register a ship hover callback: fn(shipId|null, clientX, clientY) */
   onHoverShip(fn) {
     this._onHoverShipCallbacks.push(fn);
+  }
+
+  /** Register a generic hover callback: fn(mesh|null) */
+  onHoverAny(fn) {
+    this._onHoverAnyCallbacks.push(fn);
   }
 
   /** Register a callback fired when a click lands on nothing registered */
@@ -157,6 +164,13 @@ export class InputManager {
     if (effectivePlanetId !== this._hoveredPlanet) {
       this._hoveredPlanet = effectivePlanetId;
       for (const fn of this._onHoverCallbacks) fn(effectivePlanetId, e.clientX, e.clientY);
+    }
+
+    // Generic hover — any clickable mesh
+    const anyMesh = hits.length > 0 ? hits[0].object : null;
+    if (anyMesh !== this._hoveredAnyMesh) {
+      this._hoveredAnyMesh = anyMesh;
+      for (const fn of this._onHoverAnyCallbacks) fn(anyMesh);
     }
   }
 }

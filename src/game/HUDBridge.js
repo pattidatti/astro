@@ -28,12 +28,10 @@ export class HUDBridge {
     this.dom = {
       upgTooltip:          document.getElementById('upg-tooltip'),
       planetTooltip:       document.getElementById('planet-tooltip'),
-      stationTargetBox:    document.getElementById('station-target-box'),
-      colonyShipTargetBox: document.getElementById('colony-ship-target-box'),
+      hoverTargetBox:      document.getElementById('hover-target-box'),
       toastContainer:      document.getElementById('toast-container'),
     };
-    this._hoveredStationId = null;
-    this._hoveredColonyShipPlanetId = null;
+    this._hoveredAnyMesh = null;
     this._tmpVec = new THREE.Vector3();
 
     if (onMenu) {
@@ -46,6 +44,7 @@ export class HUDBridge {
     this._setupPlanetHover();
     this._setupStationHover();
     this._setupColonyShipHover();
+    this._setupGenericHover();
     this._setupEvents();
 
     // Show welcome toast
@@ -135,7 +134,13 @@ export class HUDBridge {
 
   _setupColonyShipHover() {
     this.game.inputManager.onHoverColonyShip((planetId) => {
-      this._hoveredColonyShipPlanetId = planetId;
+      // No longer needed — generic hover handles all hoverable objects
+    });
+  }
+
+  _setupGenericHover() {
+    this.game.inputManager.onHoverAny((mesh) => {
+      this._hoveredAnyMesh = mesh;
     });
   }
 
@@ -240,37 +245,17 @@ export class HUDBridge {
     const cameraController = this.game.cameraController;
     const galaxy = this.game.galaxy;
 
-    // Update station target box screen position
-    if (this._hoveredStationId) {
-      const sys = galaxy.getSystem(this._hoveredStationId);
-      if (sys) {
-        const pos = sys.stationWorldPosition.clone().project(camera);
-        const x = (pos.x * 0.5 + 0.5) * window.innerWidth;
-        const y = (-pos.y * 0.5 + 0.5) * window.innerHeight;
-        this.dom.stationTargetBox.style.left = x + 'px';
-        this.dom.stationTargetBox.style.top  = y + 'px';
-        this.dom.stationTargetBox.classList.add('visible');
-      }
+    // Generic hover target box
+    if (this._hoveredAnyMesh) {
+      this._hoveredAnyMesh.getWorldPosition(this._tmpVec);
+      this._tmpVec.project(camera);
+      const x = (this._tmpVec.x * 0.5 + 0.5) * window.innerWidth;
+      const y = (-this._tmpVec.y * 0.5 + 0.5) * window.innerHeight;
+      this.dom.hoverTargetBox.style.left = x + 'px';
+      this.dom.hoverTargetBox.style.top  = y + 'px';
+      this.dom.hoverTargetBox.classList.add('visible');
     } else {
-      this.dom.stationTargetBox.classList.remove('visible');
-    }
-
-    // Update colony ship target box screen position
-    if (this._hoveredColonyShipPlanetId) {
-      const sys = galaxy.getSystem(this._hoveredColonyShipPlanetId);
-      if (sys?.colonyShip) {
-        sys.colonyShip.group.getWorldPosition(this._tmpVec);
-        this._tmpVec.project(camera);
-        const x = (this._tmpVec.x * 0.5 + 0.5) * window.innerWidth;
-        const y = (-this._tmpVec.y * 0.5 + 0.5) * window.innerHeight;
-        this.dom.colonyShipTargetBox.style.left = x + 'px';
-        this.dom.colonyShipTargetBox.style.top  = y + 'px';
-        this.dom.colonyShipTargetBox.classList.add('visible');
-      } else {
-        this.dom.colonyShipTargetBox.classList.remove('visible');
-      }
-    } else {
-      this.dom.colonyShipTargetBox.classList.remove('visible');
+      this.dom.hoverTargetBox.classList.remove('visible');
     }
 
     // Check camera distance to focused planet to decide panel visibility
