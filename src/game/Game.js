@@ -334,7 +334,11 @@ export function createGame() {
   gameState.on('shieldDamaged', ({ planetId }) => {
     if (planetId !== gameState.focusedPlanet) return;
     const sys = galaxy.getSystem(planetId);
-    if (sys) combatEffects.shieldHit(sys.stationWorldPosition);
+    const ps = gameState.getPlanetState(planetId);
+    if (sys?.station && ps) {
+      sys.station.setShieldState(ps.combat.shieldHP, ps.combat.shieldMaxHP);
+      combatEffects.shieldHit(sys.station.stationVisualCenter);
+    }
   });
 
   gameState.on('abilityActivated', ({ planetId, abilityId }) => {
@@ -345,7 +349,7 @@ export function createGame() {
     if (abilityId === 'orbitalStrike') combatEffects.orbitalStrike(planetPos);
     if (abilityId === 'shieldBoost') {
       const sys = galaxy.getSystem(planetId);
-      if (sys) combatEffects.shieldHit(sys.stationWorldPosition, 0x44ff88);
+      if (sys) combatEffects.shieldHit(sys.station.stationVisualCenter, 0x44ff88);
     }
     cameraController.zoomPunch(0.06);
   });
@@ -365,6 +369,7 @@ export function createGame() {
     const ps = gameState.getPlanetState(planetId);
     if (sys?.station && ps) {
       sys.station.setDamageState(ps.combat.stationHP / ps.combat.stationMaxHP);
+      sys.station.setShieldState(ps.combat.shieldHP, ps.combat.shieldMaxHP);
     }
   });
 
@@ -373,6 +378,7 @@ export function createGame() {
     const ps = gameState.getPlanetState(planetId);
     if (sys?.station && ps) {
       sys.station.setDamageState(ps.combat.stationHP / ps.combat.stationMaxHP);
+      sys.station.setShieldState(ps.combat.shieldHP, ps.combat.shieldMaxHP);
     }
   });
 

@@ -641,6 +641,11 @@ export class Station3D {
     return v;
   }
 
+  get stationVisualCenter() {
+    const v = new THREE.Vector3(0, 0.6, 0);
+    return this.group.localToWorld(v);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // DELIVERY FLASH — blinks all nav lights 3× rapidly on ship arrival
   // ─────────────────────────────────────────────────────────────────────────
@@ -770,6 +775,7 @@ export class Station3D {
       wireframe: true,
     });
     this._shieldDome = new THREE.Mesh(geo, mat);
+    this._shieldDome.position.y = 0.6;
     this._shieldDomeMat = mat;
     this._shieldDomeGeo = geo;
     this.group.add(this._shieldDome);
