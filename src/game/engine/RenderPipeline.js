@@ -3,7 +3,6 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ColorGradeShader } from '../shaders/effects/ColorGradeShader.js';
 
 export class RenderPipeline {
@@ -17,7 +16,7 @@ export class RenderPipeline {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setClearColor(0x0a0e14, 1);
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.1;
 
     // Shadow maps
@@ -48,8 +47,6 @@ export class RenderPipeline {
     // Color grading: S-curve, cool shadows/warm highlights, saturation, vignette, CA
     this.colorGradePass = new ShaderPass(ColorGradeShader);
     this.composer.addPass(this.colorGradePass);
-
-    this.composer.addPass(new OutputPass());
   }
 
   /** Called by Game.js each frame to advance time-based uniforms. */
@@ -86,8 +83,6 @@ export class RenderPipeline {
 
     this.colorGradePass = new ShaderPass(ColorGradeShader);
     this.composer.addPass(this.colorGradePass);
-
-    this.composer.addPass(new OutputPass());
   }
 
   /**

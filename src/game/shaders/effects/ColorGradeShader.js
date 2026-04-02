@@ -6,6 +6,7 @@ export const ColorGradeShader = {
     uContrast:    { value: 1.12 },
     uVigStrength: { value: 0.45 },
     uCAStrength:  { value: 0.0018 },
+    uExposure:    { value: 1.1 },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -20,7 +21,12 @@ export const ColorGradeShader = {
     uniform float uContrast;
     uniform float uVigStrength;
     uniform float uCAStrength;
+    uniform float uExposure;
     varying vec2 vUv;
+
+    vec3 acesFilmic(vec3 x) {
+      return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0);
+    }
 
     vec3 sCurve(vec3 x) {
       // Smoothstep S-curve: keeps darks dark, boosts mids, compresses highlights
@@ -60,6 +66,8 @@ export const ColorGradeShader = {
       float vig = 1.0 - dot(center, center) * uVigStrength * 3.5;
       col *= clamp(vig, 0.0, 1.0);
 
+      col = acesFilmic(col * uExposure);
+      col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
       gl_FragColor = vec4(col, 1.0);
     }
   `,

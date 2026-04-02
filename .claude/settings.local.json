@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd /c \"tasklist | findstr node\" 2>&1)",
+      "Bash(cmd /c \"rd /s /q C:\\\\Users\\\\patti\\\\dev\\\\astro\\\\examples\")",
+      "Bash(find /c/Users/patti/dev/astro -name *.html -o -name *.astro)",
+      "Bash(npm run:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d[''''version'''']\\)\")",
+      "Bash(find /c/Users/patti/dev/astro/node_modules/three/src -name logdepthbuf*)",
+      "Bash(grep:*)"
+    ]
+  }
+}

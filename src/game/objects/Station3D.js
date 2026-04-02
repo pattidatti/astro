@@ -52,7 +52,7 @@ export class Station3D {
     this._buildSolarMasts();
     this._buildEngineSection();
     this._buildAntennaArray();
-    this.group.scale.setScalar(1.5);
+    this.group.scale.setScalar(0.75);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -158,7 +158,9 @@ export class Station3D {
     }
 
     // Dome collar
-    G.add(Object.assign(this._mk(new THREE.CylinderGeometry(0.24, 0.50, 0.16, 12), this._mm()), { position: new THREE.Vector3(0, 2.32, 0) }));
+    const domeCollar = this._mk(new THREE.CylinderGeometry(0.24, 0.50, 0.16, 12), this._mm());
+    domeCollar.position.set(0, 2.32, 0);
+    G.add(domeCollar);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -627,7 +629,7 @@ export class Station3D {
   // ─────────────────────────────────────────────────────────────────────────
   init(planetId) {
     const mat = new THREE.MeshBasicMaterial({ visible: false });
-    this.hitboxMesh = this._mk(new THREE.SphereGeometry(5.5, 8, 8), mat);
+    this.hitboxMesh = this._mk(new THREE.SphereGeometry(2.75, 8, 8), mat);
     this.hitboxMesh.userData.stationId = planetId;
     this.group.add(this.hitboxMesh);
   }
