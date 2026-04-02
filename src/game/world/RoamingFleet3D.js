@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { EnemyShip3D } from '../objects/EnemyShip3D.js';
+import { Mothership3D } from '../objects/Mothership3D.js';
 
 const _dir = new THREE.Vector3();
 const _up  = new THREE.Vector3(0, 1, 0);
@@ -36,8 +37,8 @@ export class RoamingFleet3D {
 
     this._fleetId    = null;
     this._shipMeshes = [];       // { bodyGroup, hpBack, hpFill, enemyId }
-    this._msGroup    = null;     // mothership sub-group (invasion only)
-    this._msMesh     = null;     // mothership body mesh
+    this._msGroup    = null;     // mothership group (Mothership3D)
+    this._msShip     = null;     // mothership 3D object
     this._msHpBack   = null;
     this._msHpFill   = null;
 
@@ -144,37 +145,19 @@ export class RoamingFleet3D {
   }
 
   _buildMothership(msData) {
-    const color = 0xff0044;
-    this._msGroup = new THREE.Group();
+    // Use the high-quality Mothership3D model
+    this._msShip = new Mothership3D();
+    this._msGroup = this._msShip.group;
+    this._msGroup.visible = true;
 
-    // Wedge hull via extruded shape
-    const shape = new THREE.Shape();
-    shape.moveTo(0,  4.0);   // nose
-    shape.lineTo(-3.5, -3.0);
-    shape.lineTo( 3.5, -3.0);
-    shape.closePath();
+    // Hide the built-in HP bars from Mothership3D (we'll use external ones)
+    this._msShip._hpBg.visible = false;
+    this._msShip._hpFg.visible = false;
 
-    const extSettings = { depth: 1.6, bevelEnabled: false };
-    const hullGeo = new THREE.ExtrudeGeometry(shape, extSettings);
-    hullGeo.rotateX(-Math.PI / 2);
-    hullGeo.rotateY(Math.PI);
-    hullGeo.translate(0, 0, 0.8);
-    const hullMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5 });
-    this._msMesh = new THREE.Mesh(hullGeo, hullMat);
-    this._msMesh.scale.setScalar(MOTHERSHIP_SCALE);
-    this._msGroup.add(this._msMesh);
-
-    // Engine glows
-    for (const xOff of [-1.2, 0, 1.2]) {
-      const light = new THREE.PointLight(color, 1.5, 14);
-      light.position.set(xOff * MOTHERSHIP_SCALE, 0, -3 * MOTHERSHIP_SCALE);
-      this._msGroup.add(light);
-    }
-
-    // HP bar
+    // Create external HP bars for fleet display
     const { hpBack, hpFill } = this._makeHpBar(5.0, 7.5);
-    this._msGroup.add(hpBack);
-    this._msGroup.add(hpFill);
+    this.group.add(hpBack);
+    this.group.add(hpFill);
     this._msHpBack = hpBack;
     this._msHpFill = hpFill;
 
@@ -226,22 +209,37 @@ export class RoamingFleet3D {
   /**
    * Compute position along a possibly-curved path that arcs around nearby planets.
    * Uses quadratic bezier if a planet is close to the straight-line path.
+   * Offsets start/end points to clear source and destination planets.
    */
   _computeBezierPoint(fromPos, toPos, t) {
     const AVOID_RADIUS = 15;
+    const ENDPOINT_OFFSET = 12;  // Distance to offset start/end from planet centers
+
+    // Compute direction and offset the endpoints to stay outside planet surfaces
+    _dir.subVectors(toPos, fromPos);
+    const pathDist = _dir.length();
+    if (pathDist > 0.001) {
+      _dir.divideScalar(pathDist);
+    }
+
+    // Offset start and end positions to clear planet meshes
+    const effFromPos = new THREE.Vector3().addVectors(fromPos, _dir.clone().multiplyScalar(ENDPOINT_OFFSET));
+    const effToPos = new THREE.Vector3().addVectors(toPos, _dir.clone().multiplyScalar(-ENDPOINT_OFFSET));
+
+    // Check bystander planets for avoidance
     let bestPlanet = null;
     let bestDist = Infinity;
     let bestClosestT = 0;
 
     for (const pPos of this._avoidPlanets) {
-      // Project pPos onto segment fromPos → toPos
-      _dir.subVectors(toPos, fromPos);
-      const lenSq = _dir.lengthSq();
+      // Project pPos onto segment effFromPos → effToPos
+      _toLine.subVectors(effToPos, effFromPos);
+      const lenSq = _toLine.lengthSq();
       if (lenSq < 0.001) continue;
 
-      _toLine.subVectors(pPos, fromPos);
-      const segT = Math.max(0, Math.min(1, _toLine.dot(_dir) / lenSq));
-      const closest = _dir.clone().multiplyScalar(segT).add(fromPos);
+      const vecToP = new THREE.Vector3().subVectors(pPos, effFromPos);
+      const segT = Math.max(0, Math.min(1, vecToP.dot(_toLine) / lenSq));
+      const closest = _toLine.clone().multiplyScalar(segT).add(effFromPos);
       const dist = pPos.distanceTo(closest);
 
       if (dist < AVOID_RADIUS && dist < bestDist) {
@@ -253,12 +251,12 @@ export class RoamingFleet3D {
 
     if (!bestPlanet) {
       // Straight line — no avoidance needed
-      return new THREE.Vector3().lerpVectors(fromPos, toPos, t);
+      return new THREE.Vector3().lerpVectors(effFromPos, effToPos, t);
     }
 
     // Compute control point at the midpoint, pushed perpendicular away from planet
-    _mid.lerpVectors(fromPos, toPos, 0.5);
-    const closestOnLine = new THREE.Vector3().lerpVectors(fromPos, toPos, bestClosestT);
+    _mid.lerpVectors(effFromPos, effToPos, 0.5);
+    const closestOnLine = new THREE.Vector3().lerpVectors(effFromPos, effToPos, bestClosestT);
     _perp.subVectors(closestOnLine, bestPlanet).normalize(); // direction away from planet
     const pushDist = (AVOID_RADIUS - bestDist) + 8;
     const ctrl = _mid.clone().addScaledVector(_perp, pushDist);
@@ -266,9 +264,9 @@ export class RoamingFleet3D {
     // Quadratic bezier: B(t) = (1-t)² A + 2(1-t)t ctrl + t² B
     const s = 1 - t;
     return new THREE.Vector3(
-      s * s * fromPos.x + 2 * s * t * ctrl.x + t * t * toPos.x,
-      s * s * fromPos.y + 2 * s * t * ctrl.y + t * t * toPos.y,
-      s * s * fromPos.z + 2 * s * t * ctrl.z + t * t * toPos.z,
+      s * s * effFromPos.x + 2 * s * t * ctrl.x + t * t * effToPos.x,
+      s * s * effFromPos.y + 2 * s * t * ctrl.y + t * t * effToPos.y,
+      s * s * effFromPos.z + 2 * s * t * ctrl.z + t * t * effToPos.z,
     );
   }
 
@@ -283,10 +281,10 @@ export class RoamingFleet3D {
     // Direction: use bezier tangent (evaluate at t and t+epsilon)
     const eps = Math.min(0.02, 1 - t);
     const ahead = this._computeBezierPoint(fromPos, toPos, Math.min(1, t + eps));
-    _dir.subVectors(ahead, curPos);
-    if (_dir.lengthSq() > 0.001) {
-      _dir.normalize();
-      const angle = Math.atan2(_dir.x, _dir.z);
+    const dirVec = new THREE.Vector3().subVectors(ahead, curPos);
+    if (dirVec.lengthSq() > 0.001) {
+      dirVec.normalize();
+      const angle = Math.atan2(dirVec.x, dirVec.z);
       this.group.rotation.y = angle;
     }
   }
@@ -319,12 +317,23 @@ export class RoamingFleet3D {
 
     if (this._msGroup) {
       this.group.remove(this._msGroup);
-      this._msGroup.traverse(c => {
-        if (c.geometry) c.geometry.dispose();
-        if (c.material) c.material.dispose();
-      });
+      if (this._msShip) {
+        this._msShip.dispose();
+      } else {
+        this._msGroup.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
+        });
+      }
+      // Remove external HP bars
+      this.group.remove(this._msHpBack);
+      this.group.remove(this._msHpFill);
+      this._msHpBack?.geometry.dispose();
+      this._msHpBack?.material.dispose();
+      this._msHpFill?.geometry.dispose();
+      this._msHpFill?.material.dispose();
       this._msGroup = null;
-      this._msMesh  = null;
+      this._msShip  = null;
       this._msHpBack = null;
       this._msHpFill = null;
     }
