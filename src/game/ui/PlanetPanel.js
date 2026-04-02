@@ -37,7 +37,7 @@ function flashButton(btn, successClass, costText) {
     // Position relative to the button
     const rect = btn.getBoundingClientRect();
     span.style.left = rect.left + rect.width / 2 + 'px';
-    span.style.top  = rect.top + 'px';
+    span.style.top = rect.top + 'px';
     span.style.position = 'fixed';
     document.body.appendChild(span);
     span.addEventListener('animationend', () => span.remove(), { once: true });
@@ -48,7 +48,7 @@ const _ndc = new THREE.Vector3();
 
 export class PlanetPanel {
   constructor() {
-    this._leftEl  = document.getElementById('panel-left');
+    this._leftEl = document.getElementById('panel-left');
     this._rightEl = document.getElementById('panel-right');
     this._visible = false;
     this._planetId = null;
@@ -59,6 +59,10 @@ export class PlanetPanel {
     this._colonyPopupEl = document.getElementById('colony-ship-popup');
     this._colonyPopupVisible = false;
     this._defensePanel = new DefensePanel();
+
+    this._leftTab = 'base';
+    this._rightTab = 'robots';
+    this._initTabs();
 
     // Close button
     document.getElementById('panel-close')?.addEventListener('pointerdown', () => {
@@ -77,23 +81,26 @@ export class PlanetPanel {
 
     // Listen for relevant state changes to trigger re-render
     const rerender = () => { if (this._visible) this._renderAll(); };
-    gameState.on('baseBuilt',          rerender);
-    gameState.on('baseUpgraded',       rerender);
-    gameState.on('robotHired',         rerender);
-    gameState.on('robotUpgraded',      rerender);
-    gameState.on('routeAdded',         rerender);
-    gameState.on('routeRemoved',       rerender);
-    gameState.on('depositUnlocked',    rerender);
-    gameState.on('colonyShipQueued',   rerender);
-    gameState.on('colonyShipBuilt',    rerender);
-    gameState.on('defenseBuilt',       rerender);
-    gameState.on('defenseUpgraded',    rerender);
-    gameState.on('attackStarted',      rerender);
-    gameState.on('attackEnded',        rerender);
-    gameState.on('abilityActivated',   rerender);
-    gameState.on('planetFell',         rerender);
-    gameState.on('planetRecolonized',  rerender);
+    gameState.on('baseBuilt', rerender);
+    gameState.on('baseUpgraded', rerender);
+    gameState.on('robotHired', rerender);
+    gameState.on('robotUpgraded', rerender);
+    gameState.on('routeAdded', rerender);
+    gameState.on('routeRemoved', rerender);
+    gameState.on('depositUnlocked', rerender);
+    gameState.on('colonyShipQueued', rerender);
+    gameState.on('colonyShipBuilt', rerender);
+    gameState.on('defenseBuilt', rerender);
+    gameState.on('defenseUpgraded', rerender);
+    gameState.on('attackStarted', rerender);
+    gameState.on('attackEnded', rerender);
+    gameState.on('abilityActivated', rerender);
+    gameState.on('planetFell', rerender);
+    gameState.on('planetRecolonized', rerender);
     gameState.on('colonyShipLaunched', rerender);
+    const rerenderRoutes = () => { if (this._visible) this._renderRoutes(); };
+    gameState.on('shipLaunched', rerenderRoutes);
+    gameState.on('shipArrived', rerenderRoutes);
     gameState.on('productionTick', () => {
       if (!this._visible) return;
       this._renderSilos();
@@ -107,15 +114,45 @@ export class PlanetPanel {
           this._renderBase(ps, def);
           this._renderHire(ps, def);
           this._renderRobotUpgrades(ps);
+          this._renderRoutes();
         }
       }
     });
+  }
+
+  _initTabs() {
+    document.querySelectorAll('#panel-left-tabs .panel-tab').forEach(btn => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        this._leftTab = btn.dataset.tab;
+        this._activateTab('left', this._leftTab);
+      });
+    });
+    document.querySelectorAll('#panel-right-tabs .panel-tab').forEach(btn => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        this._rightTab = btn.dataset.tab;
+        this._activateTab('right', this._rightTab);
+      });
+    });
+  }
+
+  _activateTab(side, tabName) {
+    const panel = side === 'left' ? this._leftEl : this._rightEl;
+    panel.querySelectorAll('.panel-tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.tab === tabName)
+    );
+    panel.querySelectorAll('.panel-tab-content').forEach(c =>
+      c.style.display = c.dataset.tab === tabName ? '' : 'none'
+    );
   }
 
   /** Show panels for a given planet */
   show(planetId) {
     this._planetId = planetId;
     this._visible = true;
+    this._activateTab('left', this._leftTab);
+    this._activateTab('right', this._rightTab);
     this._renderAll();
     this._leftEl.classList.add('visible');
     this._rightEl.classList.add('visible');
@@ -128,6 +165,7 @@ export class PlanetPanel {
     this._leftEl.classList.remove('visible');
     this._rightEl.classList.remove('visible');
     this._hideColonyShipPopup();
+    document.querySelectorAll('.route-inline-form').forEach(f => f.remove());
   }
 
   /** Call each frame to reposition panels to match the camera's look-at target screen Y */
@@ -139,10 +177,10 @@ export class PlanetPanel {
     if (_ndc.z > 1.0) return;
 
     const screenY = (-_ndc.y * 0.5 + 0.5) * window.innerHeight;
-    const clampedY = Math.max(120, Math.min(window.innerHeight - 120, screenY));
-    const topPx = clampedY + 'px';
+    // Anchor top edge; clamp so panel stays on screen
+    const topPx = Math.max(60, Math.min(window.innerHeight - 120, screenY - 200)) + 'px';
 
-    this._leftEl.style.top  = topPx;
+    this._leftEl.style.top = topPx;
     this._rightEl.style.top = topPx;
   }
 
@@ -206,7 +244,7 @@ export class PlanetPanel {
           for (const srcId of sourcePlanets) {
             const srcDef = PLANETS.find(p => p.id === srcId);
             const canAfford = (oreCost <= 0 || gameState.siloHas(srcId, 'ore', oreCost)) &&
-                              (energyCost <= 0 || gameState.siloHas(srcId, 'energy', energyCost));
+              (energyCost <= 0 || gameState.siloHas(srcId, 'energy', energyCost));
             const btn = document.createElement('button');
             btn.className = 'build-base-btn' + (canAfford ? '' : ' cant-afford');
             btn.disabled = !canAfford;
@@ -231,7 +269,7 @@ export class PlanetPanel {
 
       const { ore: oreCost = 0, energy: energyCost = 0 } = def.baseCost;
       const canAfford = gameState.siloHas(this._planetId, 'ore', oreCost) &&
-                        gameState.siloHas(this._planetId, 'energy', energyCost);
+        gameState.siloHas(this._planetId, 'energy', energyCost);
 
       if (isOwned) {
         // Show clickable build base button
@@ -309,10 +347,10 @@ export class PlanetPanel {
       btn.addEventListener('mouseenter', () => {
         let effectLine = '';
         if (!maxed) {
-          if (upg.effect === 'storage')        effectLine = `→ +${fmt(upg.capacityBonus[lv])} capacity`;
+          if (upg.effect === 'storage') effectLine = `→ +${fmt(upg.capacityBonus[lv])} capacity`;
           else if (upg.effect === 'passiveEnergy') effectLine = `→ ${upg.passiveRate[lv]} energy/s passive`;
-          else if (upg.effect === 'shipSpeed')     effectLine = `→ +20% ship speed`;
-          else if (upg.effect === 'shipSlots')     effectLine = `→ +1 docking slot`;
+          else if (upg.effect === 'shipSpeed') effectLine = `→ +20% ship speed`;
+          else if (upg.effect === 'shipSlots') effectLine = `→ +1 docking slot`;
         }
         this._showTooltip(btn, `
           <div class="utt-name">${upg.name}</div>
@@ -340,7 +378,7 @@ export class PlanetPanel {
       if (count === 0) return 0;
       const oreZones = ps.deposits.ore.unlocked;
       return count * BASE_ORE_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
-             * def.planetMult.ore * Math.max(1, oreZones);
+        * def.planetMult.ore * Math.max(1, oreZones);
     }
     if (resource === 'energy') {
       let rate = 0;
@@ -348,7 +386,7 @@ export class PlanetPanel {
       if (count > 0) {
         const energyZones = ps.deposits.energy.unlocked;
         rate += count * BASE_ENERGY_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
-                * def.planetMult.energy * Math.max(1, energyZones);
+          * def.planetMult.energy * Math.max(1, energyZones);
       }
       const passiveLv = ps.baseLevels.passiveEnergy;
       if (passiveLv > 0) rate += _passiveRates[passiveLv - 1] || 0;
@@ -360,7 +398,7 @@ export class PlanetPanel {
       const { count, speedLevel, loadLevel } = ps.robots.miner;
       if (count === 0) return 0;
       return count * BASE_CRYSTAL_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
-             * def.planetMult.crystal * crystalZones;
+        * def.planetMult.crystal * crystalZones;
     }
     return 0;
   }
@@ -420,7 +458,7 @@ export class PlanetPanel {
 
       // Compute display % from current silo capacity
       const silo = ps?.silos?.[route.resource];
-      const pct  = silo?.capacity > 0 ? Math.round(route.amount / silo.capacity * 100) : '?';
+      const pct = silo?.capacity > 0 ? Math.round(route.amount / silo.capacity * 100) : '?';
 
       // Travel time
       const speedLv = ps?.baseLevels?.shipSpeed ?? 0;
@@ -431,9 +469,9 @@ export class PlanetPanel {
       const inTransitShip = gameState.activeShips.find(s => s.routeId === route.id);
       const etaStr = inTransitShip
         ? (() => {
-            const rem = Math.max(0, (1 - inTransitShip.t) * inTransitShip.duration);
-            return `${Math.floor(rem / 60)}m ${Math.floor(rem % 60)}s`;
-          })()
+          const rem = Math.max(0, (1 - inTransitShip.t) * inTransitShip.duration);
+          return `${Math.floor(rem / 60)}m ${Math.floor(rem % 60)}s`;
+        })()
         : null;
 
       const row = document.createElement('div');
@@ -445,11 +483,17 @@ export class PlanetPanel {
             <span class="route-from-to">${toDef?.name || route.toPlanet}</span>
             <span class="route-resource">${RESOURCE_ICONS[route.resource]} ${pct}% <span class="route-amount-hint">(${fmt(route.amount)})</span></span>
           </div>
-          <div class="route-meta">every ${route.intervalMinutes}m · ${travelStr}</div>
+          <div class="route-meta">${travelStr} travel · sends when ready</div>
           ${etaStr ? `<div class="route-transit-indicator">🚀 in transit — ETA ${etaStr}</div>` : ''}
         </div>
+        <button class="route-edit" title="Edit route">✎</button>
         <button class="route-delete" title="Remove route">✕</button>
       `;
+      row.querySelector('.route-edit').addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        AudioManager.play('UI_CLICK');
+        this._openInlineEdit(row, route, ps);
+      });
       row.querySelector('.route-delete').addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         gameState.removeRoute(route.id);
@@ -497,9 +541,9 @@ export class PlanetPanel {
       <div class="rf-label">DESTINATION</div>
       <select class="route-select" id="rf-to">
         ${ownedExcludingSelf.map(id => {
-          const def = PLANETS.find(p => p.id === id);
-          return `<option value="${id}">${def?.name || id}</option>`;
-        }).join('')}
+      const def = PLANETS.find(p => p.id === id);
+      return `<option value="${id}">${def?.name || id}</option>`;
+    }).join('')}
       </select>
 
       <div class="rf-label">RESOURCE</div>
@@ -513,9 +557,6 @@ export class PlanetPanel {
         <span id="rf-pct-label" class="route-pct-label">${defaultPct}% — ${fmt(defaultAmt)}</span>
       </div>
 
-      <div class="rf-label">INTERVAL (MINUTES)</div>
-      <input id="rf-int" type="number" value="5" min="1" class="route-select">
-
       <div id="rf-travel" class="route-travel-hint">Travel time: ~${Math.floor(defaultTravel / 60)}m ${Math.floor(defaultTravel % 60)}s</div>
 
       <div style="display:flex;gap:6px;margin-top:4px">
@@ -527,12 +568,12 @@ export class PlanetPanel {
 
     // Live slider update
     const updateSliderLabel = () => {
-      const resource  = form.querySelector('#rf-res').value;
-      const silo      = ps?.silos?.[resource];
-      const capacity  = silo?.capacity ?? 1000;
-      const sliderEl  = form.querySelector('#rf-pct');
-      const pct       = parseInt(sliderEl.value, 10);
-      const amt       = Math.round(pct / 100 * capacity);
+      const resource = form.querySelector('#rf-res').value;
+      const silo = ps?.silos?.[resource];
+      const capacity = silo?.capacity ?? 1000;
+      const sliderEl = form.querySelector('#rf-pct');
+      const pct = parseInt(sliderEl.value, 10);
+      const amt = Math.round(pct / 100 * capacity);
       sliderEl.style.setProperty('--val', pct + '%');
       form.querySelector('#rf-pct-label').textContent = `${pct}% — ${fmt(amt)}`;
     };
@@ -540,7 +581,7 @@ export class PlanetPanel {
     form.querySelector('#rf-pct').style.setProperty('--val', defaultPct + '%');
 
     const updateTravelTime = () => {
-      const to    = form.querySelector('#rf-to').value;
+      const to = form.querySelector('#rf-to').value;
       const travel = calcTravelDuration(this._planetId, to, speedLv);
       form.querySelector('#rf-travel').textContent =
         `Travel time: ~${Math.floor(travel / 60)}m ${Math.floor(travel % 60)}s`;
@@ -552,14 +593,13 @@ export class PlanetPanel {
 
     form.querySelector('#rf-confirm').addEventListener('pointerdown', (e) => {
       e.stopPropagation();
-      const to       = form.querySelector('#rf-to').value;
+      const to = form.querySelector('#rf-to').value;
       const resource = form.querySelector('#rf-res').value;
-      const silo     = ps?.silos?.[resource];
+      const silo = ps?.silos?.[resource];
       const capacity = silo?.capacity ?? 1000;
-      const pct      = parseInt(form.querySelector('#rf-pct').value, 10);
-      const amount   = Math.max(1, Math.round(pct / 100 * capacity));
-      const interval = parseFloat(form.querySelector('#rf-int').value) || 5;
-      const route = createRoute(this._planetId, to, resource, amount, interval);
+      const pct = parseInt(form.querySelector('#rf-pct').value, 10);
+      const amount = Math.max(1, Math.round(pct / 100 * capacity));
+      const route = createRoute(this._planetId, to, resource, amount);
       gameState.addRoute(route);
     });
     form.querySelector('#rf-cancel').addEventListener('pointerdown', (e) => {
@@ -567,6 +607,99 @@ export class PlanetPanel {
       AudioManager.play('UI_CLICK');
       form.remove();
       addBtn.style.display = '';
+    });
+  }
+
+  _openInlineEdit(row, route, ps) {
+    // Close any other open inline edit first
+    document.querySelectorAll('.route-inline-form').forEach(f => {
+      const r = f.closest('.route-item');
+      r?.classList.remove('route-item--editing');
+      r?.querySelectorAll('.route-edit, .route-delete').forEach(b => b.style.display = '');
+      f.remove();
+    });
+
+    // Toggle off if already open on this row
+    if (row.classList.contains('route-item--editing')) return;
+
+    row.classList.add('route-item--editing');
+    row.querySelectorAll('.route-edit, .route-delete').forEach(b => b.style.display = 'none');
+
+    const availableResources = ps ? Object.keys(ps.silos).filter(r => ps.silos[r].capacity > 0) : ['ore'];
+    const silo = ps?.silos?.[route.resource];
+    const currentPct = silo?.capacity > 0 ? Math.round(route.amount / silo.capacity * 100) : 50;
+    const currentAmt = Math.round(currentPct / 100 * (silo?.capacity ?? 1000));
+
+    const form = document.createElement('div');
+    form.className = 'route-inline-form';
+    form.innerHTML = `
+      <div class="rf-label">RESOURCE</div>
+      <select class="route-select" id="rei-res">
+        ${availableResources.map(r =>
+          `<option value="${r}" ${r === route.resource ? 'selected' : ''}>${RESOURCE_LABELS[r]}</option>`
+        ).join('')}
+      </select>
+
+      <div class="rf-label">AMOUNT PER TRIP</div>
+      <div class="route-pct-row">
+        <input type="range" id="rei-pct" min="1" max="100" value="${currentPct}" class="route-pct-slider">
+        <span id="rei-pct-label" class="route-pct-label">${currentPct}% — ${fmt(currentAmt)}</span>
+      </div>
+
+      <div class="route-inline-actions">
+        <button id="rei-toggle" class="rf-btn rf-btn-toggle">${route.active ? '⏸ PAUSE' : '▶ ENABLE'}</button>
+        <button id="rei-save" class="rf-btn rf-btn-confirm">SAVE</button>
+        <button id="rei-cancel" class="rf-btn rf-btn-cancel">CANCEL</button>
+      </div>
+    `;
+
+    row.querySelector('.route-main').appendChild(form);
+
+    const pctInput = form.querySelector('#rei-pct');
+    const pctLabel = form.querySelector('#rei-pct-label');
+    const resSelect = form.querySelector('#rei-res');
+
+    pctInput.style.setProperty('--val', currentPct + '%');
+
+    const updateLabel = () => {
+      const s = ps?.silos?.[resSelect.value];
+      const cap = s?.capacity ?? 1000;
+      const pct = parseInt(pctInput.value, 10);
+      pctInput.style.setProperty('--val', pct + '%');
+      pctLabel.textContent = `${pct}% — ${fmt(Math.round(pct / 100 * cap))}`;
+    };
+    pctInput.addEventListener('input', updateLabel);
+    resSelect.addEventListener('change', updateLabel);
+
+    const close = () => {
+      row.classList.remove('route-item--editing');
+      row.querySelectorAll('.route-edit, .route-delete').forEach(b => b.style.display = '');
+      form.remove();
+    };
+
+    form.querySelector('#rei-toggle').addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      gameState.toggleRoute(route.id);
+      route.active = !route.active;
+      form.querySelector('#rei-toggle').textContent = route.active ? '⏸ PAUSE' : '▶ ENABLE';
+      row.querySelector('.route-status').classList.toggle('inactive', !route.active);
+    });
+
+    form.querySelector('#rei-save').addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      const resource = resSelect.value;
+      const s = ps?.silos?.[resource];
+      const cap = s?.capacity ?? 1000;
+      const pct = parseInt(pctInput.value, 10);
+      const amount = Math.max(1, Math.round(pct / 100 * cap));
+      gameState.updateRoute(route.id, { resource, amount });
+      close();
+    });
+
+    form.querySelector('#rei-cancel').addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      AudioManager.play('UI_CLICK');
+      close();
     });
   }
 
@@ -642,8 +775,8 @@ export class PlanetPanel {
 
     for (const [type, robot] of Object.entries(ps.robots)) {
       if (robot.count === 0) continue;
-      const spdLv  = robot.speedLevel ?? 0;
-      const loadLv = robot.loadLevel  ?? 0;
+      const spdLv = robot.speedLevel ?? 0;
+      const loadLv = robot.loadLevel ?? 0;
       const statsHtml = (spdLv > 0 || loadLv > 0)
         ? `<span class="robot-row-stats">${spdLv > 0 ? `💨${spdLv}` : ''}${loadLv > 0 ? ` 📦${loadLv}` : ''}</span>`
         : '';
@@ -728,16 +861,9 @@ export class PlanetPanel {
   // ─── Defense panel ────────────────────────────────────────────────────────
 
   _renderDefenses() {
-    let el = document.getElementById('panel-defenses');
-    if (!el) {
-      // Create defense container in right panel if it doesn't exist
-      el = document.createElement('div');
-      el.id = 'panel-defenses';
-      this._rightEl.appendChild(el);
-    }
-    if (this._planetId) {
-      this._defensePanel.render(el, this._planetId);
-    }
+    const el = document.getElementById('panel-defenses');
+    if (!el || !this._planetId) return;
+    this._defensePanel.render(el, this._planetId);
   }
 
   // ─── Colony ship ──────────────────────────────────────────────────────────
@@ -902,17 +1028,17 @@ export class PlanetPanel {
     if (!tt) return;
     tt.innerHTML = html;
     tt.classList.add('visible');
-    const r   = anchorEl.getBoundingClientRect();
-    const ttW = tt.offsetWidth  || 220;
+    const r = anchorEl.getBoundingClientRect();
+    const ttW = tt.offsetWidth || 220;
     const ttH = tt.offsetHeight || 80;
-    let left  = r.right + 8;
+    let left = r.right + 8;
     if (left + ttW > window.innerWidth - 4) left = r.left - ttW - 8;
     left = Math.max(4, left);
     let top = r.top;
     if (top + ttH > window.innerHeight - 4) top = window.innerHeight - ttH - 4;
     top = Math.max(4, top);
     tt.style.left = left + 'px';
-    tt.style.top  = top  + 'px';
+    tt.style.top = top + 'px';
   }
 
   _hideTooltip() {

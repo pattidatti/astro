@@ -68,9 +68,7 @@ export class SolarSystem {
     this.robotManager.onDelivery = () => {
       this.station.flashDelivery();
       if (this._onDeliveryWorld) {
-        const worldPos = new THREE.Vector3();
-        this.station.group.getWorldPosition(worldPos);
-        this._onDeliveryWorld(worldPos, CARGO_THRESHOLD_DISPLAY);
+        this._onDeliveryWorld(this.station.group, CARGO_THRESHOLD_DISPLAY);
       }
     };
     this._onDeliveryWorld = null; // set via setDeliveryCallback(fn)
@@ -381,7 +379,7 @@ export class SolarSystem {
 
     // Station — only visible on colonized planets
     const _ps = gameState.getPlanetState(this.id);
-    const stationVisible = distance < 80 && !!_ps?.hasBase;
+    const stationVisible = distance < 250 && !!_ps?.hasBase;
     this.station.group.visible = stationVisible;
     if (stationVisible) {
       this.station.update(time, dt);
@@ -393,7 +391,7 @@ export class SolarSystem {
 
     // Colony ship in orbit
     if (this.colonyShip) {
-      if (distance < 80) {
+      if (distance < 250) {
         this.colonyShip.group.visible = true;
         this.colonyShip.updateOrbit(time);
       } else {

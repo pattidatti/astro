@@ -29,14 +29,13 @@ export function calcTravelDuration(fromPlanetId, toPlanetId, shipSpeedLevel = 0)
  * @param {number} amount
  * @param {number} intervalMinutes
  */
-export function createRoute(fromPlanet, toPlanet, resource, amount, intervalMinutes) {
+export function createRoute(fromPlanet, toPlanet, resource, amount) {
   return {
     id: `route_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     fromPlanet,
     toPlanet,
     resource,
     amount,
-    intervalMinutes,
     active: true,
     lastDispatchTime: 0,
   };
@@ -51,6 +50,5 @@ export function validateRoute(route, ownedPlanets) {
   if (route.fromPlanet === route.toPlanet)       return 'Source and destination must differ';
   if (!SHIPPABLE_RESOURCES.includes(route.resource)) return 'Invalid resource type';
   if (route.amount <= 0)                         return 'Amount must be positive';
-  if (route.intervalMinutes <= 0)                return 'Interval must be positive';
   return null;
 }

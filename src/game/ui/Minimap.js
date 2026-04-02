@@ -13,15 +13,20 @@ export class Minimap {
     this._onPlanetClick = onPlanetClick || null;
     this._visible = true;
     this._time = 0;
+    this._cameraController = null;
 
-    // Create canvas
+    // Create canvas wrapper (for absolute-positioned zoom buttons)
+    const wrapper = document.createElement('div');
+    wrapper.className = 'minimap-wrapper';
+    document.getElementById('top-left-hud')?.appendChild(wrapper);
+
     const canvas = document.createElement('canvas');
     canvas.id = 'minimap-canvas';
     canvas.width = SIZE * DPR;
     canvas.height = SIZE * DPR;
     canvas.style.width = SIZE + 'px';
     canvas.style.height = SIZE + 'px';
-    document.getElementById('hud-overlay')?.appendChild(canvas);
+    wrapper.appendChild(canvas);
 
     this._canvas = canvas;
     this._ctx = canvas.getContext('2d');
@@ -29,6 +34,31 @@ export class Minimap {
 
     // Click handler
     canvas.addEventListener('pointerdown', (e) => this._handleClick(e));
+
+    // Zoom controls (overlaid bottom-right of canvas)
+    const controls = document.createElement('div');
+    controls.className = 'minimap-zoom-controls';
+    const btnIn = document.createElement('button');
+    btnIn.className = 'minimap-zoom-btn';
+    btnIn.textContent = '+';
+    btnIn.title = 'Zoom inn';
+    btnIn.addEventListener('click', () => {
+      if (!this._cameraController) return;
+      const r = this._cameraController.targetSpherical.radius;
+      this._cameraController.targetSpherical.radius = Math.max(3, r * 0.75);
+    });
+    const btnOut = document.createElement('button');
+    btnOut.className = 'minimap-zoom-btn';
+    btnOut.textContent = '−';
+    btnOut.title = 'Zoom ut';
+    btnOut.addEventListener('click', () => {
+      if (!this._cameraController) return;
+      const r = this._cameraController.targetSpherical.radius;
+      this._cameraController.targetSpherical.radius = Math.min(600, r * 1.25);
+    });
+    controls.appendChild(btnIn);
+    controls.appendChild(btnOut);
+    wrapper.appendChild(controls);
 
     // Precompute planet lookup
     this._planetMap = {};
@@ -70,6 +100,7 @@ export class Minimap {
   }
 
   update(time, cameraController) {
+    if (!this._cameraController) this._cameraController = cameraController;
     this._time = time;
     const ctx = this._ctx;
 
@@ -78,7 +109,8 @@ export class Minimap {
     const shouldShow = zoomLevel === 'galaxy' || zoomLevel === 'system';
     if (shouldShow !== this._visible) {
       this._visible = shouldShow;
-      this._canvas.classList.toggle('minimap-hidden', !shouldShow);
+      const container = document.getElementById('top-left-hud');
+      if (container) container.classList.toggle('minimap-hidden', !shouldShow);
     }
     if (!shouldShow) return;
 
@@ -196,6 +228,6 @@ export class Minimap {
   }
 
   dispose() {
-    this._canvas.remove();
+    this._canvas.closest('.minimap-wrapper')?.remove();
   }
 }

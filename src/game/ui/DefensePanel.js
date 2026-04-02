@@ -102,37 +102,24 @@ export class DefensePanel {
   }
 
   _renderDefenseGrid(planetId, combat) {
-    let html = '<div class="defense-grid">';
+    let html = '<div class="hire-grid">';
 
     for (const [id, def] of Object.entries(DEFENSE_TYPES)) {
       const level = combat.defenses[id] || 0;
       const maxed = level >= def.maxLevel;
       const cost = maxed ? null : def.energyCost[level];
       const canAfford = cost !== null && gameState.siloHas(planetId, 'energy', cost);
-
-      let statsHtml = '';
-      if (level > 0) {
-        if (def.damage) {
-          statsHtml = `DMG:${def.damage[level-1]} | RATE:${def.fireRate[level-1]}/s`;
-        } else if (def.shieldHP) {
-          statsHtml = `HP:${def.shieldHP[level-1]} | REGEN:${def.regenRate[level-1]}/s`;
-        }
-      }
+      const costClass = (canAfford || maxed) ? '' : 'cant';
 
       html += `
-        <div class="defense-card${isActive(level) ? ' active' : ''}">
-          <div class="defense-card-header">
-            <span>${def.icon} ${def.name}</span>
-            <span class="defense-level">${level > 0 ? 'LV.' + level : '—'}</span>
-          </div>
-          ${level > 0 ? `<div class="defense-stats">${statsHtml}</div>` : ''}
-          ${!maxed ? `
-            <button class="defense-buy-btn${canAfford ? '' : ' cant-afford'}"
-                    data-defense-id="${id}" ${canAfford ? '' : 'disabled'}>
-              ${level === 0 ? 'BUILD' : 'UPGRADE'} ⚡${fmt(cost)}
-            </button>
-          ` : '<div class="defense-maxed">MAX</div>'}
-        </div>
+        <button class="hire-btn${maxed ? ' maxed' : ''}"
+                data-defense-id="${id}"
+                ${!maxed && !canAfford ? 'disabled' : ''}>
+          <span class="hire-btn-icon">${def.icon}</span>
+          <span class="hire-btn-name">${def.name}</span>
+          <span class="hire-btn-count">${level > 0 ? 'LV.' + level : '—'}</span>
+          <span class="hire-btn-cost ${costClass}">${maxed ? '✓ MAX' : (level === 0 ? 'BUILD' : 'UPGRADE') + ' ⚡' + fmt(cost)}</span>
+        </button>
       `;
     }
 
@@ -202,7 +189,7 @@ export class DefensePanel {
 
   _bindEvents(container, planetId) {
     // Defense buy buttons
-    container.querySelectorAll('.defense-buy-btn').forEach(btn => {
+    container.querySelectorAll('[data-defense-id]').forEach(btn => {
       btn.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         const defenseId = btn.dataset.defenseId;

@@ -461,6 +461,20 @@ class GameState extends EventEmitter {
     return true;
   }
 
+  updateRoute(routeId, { resource, amount, active } = {}) {
+    const route = this.routes.find(r => r.id === routeId);
+    if (!route) return false;
+    const resourceChanged = resource !== undefined && resource !== route.resource;
+    if (resource !== undefined) route.resource = resource;
+    if (amount !== undefined) route.amount = amount;
+    if (active !== undefined) route.active = active;
+    if (resourceChanged) {
+      this.activeShips = this.activeShips.filter(s => s.routeId !== routeId);
+    }
+    this.emit('routeAdded');
+    return true;
+  }
+
   // ─── Defense management ────────────────────────────────────────────────────
 
   /**

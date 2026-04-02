@@ -61,7 +61,7 @@ export class ShipManager3D {
     const toPos   = this._galaxy.getPlanetWorldPosition(data.toPlanet);
 
     if (fromPos && toPos) {
-      ship3d.activate(fromPos, toPos);
+      ship3d.activate(fromPos, toPos, data.resource);
     }
 
     this._active.set(data.id, { ship3d, data });
@@ -71,6 +71,14 @@ export class ShipManager3D {
       const shipId = data.id;
       this._inputManager.addClickable(ship3d._fuselage, () => {
         gameState.emit('cargoShipClicked', { shipId });
+      });
+    }
+
+    // Register colony ships in flight as clickable
+    if (data.isColony && this._inputManager && ship3d.hitbox) {
+      const shipId = data.id;
+      this._inputManager.addClickable(ship3d.hitbox, () => {
+        gameState.emit('colonyShipInFlightClicked', { shipId });
       });
     }
   }
@@ -97,6 +105,9 @@ export class ShipManager3D {
     // Find the colony ship that was orbiting the destination planet
     for (const [shipId, entry] of this._active) {
       if (entry.data.isColony && entry.data.toPlanet === data.toPlanetId) {
+        if (this._inputManager && entry.ship3d.hitbox) {
+          this._inputManager.removeClickable(entry.ship3d.hitbox);
+        }
         entry.ship3d.deactivate();
         this._colonyPool.push(entry.ship3d);
         this._active.delete(shipId);

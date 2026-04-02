@@ -25,8 +25,10 @@
   <!-- HUD Overlay -->
   <div id="hud-overlay" style="visibility:hidden">
 
-    <!-- Menu button (top-left) -->
-    <button id="menu-btn" title="Menu [ESC]">&#x2630;</button>
+    <!-- Top-left panel: menu button + minimap -->
+    <div id="top-left-hud">
+      <button id="menu-btn" title="Menu [ESC]">&#x2630; MENU</button>
+    </div>
 
     <!-- Left floating panel — Space Base -->
     <div id="panel-left" class="planet-panel">
@@ -35,18 +37,18 @@
         <span class="panel-planet-name">SPACE BASE</span>
         <button class="panel-close" id="panel-close">&#x2715;</button>
       </div>
+      <div class="panel-tabs" id="panel-left-tabs">
+        <button class="panel-tab active" data-tab="base">BASE</button>
+        <button class="panel-tab" data-tab="routes">ROUTES</button>
+      </div>
       <div class="panel-body">
-        <div class="panel-section" id="panel-base">
-          <!-- Populated by PlanetPanel.js -->
+        <div class="panel-tab-content" data-tab="base">
+          <div class="panel-section" id="panel-base"></div>
+          <div class="panel-section" id="panel-colony-ship"></div>
+          <div class="panel-section" id="panel-silos"></div>
         </div>
-        <div class="panel-section" id="panel-colony-ship">
-          <!-- Colony ship build/status -->
-        </div>
-        <div class="panel-section" id="panel-silos">
-          <!-- Resource silos -->
-        </div>
-        <div class="panel-section" id="panel-routes">
-          <!-- Ship routes -->
+        <div class="panel-tab-content" data-tab="routes" style="display:none">
+          <div class="panel-section" id="panel-routes"></div>
         </div>
       </div>
     </div>
@@ -57,15 +59,21 @@
         <span class="panel-planet-icon">&#x1F916;</span>
         <span class="panel-planet-name">ROBOTS</span>
       </div>
+      <div class="panel-tabs" id="panel-right-tabs">
+        <button class="panel-tab active" data-tab="robots">ROBOTS</button>
+        <button class="panel-tab" data-tab="defense">DEFENSE</button>
+        <button class="panel-tab" data-tab="upgrades">UPG</button>
+      </div>
       <div class="panel-body">
-        <div class="panel-section" id="panel-robots-hire">
-          <!-- Robot hire buttons -->
+        <div class="panel-tab-content" data-tab="robots">
+          <div class="panel-section" id="panel-robots-hire"></div>
+          <div class="panel-section" id="panel-robots-active"></div>
         </div>
-        <div class="panel-section" id="panel-robots-active">
-          <!-- Active robot list -->
+        <div class="panel-tab-content" data-tab="defense" style="display:none">
+          <div class="panel-section" id="panel-defenses"></div>
         </div>
-        <div class="panel-section" id="panel-robots-upgrades">
-          <!-- Robot specialization upgrades -->
+        <div class="panel-tab-content" data-tab="upgrades" style="display:none">
+          <div class="panel-section" id="panel-robots-upgrades"></div>
         </div>
       </div>
     </div>

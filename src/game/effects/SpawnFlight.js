@@ -11,7 +11,7 @@ const ROBOT_TYPE_CLASS = {
   scout:     ScoutBot,
 };
 
-const FLIGHT_DURATION = 1.2; // seconds
+const FLIGHT_DURATION = 3.5; // seconds
 
 /**
  * Animates a real 3D robot model flying from off-screen (behind the right panel)
@@ -48,8 +48,8 @@ export class SpawnFlight {
     startNDC.unproject(this.camera);
     // Direction from camera to unprojected point
     const dir = startNDC.sub(camPos).normalize();
-    // Place start at same distance as station
-    const startPos = camPos.clone().addScaledVector(dir, stationDist * 0.7);
+    // Place start very close to camera for dramatic close-up reveal
+    const startPos = camPos.clone().addScaledVector(dir, Math.max(8, stationDist * 0.08));
 
     // Control point: midpoint raised upward for arc
     const controlPos = new THREE.Vector3()
@@ -69,10 +69,25 @@ export class SpawnFlight {
     const trail = robot.trail;
     this.scene.add(trail);
 
+    // Collect emissive sub-meshes for glow boost during flight
+    const emissiveMeshes = [];
+    mesh.traverse((child) => {
+      if (child.isMesh && child.material && child.material.emissive) {
+        emissiveMeshes.push({ mat: child.material, originalIntensity: child.material.emissiveIntensity });
+      }
+    });
+
+    // PointLight that travels with the robot
+    const light = new THREE.PointLight(0x88ffaa, 4.0, 12, 1.5);
+    light.position.copy(startPos);
+    this.scene.add(light);
+
     this.activeFlights.push({
       mesh,
       trail,
       robot,
+      light,
+      emissiveMeshes,
       startPos,
       controlPos,
       endPos,
@@ -96,6 +111,24 @@ export class SpawnFlight {
       const z = omt * omt * f.startPos.z + 2 * omt * t * f.controlPos.z + t * t * f.endPos.z;
       f.mesh.position.set(x, y, z);
 
+      // PointLight follows robot with pulsing intensity
+      f.light.position.copy(f.mesh.position);
+      const lightPulse = 1.0 + 0.35 * Math.sin(f.age * 8.0);
+      f.light.intensity = 4.0 * lightPulse * (1 - rawT * 0.4);
+
+      // Emissive glow boost on robot sub-meshes
+      const glowPulse = 0.7 + 0.3 * Math.sin(f.age * 6.0);
+      const glowBoost = 3.0 * glowPulse * (1 - rawT * 0.6);
+      for (const em of f.emissiveMeshes) {
+        em.mat.emissiveIntensity = em.originalIntensity + glowBoost;
+      }
+
+      // Trail opacity and color boosted during spawn flight
+      const trailOpacity = 0.5 + 0.4 * Math.sin(rawT * Math.PI);
+      f.trail.material.opacity = trailOpacity;
+      const w = trailOpacity * 0.3;
+      f.trail.material.color.setRGB(0x7c / 255 + w, 0xb8 / 255 + w, 0x5e / 255 + w);
+
       // Point toward destination (tangent of bezier)
       const tNext = Math.min(t + 0.05, 1);
       const omtN = 1 - tNext;
@@ -107,12 +140,17 @@ export class SpawnFlight {
       // Slight spin for visual flair
       f.mesh.rotation.z += dt * 2;
 
-      // Scale: start small, grow mid-flight, settle
-      const scale = 0.3 * (0.5 + 0.7 * Math.sin(rawT * Math.PI));
+      // Scale: start visible, peak mid-flight, settle
+      const scale = 0.3 * (0.7 + 0.6 * Math.sin(rawT * Math.PI));
       f.mesh.scale.setScalar(scale);
 
       // Arrival
       if (rawT >= 1) {
+        for (const em of f.emissiveMeshes) {
+          em.mat.emissiveIntensity = em.originalIntensity;
+        }
+        this.scene.remove(f.light);
+        f.light.dispose();
         this.scene.remove(f.mesh);
         this.scene.remove(f.trail);
         f.robot.dispose();
@@ -124,6 +162,8 @@ export class SpawnFlight {
 
   dispose() {
     for (const f of this.activeFlights) {
+      this.scene.remove(f.light);
+      f.light.dispose();
       this.scene.remove(f.mesh);
       this.scene.remove(f.trail);
       f.robot.dispose();

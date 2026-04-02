@@ -7,7 +7,16 @@
       "Bash(npm run:*)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d[''''version'''']\\)\")",
       "Bash(find /c/Users/patti/dev/astro/node_modules/three/src -name logdepthbuf*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(ffmpeg -version)",
+      "Bash(powershell.exe -Command \"Get-Command ffmpeg -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(winget install:*)",
+      "Bash(powershell.exe -Command \"Get-Command ffmpeg | Select-Object -ExpandProperty Source\" 2>&1)",
+      "Bash(git fetch:*)",
+      "Bash(wc -l /c/Users/patti/dev/astro/src/game/world/*.js)",
+      "Bash(ls -1 /c/Users/patti/dev/astro/src/game/objects/*.js)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(xargs grep:*)"
     ]
   }
 }

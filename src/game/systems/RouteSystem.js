@@ -34,9 +34,6 @@ export class RouteSystem {
       // Check if hyperlane is blocked by enemy patrol
       if (this._hyperlanePatrolSystem && this._hyperlanePatrolSystem.isLaneBlocked(route.fromPlanet, route.toPlanet)) continue;
 
-      const intervalMs = route.intervalMinutes * 60 * 1000;
-      if (now - route.lastDispatchTime < intervalMs) continue;
-
       // Check ship slot availability
       const activeFromRoute = gameState.activeShips.filter(s => s.routeId === route.id).length;
       if (activeFromRoute > 0) continue; // one ship per route at a time

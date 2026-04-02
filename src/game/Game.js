@@ -14,6 +14,7 @@ import { ShipManager3D } from './world/ShipManager3D.js';
 import { EnemyManager3D } from './world/EnemyManager3D.js';
 import { SpawnFlight } from './effects/SpawnFlight.js';
 import { CombatEffects } from './effects/CombatEffects.js';
+import { ClickFeedback } from './effects/ClickFeedback.js';
 import { Minimap } from './ui/Minimap.js';
 
 export function createGame() {
@@ -53,6 +54,9 @@ export function createGame() {
   const skybox = new Skybox(sceneManager.scene);
   skybox.setPlanetPalette(gameState.activePlanetDef);
 
+  // --- Click feedback (delivery burst + shockwave) ---
+  const clickFeedback = new ClickFeedback(sceneManager.scene);
+
   // --- Galaxy ---
   const galaxy = new Galaxy();
   sceneManager.add(galaxy.group);
@@ -63,6 +67,11 @@ export function createGame() {
     radius: sys.planet.radius,
   }));
   cameraController.setPlanetColliders(planetColliders);
+
+  // Wire delivery burst feedback to all stations
+  galaxy.setDeliveryCallback((worldPos, amount) => {
+    clickFeedback.deliveryBurst(worldPos, amount);
+  });
 
   // --- Ship tooltip ---
   let _selectedShipId = null;
@@ -87,6 +96,10 @@ export function createGame() {
     if (!ship) return;
     _selectedShipId = shipId;
     cameraController.trackObject(() => shipManager.getShipPosition(shipId), 15);
+  });
+
+  gameState.on('colonyShipInFlightClicked', ({ shipId }) => {
+    cameraController.trackObject(() => shipManager.getColonyShipPosition(shipId), 20);
   });
 
   gameState.on('shipArrived', (data) => {
@@ -222,11 +235,15 @@ export function createGame() {
   });
 
   // --- Camera punch + shockwave on upgrades/colonization ---
-  gameState.on('baseUpgraded', () => {
+  gameState.on('baseUpgraded', ({ planetId }) => {
     cameraController.zoomPunch(0.05);
+    const sys = galaxy.getSystem(planetId);
+    if (sys) clickFeedback.shockwave(sys.stationWorldPosition);
   });
-  gameState.on('planetColonized', () => {
+  gameState.on('planetColonized', (id) => {
     cameraController.zoomPunch(0.08);
+    const sys = galaxy.getSystem(id);
+    if (sys) clickFeedback.shockwave(sys.planetWorldPosition);
   });
 
   // Focus on active planet at start — track the orbiting planet
@@ -306,6 +323,7 @@ export function createGame() {
     galaxy.update(camera, dt, time);
     skybox.update(time, camera);
     combatEffects.update(dt);
+    clickFeedback.update(dt);
     spawnFlight.update(dt);
     minimap.update(time, cameraController);
     renderPipeline.tick(time);
