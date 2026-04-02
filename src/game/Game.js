@@ -261,11 +261,20 @@ export function createGame() {
   gameState.on('fleetArrived',   ({ fleetId }) => { if (fleetId === _selectedFleetId) _deselectFleet(); });
   gameState.on('fleetDestroyed', ({ fleetId }) => { if (fleetId === _selectedFleetId) _deselectFleet(); });
 
-  // Combat visual events
+  // Combat visual events — projectile cooldowns per defense type
+  const _projectileCooldowns = { cannon: 0, satellite: 0, defenseShip: 0, shield: 0 };
+  const _projectileCooldownTimes = { cannon: 0.4, satellite: 0.25, defenseShip: 0.35, shield: 0.3 };
+
   gameState.on('defenseFired', ({ planetId, defenseType, targetId, damage }) => {
     if (planetId !== gameState.focusedPlanet) return;
 
-    // Pick laser color by defense type
+    // Cooldown gate: throttle to visible fire rate per defense type
+    const now = performance.now() / 1000;
+    if (!_projectileCooldowns[defenseType]) _projectileCooldowns[defenseType] = 0;
+    if (now < _projectileCooldowns[defenseType]) return;  // on cooldown, skip this shot
+    _projectileCooldowns[defenseType] = now + (_projectileCooldownTimes[defenseType] ?? 0.4);
+
+    // Pick projectile color by defense type
     const colorMap = {
       cannon:      0xd4a843,  // amber gold
       satellite:   0x44ddff,  // cyan
@@ -291,7 +300,7 @@ export function createGame() {
         return pPos.clone().add(new THREE.Vector3(Math.cos(a) * 13, (Math.random() - 0.5) * 4, Math.sin(a) * 13));
       })();
 
-    if (toPos) combatEffects.laser(fromPos, toPos, laserColor);
+    if (toPos) combatEffects.projectile(fromPos, toPos, laserColor);
   });
 
   gameState.on('enemyDestroyed', ({ planetId, enemy }) => {

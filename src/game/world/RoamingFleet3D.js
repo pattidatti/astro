@@ -1,7 +1,11 @@
 import * as THREE from 'three';
+import { EnemyShip3D } from '../objects/EnemyShip3D.js';
 
 const _dir = new THREE.Vector3();
 const _up  = new THREE.Vector3(0, 1, 0);
+const _mid = new THREE.Vector3();
+const _perp = new THREE.Vector3();
+const _toLine = new THREE.Vector3();
 
 /** Colors per enemy type. */
 const TYPE_COLOR = {
@@ -13,6 +17,9 @@ const TYPE_COLOR = {
 
 /** Scale multiplier for the mothership hull. */
 const MOTHERSHIP_SCALE = 2.2;
+
+/** Scale multiplier for EnemyShip3D in fleet formation. */
+const FLEET_SHIP_SCALE = 12;
 
 /**
  * RoamingFleet3D — renders a roaming fleet as a 3D ship formation.
@@ -35,6 +42,7 @@ export class RoamingFleet3D {
     this._msHpFill   = null;
 
     this._worldPos = new THREE.Vector3();
+    this._avoidPlanets = [];     // Array of nearby planet positions
 
     // Invisible click sphere — registered with InputManager
     const hitGeo = new THREE.SphereGeometry(9, 8, 6);
@@ -74,8 +82,9 @@ export class RoamingFleet3D {
 
   // ─── Per-frame ────────────────────────────────────────────────────────────
 
-  update(fromPos, toPos, fleet) {
+  update(fromPos, toPos, fleet, avoidPositions = []) {
     if (!fromPos || !toPos) return;
+    this._avoidPlanets = avoidPositions;
     this._updateTransform(fromPos, toPos, fleet.position);
     this._updateHpBars(fleet);
   }
@@ -111,35 +120,27 @@ export class RoamingFleet3D {
 
   _buildFighter(enemy, localOffset) {
     const color = TYPE_COLOR[enemy.type] ?? 0xff3333;
-    const bodyGroup = new THREE.Group();
-    bodyGroup.position.copy(localOffset);
 
-    // Hull: elongated cone
-    const hullGeo = new THREE.ConeGeometry(0.9, 3.5, 6);
-    hullGeo.rotateX(Math.PI / 2); // point toward +Z
-    const hullMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4 });
-    const hull = new THREE.Mesh(hullGeo, hullMat);
-    bodyGroup.add(hull);
+    // Create EnemyShip3D instance
+    const ship = new EnemyShip3D();
+    ship.setType(enemy.type, color);
 
-    // Wings: two flat boxes
-    const wingGeo = new THREE.BoxGeometry(3.0, 0.12, 1.2);
-    const wingMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2 });
-    const wings = new THREE.Mesh(wingGeo, wingMat);
-    wings.position.z = -0.6;
-    bodyGroup.add(wings);
+    // EnemyShip3D is modeled at ~0.3 units scale. Scale up for fleet formation.
+    ship.group.scale.setScalar(FLEET_SHIP_SCALE);
+    ship.group.position.copy(localOffset);
+    ship.group.visible = true;
 
-    // Engine glow
-    const glowLight = new THREE.PointLight(color, 1.2, 8);
-    glowLight.position.z = -1.8;
-    bodyGroup.add(glowLight);
+    // Hide the built-in HP bars from EnemyShip3D (we use external bars)
+    ship._hpBg.visible = false;
+    ship._hpFg.visible = false;
 
-    // HP bar — background (grey) + fill (green→red)
+    // HP bar — background (grey) + fill (green→red), external to the ship group
     const { hpBack, hpFill } = this._makeHpBar(3.0, localOffset.y + 2.5);
-    bodyGroup.add(hpBack);
-    bodyGroup.add(hpFill);
+    this.group.add(hpBack);
+    this.group.add(hpFill);
 
-    this.group.add(bodyGroup);
-    this._shipMeshes.push({ bodyGroup, hpBack, hpFill, enemyId: enemy.id });
+    this.group.add(ship.group);
+    this._shipMeshes.push({ bodyGroup: ship.group, hpBack, hpFill, enemyId: enemy.id, ship });
   }
 
   _buildMothership(msData) {
@@ -220,18 +221,71 @@ export class RoamingFleet3D {
     }
   }
 
+  // ─── Bezier path avoidance ────────────────────────────────────────────────
+
+  /**
+   * Compute position along a possibly-curved path that arcs around nearby planets.
+   * Uses quadratic bezier if a planet is close to the straight-line path.
+   */
+  _computeBezierPoint(fromPos, toPos, t) {
+    const AVOID_RADIUS = 15;
+    let bestPlanet = null;
+    let bestDist = Infinity;
+    let bestClosestT = 0;
+
+    for (const pPos of this._avoidPlanets) {
+      // Project pPos onto segment fromPos → toPos
+      _dir.subVectors(toPos, fromPos);
+      const lenSq = _dir.lengthSq();
+      if (lenSq < 0.001) continue;
+
+      _toLine.subVectors(pPos, fromPos);
+      const segT = Math.max(0, Math.min(1, _toLine.dot(_dir) / lenSq));
+      const closest = _dir.clone().multiplyScalar(segT).add(fromPos);
+      const dist = pPos.distanceTo(closest);
+
+      if (dist < AVOID_RADIUS && dist < bestDist) {
+        bestDist = dist;
+        bestPlanet = pPos;
+        bestClosestT = segT;
+      }
+    }
+
+    if (!bestPlanet) {
+      // Straight line — no avoidance needed
+      return new THREE.Vector3().lerpVectors(fromPos, toPos, t);
+    }
+
+    // Compute control point at the midpoint, pushed perpendicular away from planet
+    _mid.lerpVectors(fromPos, toPos, 0.5);
+    const closestOnLine = new THREE.Vector3().lerpVectors(fromPos, toPos, bestClosestT);
+    _perp.subVectors(closestOnLine, bestPlanet).normalize(); // direction away from planet
+    const pushDist = (AVOID_RADIUS - bestDist) + 8;
+    const ctrl = _mid.clone().addScaledVector(_perp, pushDist);
+
+    // Quadratic bezier: B(t) = (1-t)² A + 2(1-t)t ctrl + t² B
+    const s = 1 - t;
+    return new THREE.Vector3(
+      s * s * fromPos.x + 2 * s * t * ctrl.x + t * t * toPos.x,
+      s * s * fromPos.y + 2 * s * t * ctrl.y + t * t * toPos.y,
+      s * s * fromPos.z + 2 * s * t * ctrl.z + t * t * toPos.z,
+    );
+  }
+
   // ─── Transform ────────────────────────────────────────────────────────────
 
   _updateTransform(fromPos, toPos, t) {
-    this._worldPos.lerpVectors(fromPos, toPos, t);
-    this._worldPos.y += 4; // float above lane/path
+    const curPos = this._computeBezierPoint(fromPos, toPos, t);
+    curPos.y += 4;  // float above lane/path
+    this._worldPos.copy(curPos);
     this.group.position.copy(this._worldPos);
 
-    // Rotate group to face direction of travel
-    _dir.subVectors(toPos, fromPos);
+    // Direction: use bezier tangent (evaluate at t and t+epsilon)
+    const eps = Math.min(0.02, 1 - t);
+    const ahead = this._computeBezierPoint(fromPos, toPos, Math.min(1, t + eps));
+    _dir.subVectors(ahead, curPos);
     if (_dir.lengthSq() > 0.001) {
       _dir.normalize();
-      // lookAt-style rotation: we want +Z to point in travel direction
       const angle = Math.atan2(_dir.x, _dir.z);
       this.group.rotation.y = angle;
     }
@@ -240,10 +294,26 @@ export class RoamingFleet3D {
   _clearChildren() {
     for (const sm of this._shipMeshes) {
       this.group.remove(sm.bodyGroup);
-      sm.bodyGroup.traverse(c => {
-        if (c.geometry) c.geometry.dispose();
-        if (c.material) c.material.dispose();
-      });
+      // If it's an EnemyShip3D wrapper, dispose it properly
+      if (sm.ship) {
+        sm.ship.dispose?.();
+        sm.bodyGroup.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
+        });
+      } else {
+        sm.bodyGroup.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
+        });
+      }
+      // Remove HP bar planes from group
+      this.group.remove(sm.hpBack);
+      this.group.remove(sm.hpFill);
+      sm.hpBack.geometry.dispose();
+      sm.hpBack.material.dispose();
+      sm.hpFill.geometry.dispose();
+      sm.hpFill.material.dispose();
     }
     this._shipMeshes = [];
 

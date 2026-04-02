@@ -18,6 +18,13 @@ export class EnemyShip3D {
     this._verticalOffset = 18 + Math.random() * 6;
     this._speed = 1.0;
 
+    // Approach animation state
+    this._inApproach = false;
+    this._approachFrom = new THREE.Vector3();
+    this._approachTo = new THREE.Vector3();
+    this._approachTime = 0;
+    this._approachDuration = 1.5;
+
     this._buildMesh();
     this._createTrail();
     this._createHPBar();
@@ -281,10 +288,24 @@ export class EnemyShip3D {
     this._verticalOffset = 18 + Math.random() * 6;
     this.group.visible = true;
 
-    // Initialize position
-    const pos = this._calcOrbitPos();
-    this.group.position.copy(pos);
-    for (const v of this._trailPositions) v.copy(pos);
+    // Set up approach animation
+    const orbitPos = this._calcOrbitPos();
+    this._approachTo.copy(orbitPos);
+
+    // Start position: planet pos + random outward direction, ~60 units away
+    const angle = Math.random() * Math.PI * 2;
+    this._approachFrom.set(
+      targetPos.x + Math.cos(angle) * 60,
+      targetPos.y + this._verticalOffset + (Math.random() - 0.5) * 10,
+      targetPos.z + Math.sin(angle) * 60,
+    );
+
+    this._inApproach = true;
+    this._approachTime = 0;
+    this.group.position.copy(this._approachFrom);
+
+    // Initialize trail at start position
+    for (const v of this._trailPositions) v.copy(this._approachFrom);
   }
 
   deactivate() {
@@ -332,6 +353,46 @@ export class EnemyShip3D {
   update(dt, targetPos) {
     if (targetPos) this._targetPos.copy(targetPos);
 
+    // Handle approach animation
+    if (this._inApproach) {
+      this._approachTime += dt;
+      const rawT = Math.min(1, this._approachTime / this._approachDuration);
+      // Ease-out quadratic: decelerate into orbit
+      const t = 1 - Math.pow(1 - rawT, 2);
+
+      const newPos = new THREE.Vector3().lerpVectors(this._approachFrom, this._approachTo, t);
+      this.group.position.copy(newPos);
+
+      // Face direction of travel during approach
+      if (rawT < 0.98) {
+        const dir = new THREE.Vector3().subVectors(this._approachTo, this._approachFrom).normalize();
+        this._meshGroup.lookAt(newPos.clone().add(dir));
+      }
+
+      // Update trail during approach
+      for (let i = TRAIL_LENGTH - 1; i > 0; i--) {
+        this._trailPositions[i].copy(this._trailPositions[i - 1]);
+      }
+      this._trailPositions[0].copy(newPos);
+      const arr = this._trailGeo.attributes.position.array;
+      for (let i = 0; i < TRAIL_LENGTH; i++) {
+        const local = this._trailPositions[i].clone().sub(newPos);
+        arr[i * 3] = local.x; arr[i * 3 + 1] = local.y; arr[i * 3 + 2] = local.z;
+      }
+      this._trailGeo.attributes.position.needsUpdate = true;
+
+      if (rawT >= 1) {
+        this._inApproach = false;
+        // Snap orbit angle to match the landing position
+        this._orbitAngle = Math.atan2(
+          this._approachTo.z - this._targetPos.z,
+          this._approachTo.x - this._targetPos.x
+        );
+      }
+      return;
+    }
+
+    // Normal orbit behavior
     this._orbitAngle += dt * 0.5 * this._speed;
     const newPos = this._calcOrbitPos();
     this.group.position.copy(newPos);

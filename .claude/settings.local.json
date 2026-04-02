@@ -19,7 +19,10 @@
       "Bash(find C:/Users/patti/dev/astro -name HUD.css -o -name *.css -type f)",
       "Bash(find C:/Users/patti/dev/astro -name *.css -type f)",
       "Bash(node:*)",
-      "Bash(curl -s http://localhost:5173)"
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

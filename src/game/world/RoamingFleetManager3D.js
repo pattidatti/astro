@@ -39,6 +39,9 @@ export class RoamingFleetManager3D {
 
   /** Called by Galaxy.update() each frame. */
   update(dt, time) {
+    // Gather all live planet positions once per frame for avoidance computation
+    const allPlanetIds = Object.keys(this._galaxy.systems);
+
     for (const [fleetId, fleet3D] of this._active) {
       const fleet = gameState.roamingFleets.find(f => f.id === fleetId);
       if (!fleet) {
@@ -47,7 +50,14 @@ export class RoamingFleetManager3D {
       }
       const fromPos = this._galaxy.getPlanetWorldPosition(fleet.fromPlanet);
       const toPos   = this._galaxy.getPlanetWorldPosition(fleet.toPlanet);
-      fleet3D.update(fromPos, toPos, fleet);
+
+      // Bystander planet positions (exclude source and destination)
+      const avoidPositions = allPlanetIds
+        .filter(id => id !== fleet.fromPlanet && id !== fleet.toPlanet)
+        .map(id => this._galaxy.getPlanetWorldPosition(id))
+        .filter(Boolean);
+
+      fleet3D.update(fromPos, toPos, fleet, avoidPositions);
     }
   }
 

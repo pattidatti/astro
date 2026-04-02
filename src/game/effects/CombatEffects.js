@@ -3,10 +3,12 @@ import * as THREE from 'three';
 const MAX_LASERS = 8;
 const MAX_EXPLOSIONS = 6;
 const MAX_SHIELD_HITS = 4;
+const MAX_PROJECTILES = 20;
 
 const LASER_LIFETIME = 0.12;
 const EXPLOSION_LIFETIME = 0.6;
 const SHIELD_HIT_LIFETIME = 0.4;
+const PROJECTILE_SPEED = 120;
 
 /**
  * Pooled combat visual effects: laser beams, explosions, shield impacts, warp flashes.
@@ -17,6 +19,61 @@ export class CombatEffects {
     this._activeLasers = [];
     this._activeExplosions = [];
     this._activeShieldHits = [];
+    this._activeProjectiles = [];
+  }
+
+  /**
+   * Spawn a traveling projectile bolt from origin toward target.
+   */
+  projectile(fromPos, toPos, color = 0xff4444) {
+    const dir = new THREE.Vector3().subVectors(toPos, fromPos);
+    const distance = dir.length();
+    if (distance < 0.001) return;
+    dir.divideScalar(distance);
+
+    // Bolt: small elongated sphere
+    const boltGeo = new THREE.SphereGeometry(0.15, 6, 4);
+    boltGeo.applyMatrix4(new THREE.Matrix4().makeScale(0.4, 0.4, 1.8));
+    const boltMat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const bolt = new THREE.Mesh(boltGeo, boltMat);
+    bolt.position.copy(fromPos);
+
+    // Orient bolt along direction of travel
+    bolt.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+
+    this._scene.add(bolt);
+
+    // Small glow point
+    const glowGeo = new THREE.SphereGeometry(0.2, 6, 4);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.copy(fromPos);
+    this._scene.add(glow);
+
+    this._activeProjectiles.push({
+      bolt, glow, boltGeo, boltMat, glowGeo, glowMat,
+      fromPos: fromPos.clone(),
+      toPos: toPos.clone(),
+      dir,
+      distance,
+      traveled: 0,
+    });
+
+    while (this._activeProjectiles.length > MAX_PROJECTILES) {
+      this._disposeProjectile(this._activeProjectiles.shift());
+    }
   }
 
   /**
@@ -190,6 +247,26 @@ export class CombatEffects {
    * Per-frame update all active effects.
    */
   update(dt) {
+    // Projectiles
+    for (let i = this._activeProjectiles.length - 1; i >= 0; i--) {
+      const p = this._activeProjectiles[i];
+      p.traveled += PROJECTILE_SPEED * dt;
+
+      if (p.traveled >= p.distance) {
+        // Arrived — dispose
+        this._disposeProjectile(p);
+        this._activeProjectiles.splice(i, 1);
+        continue;
+      }
+
+      const t = p.traveled / p.distance;
+      p.bolt.position.lerpVectors(p.fromPos, p.toPos, t);
+      p.glow.position.copy(p.bolt.position);
+      // Fade slightly as it nears target
+      p.boltMat.opacity = 0.95 * (1 - t * 0.3);
+      p.glowMat.opacity = 0.6 * (1 - t * 0.3);
+    }
+
     // Lasers
     for (let i = this._activeLasers.length - 1; i >= 0; i--) {
       const e = this._activeLasers[i];
@@ -247,6 +324,15 @@ export class CombatEffects {
       e.mat.opacity = (1 - t) * 0.5;
       e.mesh.scale.setScalar(1 + t * 0.5);
     }
+  }
+
+  _disposeProjectile(p) {
+    this._scene.remove(p.bolt);
+    this._scene.remove(p.glow);
+    p.boltGeo.dispose();
+    p.boltMat.dispose();
+    p.glowGeo.dispose();
+    p.glowMat.dispose();
   }
 
   _disposeLaser(e) {
