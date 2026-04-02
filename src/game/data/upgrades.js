@@ -63,7 +63,7 @@ export const ROBOT_ACTIONS = [
     type: 'builder',
     name: 'BUILDER BOT',
     icon: '🔧',
-    desc: 'Constructs and upgrades structures',
+    desc: 'Repairs damaged station hull between attacks',
     energyCostFn: (ps) => Math.floor(20 * Math.pow(1.15, ps.robots.builder.count)),
   },
   {

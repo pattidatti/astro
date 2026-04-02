@@ -130,7 +130,7 @@ export function createGame() {
       pos.y += (Math.random() - 0.5) * 6;
       pos.z += (Math.random() - 0.5) * 20;
       combatEffects.explosion(pos, enemy.type === 'bomber' ? 1.5 : 1.0);
-      cameraController.zoomPunch(0.02);
+      cameraController.shake(0.02, 0.2);
     }
   });
 
@@ -141,7 +141,7 @@ export function createGame() {
       const pos = planetPos.clone();
       pos.y += 8;
       combatEffects.explosion(pos, 3.0, 0xff2200);
-      cameraController.zoomPunch(0.1);
+      cameraController.shake(0.08, 0.5);
     }
   });
 
@@ -168,7 +168,8 @@ export function createGame() {
     const planetPos = galaxy.getPlanetWorldPosition(planetId);
     if (planetPos) {
       combatEffects.explosion(planetPos, 4.0, 0xff0000);
-      cameraController.zoomPunch(0.15);
+      cameraController.shake(0.15, 0.8);
+      cameraController.zoomPunch(0.1);
     }
   });
 

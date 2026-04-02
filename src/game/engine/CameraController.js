@@ -178,6 +178,17 @@ export class CameraController {
     this._punchFrame = true;
   }
 
+  /**
+   * Start a camera shake effect for combat impacts.
+   * @param {number} intensity - Shake strength (0.01 = subtle, 0.1 = heavy)
+   * @param {number} duration - Duration in seconds
+   */
+  shake(intensity = 0.03, duration = 0.3) {
+    this._shakeIntensity = intensity;
+    this._shakeDuration = duration;
+    this._shakeElapsed = 0;
+  }
+
   getZoomLevel() {
     const d = this.spherical.radius;
     if (d > 200) return 'galaxy';
@@ -242,6 +253,16 @@ export class CameraController {
       this.target.lerp(this.targetTarget, damping);
 
       this._updateCameraPosition();
+
+      // Camera shake
+      if (this._shakeDuration > 0 && this._shakeElapsed < this._shakeDuration) {
+        this._shakeElapsed += dt;
+        const decay = 1 - (this._shakeElapsed / this._shakeDuration);
+        const offsetX = (Math.random() - 0.5) * 2 * this._shakeIntensity * decay;
+        const offsetY = (Math.random() - 0.5) * 2 * this._shakeIntensity * decay;
+        this.camera.position.x += offsetX;
+        this.camera.position.y += offsetY;
+      }
     }
   }
 

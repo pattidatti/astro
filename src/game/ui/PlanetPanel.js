@@ -166,11 +166,67 @@ export class PlanetPanel {
     if (!el) return;
 
     if (!ps || !ps.hasBase) {
+      const isOwned = gameState.ownedPlanets.includes(this._planetId);
+      const isFallen = ps?.combat?.fallen;
+
+      // Fallen planet — show recolonize UI
+      if (isOwned && isFallen) {
+        const recolCostMult = 0.5;
+        const oreCost = Math.floor((def.baseCost.ore || 0) * recolCostMult);
+        const energyCost = Math.floor((def.baseCost.energy || 0) * recolCostMult);
+
+        // Find a source planet to pay from
+        const sourcePlanets = gameState.ownedPlanets.filter(pid => {
+          if (pid === this._planetId) return false;
+          const sps = gameState.getPlanetState(pid);
+          return sps?.hasBase;
+        });
+
+        el.innerHTML = `
+          <div class="panel-section-title">⚠ STATION DESTROYED</div>
+          <div style="color:var(--dune-red);font-size:11px;margin:6px 0">
+            This station has fallen. Some infrastructure survived.
+          </div>
+          <div style="font-size:10px;color:var(--dune-text-dim);margin-bottom:8px">
+            Base levels and deposits preserved. Defenses lost. Robots reduced.
+          </div>
+        `;
+
+        if (sourcePlanets.length > 0) {
+          let costStr = '';
+          if (oreCost > 0) costStr += `⬡ ${fmt(oreCost)} ORE`;
+          if (energyCost > 0) costStr += (costStr ? '  ' : '') + `⚡ ${fmt(energyCost)} ENERGY`;
+
+          for (const srcId of sourcePlanets) {
+            const srcDef = PLANETS.find(p => p.id === srcId);
+            const canAfford = (oreCost <= 0 || gameState.siloHas(srcId, 'ore', oreCost)) &&
+                              (energyCost <= 0 || gameState.siloHas(srcId, 'energy', energyCost));
+            const btn = document.createElement('button');
+            btn.className = 'build-base-btn' + (canAfford ? '' : ' cant-afford');
+            btn.disabled = !canAfford;
+            btn.innerHTML = `
+              <span>🔄 RECOLONIZE from ${srcDef?.name || srcId}</span>
+              ${costStr ? `<span class="base-upg-cost ${canAfford ? '' : 'cant'}">${costStr}</span>` : '<span style="font-size:10px;color:var(--dune-text-dim)">FREE</span>'}
+            `;
+            if (canAfford) {
+              btn.addEventListener('pointerdown', (e) => {
+                e.stopPropagation();
+                AudioManager.play('UI_CLICK');
+                gameState.recolonize(srcId, this._planetId);
+              });
+            }
+            el.appendChild(btn);
+          }
+        } else {
+          el.innerHTML += '<div style="color:var(--dune-text-dim);font-size:10px">No owned planets available for recolonization.</div>';
+        }
+        return;
+      }
+
       const { ore: oreCost = 0, energy: energyCost = 0 } = def.baseCost;
       const canAfford = gameState.siloHas(this._planetId, 'ore', oreCost) &&
                         gameState.siloHas(this._planetId, 'energy', energyCost);
 
-      const isOwned = gameState.ownedPlanets.includes(this._planetId);
       if (isOwned) {
         // Show clickable build base button
         let costStr = '';
