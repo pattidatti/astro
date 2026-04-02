@@ -5,6 +5,8 @@ import { getAllWorldPositions } from '../utils/CoordinateMapper.js';
 import { SolarSystem } from './SolarSystem.js';
 import { Star3D } from '../objects/Star3D.js';
 import { NebulaVolume } from '../effects/NebulaVolume.js';
+import { PatrolDot3D } from '../objects/PatrolDot3D.js';
+import { gameState } from '../GameState.js';
 
 /**
  * Galaxy — one solar system: a central star with 8 orbiting planets.
@@ -25,6 +27,8 @@ export class Galaxy {
 
     this._createSystems();
     this._createCosmicNebulas();
+    this._createPatrolDots();
+    this._createThreatIndicators();
   }
 
   _createCosmicNebulas() {
@@ -103,6 +107,90 @@ export class Galaxy {
     }));
   }
 
+  _createPatrolDots() {
+    this._patrolDots = [];
+    for (let i = 0; i < 8; i++) {
+      const dot = new PatrolDot3D();
+      this.group.add(dot.mesh);
+      this._patrolDots.push(dot);
+    }
+    this._activePatrolDots = new Map(); // patrolId → PatrolDot3D
+  }
+
+  _createThreatIndicators() {
+    this._threatRings = {};
+    for (const def of PLANETS) {
+      if (def.id === 'xerion') continue;
+      const geo = new THREE.RingGeometry(12, 13, 32);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xff3333,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const ring = new THREE.Mesh(geo, mat);
+      ring.rotation.x = Math.PI / 2;
+      this._threatRings[def.id] = { mesh: ring, mat };
+      this.group.add(ring);
+    }
+  }
+
+  _updatePatrolDots(time) {
+    const patrols = gameState.hyperlanePatrols;
+
+    // Deactivate dots for removed patrols
+    for (const [pid, dot] of this._activePatrolDots) {
+      if (!patrols.some(p => p.id === pid)) {
+        dot.deactivate();
+        this._activePatrolDots.delete(pid);
+      }
+    }
+
+    // Activate/update dots for active patrols
+    for (const patrol of patrols) {
+      let dot = this._activePatrolDots.get(patrol.id);
+      if (!dot) {
+        // Find a free dot
+        dot = this._patrolDots.find(d => !d.mesh.visible);
+        if (!dot) continue;
+        this._activePatrolDots.set(patrol.id, dot);
+      }
+
+      // Interpolate position along the hyperlane
+      const [a, b] = patrol.lane;
+      const posA = this.getPlanetWorldPosition(a);
+      const posB = this.getPlanetWorldPosition(b);
+      if (posA && posB) {
+        const pos = new THREE.Vector3().lerpVectors(posA, posB, patrol.position);
+        pos.y += 3; // Slightly above the lane
+        dot.update(time, pos);
+        if (!dot.mesh.visible) dot.activate(pos);
+      }
+    }
+  }
+
+  _updateThreatIndicators(time) {
+    for (const [planetId, indicator] of Object.entries(this._threatRings)) {
+      const isUnderAttack = gameState.isUnderAttack(planetId);
+      const pos = this.getPlanetWorldPosition(planetId);
+
+      if (pos) {
+        indicator.mesh.position.copy(pos);
+        indicator.mesh.position.y += 0.5;
+      }
+
+      if (isUnderAttack) {
+        // Pulsing red ring
+        const pulse = 0.3 + Math.sin(time * 4) * 0.2;
+        indicator.mat.opacity = pulse;
+      } else {
+        indicator.mat.opacity = Math.max(0, indicator.mat.opacity - 0.02);
+      }
+    }
+  }
+
   /**
    * Update all planet systems.
    * @param {THREE.Camera} camera
@@ -119,6 +207,10 @@ export class Galaxy {
     for (const neb of this._cosmicNebulas) {
       neb.update(time, camera);
     }
+
+    // Update patrol dots and threat indicators
+    this._updatePatrolDots(time);
+    this._updateThreatIndicators(time);
 
     // Update each planet system's LOD — distance measured to planet, not center
     for (const id in this.systems) {

@@ -867,3 +867,320 @@
   padding: 2px 4px;
 }
 .colony-ship-popup .csp-close:hover { color: var(--dune-sand); }
+
+/* ══════════════════════════════════════════════════════
+   COMBAT & DEFENSE UI
+   ══════════════════════════════════════════════════════ */
+
+/* ── Combat Alert Banner ── */
+.combat-alert {
+  position: fixed;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 32px;
+  font-family: 'Orbitron', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  border-radius: 0 0 8px 8px;
+  z-index: 100;
+  pointer-events: none;
+  transition: top 0.4s ease-out;
+  white-space: nowrap;
+}
+.combat-alert.visible {
+  top: 0;
+}
+.combat-alert.raid {
+  background: linear-gradient(180deg, rgba(200,60,30,0.9), rgba(100,30,15,0.85));
+  color: #ffcc44;
+  border: 1px solid rgba(255,100,50,0.5);
+  box-shadow: 0 4px 20px rgba(255,60,30,0.3);
+}
+.combat-alert.invasion {
+  background: linear-gradient(180deg, rgba(180,20,20,0.95), rgba(80,10,10,0.9));
+  color: #ff4444;
+  border: 1px solid rgba(255,50,50,0.6);
+  box-shadow: 0 4px 30px rgba(255,30,30,0.5);
+  animation: alertPulse 0.5s ease-in-out 3;
+}
+.combat-alert.victory {
+  background: linear-gradient(180deg, rgba(40,120,60,0.9), rgba(20,60,30,0.85));
+  color: #88ff88;
+  border: 1px solid rgba(80,200,80,0.5);
+  box-shadow: 0 4px 20px rgba(40,200,60,0.3);
+}
+.combat-alert.fall {
+  background: linear-gradient(180deg, rgba(200,0,0,0.95), rgba(100,0,0,0.9));
+  color: #ffffff;
+  border: 1px solid rgba(255,0,0,0.7);
+  box-shadow: 0 4px 40px rgba(255,0,0,0.6);
+  animation: alertPulse 0.3s ease-in-out 5;
+}
+@keyframes alertPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ── Combat Summary ── */
+.combat-summary {
+  position: fixed;
+  top: 60px;
+  right: 12px;
+  background: var(--dune-bg);
+  border: 1px solid rgba(255,60,30,0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text);
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+  max-width: 260px;
+}
+.combat-summary.visible {
+  opacity: 1;
+}
+.combat-summary-row {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255,60,30,0.1);
+}
+.combat-summary-row:last-child { border-bottom: none; }
+
+/* ── Defense Status Bars ── */
+.defense-status {
+  margin-bottom: 8px;
+}
+.combat-badge {
+  display: inline-block;
+  background: rgba(255,50,30,0.25);
+  color: #ff6644;
+  font-family: 'Orbitron', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,50,30,0.4);
+  margin-bottom: 6px;
+}
+.combat-badge.pulse {
+  animation: combatPulse 1s infinite;
+}
+@keyframes combatPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.defense-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+}
+.defense-label {
+  width: 65px;
+  color: var(--dune-text-secondary);
+  flex-shrink: 0;
+}
+.defense-bar-track {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.defense-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.hull-bar { background: #44ff44; }
+.shield-bar { background: #4488ff; }
+.defense-value {
+  width: 70px;
+  text-align: right;
+  color: var(--dune-text);
+  font-size: 10px;
+}
+
+/* ── Defense Grid ── */
+.defense-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.defense-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--dune-border);
+  border-radius: 5px;
+  padding: 6px 8px;
+}
+.defense-card.active {
+  border-color: var(--dune-border-bright);
+  background: rgba(212,168,67,0.05);
+}
+.defense-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--dune-text);
+  margin-bottom: 4px;
+}
+.defense-level {
+  color: var(--dune-gold);
+  font-size: 10px;
+}
+.defense-stats {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: var(--dune-text-dim);
+  margin-bottom: 4px;
+}
+.defense-buy-btn {
+  width: 100%;
+  padding: 4px 6px;
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--dune-gold);
+  background: rgba(212,168,67,0.1);
+  border: 1px solid var(--dune-border);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.defense-buy-btn:hover:not(:disabled) {
+  background: rgba(212,168,67,0.2);
+  border-color: var(--dune-border-bright);
+}
+.defense-buy-btn.cant-afford {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.defense-maxed {
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  color: var(--dune-green);
+  text-align: center;
+  padding: 4px;
+}
+
+/* ── Defense Upgrades ── */
+.defense-upgrades {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.defense-upg-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+}
+.defense-upg-name {
+  flex: 1;
+  color: var(--dune-text);
+}
+.defense-upg-level {
+  color: var(--dune-text-dim);
+  width: 35px;
+  text-align: center;
+}
+.defense-upg-btn {
+  padding: 2px 8px;
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  color: var(--dune-gold);
+  background: rgba(212,168,67,0.08);
+  border: 1px solid var(--dune-border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.defense-upg-btn:hover:not(:disabled) {
+  background: rgba(212,168,67,0.18);
+}
+.defense-upg-btn.cant-afford {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.defense-maxed-sm {
+  font-size: 9px;
+  color: var(--dune-green);
+}
+
+/* ── Ability Buttons ── */
+.ability-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+.ability-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  background: rgba(68,136,255,0.08);
+  border: 1px solid rgba(68,136,255,0.25);
+  border-radius: 5px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background 0.2s, border-color 0.2s;
+}
+.ability-btn:hover:not(:disabled) {
+  background: rgba(68,136,255,0.18);
+  border-color: rgba(68,136,255,0.5);
+}
+.ability-btn.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.ability-icon {
+  font-size: 18px;
+  margin-bottom: 2px;
+}
+.ability-name {
+  font-family: 'Orbitron', monospace;
+  font-size: 7px;
+  font-weight: 600;
+  color: var(--dune-text);
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+.ability-cost {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: var(--dune-gold-dim);
+  margin-top: 2px;
+}
+.ability-cooldown-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  pointer-events: none;
+}
+.ability-cooldown-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Orbitron', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 0 6px rgba(0,0,0,0.8);
+  pointer-events: none;
+}

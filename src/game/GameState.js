@@ -1,7 +1,10 @@
 import { PLANETS } from './data/planets.js';
 import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult } from './data/upgrades.js';
+import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP,
+         BUILDER_REPAIR_RATE, RECOLONIZE_COST_MULT, FALL_ROBOT_SURVIVAL } from './data/defenses.js';
+import { ENEMY_TYPES } from './data/enemies.js';
 
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 const COLONY_SHIP_BUILD_COST = { ore: 300 };
 const COLONY_SHIP_BUILD_TIME = 20;   // seconds
@@ -48,6 +51,18 @@ function makePlanetState(planetDef) {
     colonyShipBuildQueue: [], // [{ progress: 0 }] — builds one at a time
     // Scout deposit unlock progress (seconds needed to unlock one zone)
     depositProgress: { ore: 0, crystal: 0, energy: 0 },
+    // Combat & defense state
+    combat: {
+      stationHP: BASE_STATION_HP,
+      stationMaxHP: BASE_STATION_HP,
+      shieldHP: 0,
+      shieldMaxHP: 0,
+      defenses: { cannon: 0, satellite: 0, defenseShip: 0, shield: 0 },
+      defenseLevels: {},       // upgradeId → level
+      abilityCooldowns: { emp: 0, shieldBoost: 0, orbitalStrike: 0 },
+      activeEffects: [],       // [{ type, remaining }]
+      fallen: false,
+    },
   };
 }
 
@@ -68,6 +83,12 @@ class GameState extends EventEmitter {
     this.colonyShipsInFlight = []; // [{ id, fromPlanetId, toPlanetId, duration, elapsed }]
     this.tutorialStep = 0;
     this.lastSaved = Date.now();
+
+    // Combat runtime state
+    this.activeAttacks = [];      // [{ id, type, planetId, enemies, wave, elapsed, ... }]
+    this.hyperlanePatrols = [];   // [{ id, lane, position, enemies }]
+    this.lastAttackTime = {};     // planetId → timestamp of last attack end
+    this.colonizationTime = {};   // planetId → timestamp of colonization (for grace period)
 
     // Bootstrap Xerion with starter energy (player must build base manually)
     const xerionDef = PLANETS.find(p => p.id === 'xerion');
@@ -393,6 +414,270 @@ class GameState extends EventEmitter {
     return true;
   }
 
+  // ─── Defense management ────────────────────────────────────────────────────
+
+  /**
+   * Purchase or upgrade a defense on a planet.
+   * Returns false if conditions not met.
+   */
+  buyDefense(planetId, defenseId) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps || !ps.hasBase) return false;
+    const defType = DEFENSE_TYPES[defenseId];
+    if (!defType) return false;
+
+    const currentLevel = ps.combat.defenses[defenseId] || 0;
+    if (currentLevel >= defType.maxLevel) return false;
+
+    const cost = defType.energyCost[currentLevel];
+    if (!this.siloHas(planetId, 'energy', cost)) return false;
+
+    this.deductFromSilo(planetId, 'energy', cost);
+    ps.combat.defenses[defenseId] = currentLevel + 1;
+
+    // Shield: update max HP and current HP
+    if (defenseId === 'shield') {
+      const newLevel = currentLevel + 1;
+      ps.combat.shieldMaxHP = defType.shieldHP[newLevel - 1];
+      ps.combat.shieldHP = ps.combat.shieldMaxHP;
+    }
+
+    this.emit('defenseBuilt', { planetId, defenseId, level: currentLevel + 1 });
+    return true;
+  }
+
+  /**
+   * Purchase a defense upgrade (from the defense upgrade tree).
+   */
+  buyDefenseUpgrade(planetId, upgradeId) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps || !ps.hasBase) return false;
+    const upg = DEFENSE_UPGRADES.find(u => u.id === upgradeId);
+    if (!upg) return false;
+
+    // Must have the defense type built first
+    const defLevel = ps.combat.defenses[upg.defenseType] || 0;
+    if (defLevel <= 0) return false;
+
+    const currentLevel = ps.combat.defenseLevels[upgradeId] || 0;
+    if (currentLevel >= upg.maxLevel) return false;
+
+    const cost = upg.energyCost[currentLevel];
+    if (!this.siloHas(planetId, 'energy', cost)) return false;
+
+    this.deductFromSilo(planetId, 'energy', cost);
+    ps.combat.defenseLevels[upgradeId] = currentLevel + 1;
+
+    this.emit('defenseUpgraded', { planetId, upgradeId, level: currentLevel + 1 });
+    return true;
+  }
+
+  /**
+   * Activate an active ability on a planet during combat.
+   */
+  activateAbility(planetId, abilityId) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps) return false;
+    const ability = ACTIVE_ABILITIES[abilityId];
+    if (!ability) return false;
+
+    // Check cooldown
+    if ((ps.combat.abilityCooldowns[abilityId] || 0) > 0) return false;
+
+    // Check energy cost
+    if (!this.siloHas(planetId, 'energy', ability.energyCost)) return false;
+
+    this.deductFromSilo(planetId, 'energy', ability.energyCost);
+    ps.combat.abilityCooldowns[abilityId] = ability.cooldown;
+
+    // Add active effect
+    ps.combat.activeEffects.push({
+      type: abilityId,
+      remaining: ability.duration || 0,
+    });
+
+    this.emit('abilityActivated', { planetId, abilityId });
+    return true;
+  }
+
+  /**
+   * Apply damage to station shield first, then hull.
+   * Returns remaining damage that pierced through.
+   */
+  damageStation(planetId, amount) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps) return 0;
+
+    let remaining = amount;
+
+    // Shield absorbs first
+    if (ps.combat.shieldHP > 0) {
+      const absorbed = Math.min(remaining, ps.combat.shieldHP);
+      ps.combat.shieldHP -= absorbed;
+      remaining -= absorbed;
+      if (absorbed > 0) {
+        this.emit('shieldDamaged', { planetId, absorbed, shieldHP: ps.combat.shieldHP });
+      }
+    }
+
+    // Remaining hits hull
+    if (remaining > 0) {
+      ps.combat.stationHP = Math.max(0, ps.combat.stationHP - remaining);
+      this.emit('stationDamaged', { planetId, damage: remaining, stationHP: ps.combat.stationHP });
+
+      // Check for planet fall
+      if (ps.combat.stationHP <= 0) {
+        this.planetFall(planetId);
+      }
+    }
+
+    return remaining;
+  }
+
+  /**
+   * Steal resources from a planet's silo (raider attack).
+   */
+  stealFromSilo(planetId, resource, amount) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps) return 0;
+    const stolen = this.deductFromSilo(planetId, resource, amount);
+    if (stolen > 0) {
+      this.emit('resourceStolen', { planetId, resource, amount: stolen });
+    }
+    return stolen;
+  }
+
+  /**
+   * Handle planet fall — station destroyed, partial reset.
+   */
+  planetFall(planetId) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps) return;
+
+    ps.combat.fallen = true;
+    ps.hasBase = false;
+    ps.combat.stationHP = 0;
+    ps.combat.shieldHP = 0;
+
+    // Robots: keep fraction alive (rounded down)
+    for (const type of Object.keys(ps.robots)) {
+      ps.robots[type].count = Math.floor(ps.robots[type].count * FALL_ROBOT_SURVIVAL);
+    }
+
+    // Silos: emptied
+    for (const resource of Object.keys(ps.silos)) {
+      ps.silos[resource].amount = 0;
+    }
+
+    // Defenses: reset to 0
+    for (const key of Object.keys(ps.combat.defenses)) {
+      ps.combat.defenses[key] = 0;
+    }
+    ps.combat.defenseLevels = {};
+    ps.combat.shieldMaxHP = 0;
+    ps.combat.activeEffects = [];
+
+    // baseLevels: PRESERVED (key decision — not punitive)
+    // deposits/depositProgress: PRESERVED
+    // upgradeLevels (robot upgrades): PRESERVED
+
+    // Remove routes from/to this planet
+    this.routes = this.routes.filter(r => r.fromPlanet !== planetId && r.toPlanet !== planetId);
+    this.activeShips = this.activeShips.filter(s => s.fromPlanet !== planetId && s.toPlanet !== planetId);
+
+    // Clear active attacks on this planet
+    this.activeAttacks = this.activeAttacks.filter(a => a.planetId !== planetId);
+
+    this.emit('planetFell', planetId);
+  }
+
+  /**
+   * Recolonize a fallen planet at reduced cost.
+   * Pays from a source planet's silos.
+   */
+  recolonize(sourcePlanetId, targetPlanetId) {
+    const targetPs = this.getPlanetState(targetPlanetId);
+    if (!targetPs || !targetPs.combat.fallen) return false;
+
+    const def = PLANETS.find(p => p.id === targetPlanetId);
+    if (!def) return false;
+
+    // Reduced cost
+    const oreCost = Math.floor((def.baseCost.ore || 0) * RECOLONIZE_COST_MULT);
+    const energyCost = Math.floor((def.baseCost.energy || 0) * RECOLONIZE_COST_MULT);
+
+    if (oreCost > 0 && !this.siloHas(sourcePlanetId, 'ore', oreCost)) return false;
+    if (energyCost > 0 && !this.siloHas(sourcePlanetId, 'energy', energyCost)) return false;
+
+    if (oreCost > 0) this.deductFromSilo(sourcePlanetId, 'ore', oreCost);
+    if (energyCost > 0) this.deductFromSilo(sourcePlanetId, 'energy', energyCost);
+
+    targetPs.combat.fallen = false;
+    targetPs.hasBase = true;
+    targetPs.combat.stationHP = BASE_STATION_HP;
+
+    this.colonizationTime[targetPlanetId] = Date.now();
+    this.emit('planetRecolonized', { planetId: targetPlanetId, sourcePlanetId });
+    return true;
+  }
+
+  /**
+   * Repair station HP (called by builder robots via CombatSystem).
+   */
+  repairStation(planetId, amount) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps || !ps.hasBase) return 0;
+    const repairAmount = Math.min(amount, ps.combat.stationMaxHP - ps.combat.stationHP);
+    if (repairAmount <= 0) return 0;
+    ps.combat.stationHP += repairAmount;
+    this.emit('repairTick', { planetId, amount: repairAmount, stationHP: ps.combat.stationHP });
+    return repairAmount;
+  }
+
+  /**
+   * Tick ability cooldowns for a planet.
+   */
+  tickAbilityCooldowns(planetId, dt) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps) return;
+
+    // Tick cooldowns
+    for (const id of Object.keys(ps.combat.abilityCooldowns)) {
+      if (ps.combat.abilityCooldowns[id] > 0) {
+        ps.combat.abilityCooldowns[id] = Math.max(0, ps.combat.abilityCooldowns[id] - dt);
+        if (ps.combat.abilityCooldowns[id] <= 0) {
+          this.emit('abilityReady', { planetId, abilityId: id });
+        }
+      }
+    }
+
+    // Tick active effects
+    for (let i = ps.combat.activeEffects.length - 1; i >= 0; i--) {
+      const eff = ps.combat.activeEffects[i];
+      eff.remaining -= dt;
+      if (eff.remaining <= 0) {
+        ps.combat.activeEffects.splice(i, 1);
+        this.emit('effectExpired', { planetId, type: eff.type });
+      }
+    }
+  }
+
+  /**
+   * Check if a planet has an active effect of the given type.
+   */
+  hasActiveEffect(planetId, effectType) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps) return false;
+    return ps.combat.activeEffects.some(e => e.type === effectType);
+  }
+
+  /**
+   * Check if a planet is currently under attack.
+   */
+  isUnderAttack(planetId) {
+    return this.activeAttacks.some(a => a.planetId === planetId);
+  }
+
   // ─── Stub tick (production handled by ProductionSystem) ───────────────────
 
   tick(_dt) {
@@ -402,6 +687,18 @@ class GameState extends EventEmitter {
   // ─── Serialization ────────────────────────────────────────────────────────
 
   serialize() {
+    // Serialize active attacks (strip runtime-only fields, keep essentials)
+    const attacks = this.activeAttacks.map(a => ({
+      id: a.id,
+      type: a.type,
+      planetId: a.planetId,
+      wave: a.wave,
+      elapsed: a.elapsed,
+      enemies: a.enemies.map(e => ({ type: e.type, hp: e.hp, damage: e.damage, target: e.target, stealRate: e.stealRate || 0 })),
+      mothership: a.mothership ? { hp: a.mothership.hp, maxHP: a.mothership.maxHP } : null,
+      template: a.template,
+    }));
+
     return {
       saveVersion: SAVE_VERSION,
       planetState: JSON.parse(JSON.stringify(this.planetState)),
@@ -410,6 +707,10 @@ class GameState extends EventEmitter {
       routes: JSON.parse(JSON.stringify(this.routes)),
       colonyShipsInOrbit: JSON.parse(JSON.stringify(this.colonyShipsInOrbit)),
       colonyShipsInFlight: JSON.parse(JSON.stringify(this.colonyShipsInFlight)),
+      activeAttacks: attacks,
+      hyperlanePatrols: JSON.parse(JSON.stringify(this.hyperlanePatrols)),
+      lastAttackTime: { ...this.lastAttackTime },
+      colonizationTime: { ...this.colonizationTime },
       tutorialStep: this.tutorialStep,
       lastSaved: Date.now(),
     };
@@ -431,6 +732,10 @@ class GameState extends EventEmitter {
     this.activeShips         = []; // reconstructed by RouteSystem
     this.colonyShipsInOrbit  = data.colonyShipsInOrbit ?? [];
     this.colonyShipsInFlight = data.colonyShipsInFlight ?? [];
+    this.activeAttacks       = data.activeAttacks ?? [];
+    this.hyperlanePatrols    = data.hyperlanePatrols ?? [];
+    this.lastAttackTime      = data.lastAttackTime ?? {};
+    this.colonizationTime    = data.colonizationTime ?? {};
     this.tutorialStep   = data.tutorialStep ?? -1; // assume tutorial complete for existing saves
     this.lastSaved      = data.lastSaved ?? Date.now();
 
@@ -442,8 +747,22 @@ class GameState extends EventEmitter {
     }
 
     // Backwards compat: ensure colonyShipBuildQueue exists on all planet states
+    // v2→v3 migration: ensure combat fields exist on all planet states
     for (const ps of Object.values(this.planetState)) {
       if (!ps.colonyShipBuildQueue) ps.colonyShipBuildQueue = [];
+      if (!ps.combat) {
+        ps.combat = {
+          stationHP: BASE_STATION_HP,
+          stationMaxHP: BASE_STATION_HP,
+          shieldHP: 0,
+          shieldMaxHP: 0,
+          defenses: { cannon: 0, satellite: 0, defenseShip: 0, shield: 0 },
+          defenseLevels: {},
+          abilityCooldowns: { emp: 0, shieldBoost: 0, orbitalStrike: 0 },
+          activeEffects: [],
+          fallen: false,
+        };
+      }
     }
 
     this.emit('stateLoaded');

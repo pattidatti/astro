@@ -1,6 +1,7 @@
 import { gameState } from './GameState.js';
 import { PLANETS } from './data/planets.js';
 import { PlanetPanel } from './ui/PlanetPanel.js';
+import { CombatHUD } from './ui/CombatHUD.js';
 import { AudioManager } from './audio/AudioManager.js';
 
 const fmt = (n) => {
@@ -18,6 +19,7 @@ export class HUDBridge {
   constructor(game, { onMenu } = {}) {
     this.game = game;
     this._planetPanel = new PlanetPanel();
+    this._combatHUD = new CombatHUD();
     this._panelsVisible = false;
     this._currentPlanetId = gameState.focusedPlanet;
     this._suppressNextPlanetChanged = false;
@@ -178,6 +180,37 @@ export class HUDBridge {
       AudioManager.play('STATE_LOADED');
       this._currentPlanetId = gameState.focusedPlanet;
     });
+
+    // Combat events
+    gameState.on('attackStarted', ({ planetId, type }) => {
+      const p = PLANETS.find(x => x.id === planetId);
+      const name = p?.name || planetId;
+      if (type === 'invasion') {
+        this.toast(`👾 INVASION: ${name}`);
+      } else {
+        this.toast(`⚔ RAID: ${name}`);
+      }
+    });
+    gameState.on('attackEnded', ({ planetId, reason }) => {
+      if (reason === 'victory') {
+        const p = PLANETS.find(x => x.id === planetId);
+        this.toast(`✓ DEFENDED: ${p?.name || planetId}`);
+      }
+    });
+    gameState.on('planetFell', (planetId) => {
+      const p = PLANETS.find(x => x.id === planetId);
+      this.toast(`✖ STATION LOST: ${p?.name || planetId}`);
+    });
+    gameState.on('defenseBuilt', ({ planetId, defenseId }) => {
+      this.toast(`🛡 DEFENSE BUILT: ${defenseId.toUpperCase()}`);
+    });
+    gameState.on('cargoIntercepted', ({ ship }) => {
+      this.toast(`⚠ CARGO LOST: ${fmt(ship.amount)} ${ship.resource.toUpperCase()}`);
+    });
+    gameState.on('planetRecolonized', ({ planetId }) => {
+      const p = PLANETS.find(x => x.id === planetId);
+      this.toast(`🌍 RECOLONIZED: ${p?.name || planetId}`);
+    });
   }
 
   update(_dt) {
@@ -219,6 +252,9 @@ export class HUDBridge {
         this._planetPanel.update(camera, cameraController.target);
       }
     }
+
+    // Update combat HUD summary
+    this._combatHUD.updateSummary();
   }
 
   toast(msg) {

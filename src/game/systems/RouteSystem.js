@@ -2,8 +2,9 @@ import { gameState } from '../GameState.js';
 import { calcTravelDuration } from '../data/routes.js';
 
 export class RouteSystem {
-  constructor(animationLoop) {
+  constructor(animationLoop, hyperlanePatrolSystem) {
     this._nextShipId = 0;
+    this._hyperlanePatrolSystem = hyperlanePatrolSystem;
     animationLoop.onUpdate((dt) => this._tick(dt));
   }
 
@@ -29,6 +30,9 @@ export class RouteSystem {
 
       const ps = gameState.getPlanetState(route.fromPlanet);
       if (!ps || !ps.hasBase) continue;
+
+      // Check if hyperlane is blocked by enemy patrol
+      if (this._hyperlanePatrolSystem && this._hyperlanePatrolSystem.isLaneBlocked(route.fromPlanet, route.toPlanet)) continue;
 
       const intervalMs = route.intervalMinutes * 60 * 1000;
       if (now - route.lastDispatchTime < intervalMs) continue;

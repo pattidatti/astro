@@ -749,6 +749,97 @@ export class Station3D {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // COMBAT — damage states + shield dome
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Initialize shield dome mesh (call once when defense is first built).
+   */
+  initShieldDome() {
+    if (this._shieldDome) return;
+    const geo = new THREE.SphereGeometry(4.5, 24, 16);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x4488ff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      wireframe: true,
+    });
+    this._shieldDome = new THREE.Mesh(geo, mat);
+    this._shieldDomeMat = mat;
+    this._shieldDomeGeo = geo;
+    this.group.add(this._shieldDome);
+  }
+
+  /**
+   * Update shield dome visibility based on shield HP.
+   */
+  setShieldState(shieldHP, shieldMaxHP) {
+    if (!this._shieldDome) {
+      if (shieldMaxHP > 0) this.initShieldDome();
+      else return;
+    }
+    if (shieldMaxHP <= 0) {
+      this._shieldDomeMat.opacity = 0;
+      return;
+    }
+    const frac = shieldHP / shieldMaxHP;
+    this._shieldDomeMat.opacity = 0.08 + frac * 0.12; // subtle visible when up
+    this._shieldDomeMat.color.setHex(frac > 0.5 ? 0x4488ff : (frac > 0.2 ? 0x44aaff : 0xff4444));
+  }
+
+  /**
+   * Set visual damage state based on station HP percentage.
+   * 0 = destroyed, 1 = full health.
+   */
+  setDamageState(hpFraction) {
+    if (!this._damageParticles) {
+      this._createDamageParticles();
+    }
+
+    // Show spark particles below 75%
+    if (hpFraction < 0.75) {
+      this._damageParticles.visible = true;
+      const intensity = 1 - hpFraction; // 0 at full, 1 at 0 HP
+      this._damageParticleMat.opacity = intensity * 0.6;
+      this._damageParticleMat.size = 0.1 + intensity * 0.15;
+    } else {
+      this._damageParticles.visible = false;
+    }
+
+    // Darken hull emissive when damaged
+    const darken = Math.max(0, 1 - hpFraction * 2); // starts darkening below 50%
+    if (this._reactor) {
+      this._reactor.material.emissive.setHex(darken > 0.3 ? 0x880000 : REACTOR);
+    }
+  }
+
+  _createDamageParticles() {
+    const count = 20;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3]     = (Math.random() - 0.5) * 3;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 3;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    this._damageParticleMat = new THREE.PointsMaterial({
+      color: 0xff8800,
+      size: 0.15,
+      transparent: true,
+      opacity: 0.4,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this._damageParticles = new THREE.Points(geo, this._damageParticleMat);
+    this._damageParticles.visible = false;
+    this.group.add(this._damageParticles);
+  }
+
   dispose() {
     this.group.traverse((child) => {
       if (child.isMesh) {
