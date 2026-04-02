@@ -12,7 +12,9 @@ import { Skybox } from './world/Skybox.js';
 import { ClickFeedback } from './effects/ClickFeedback.js';
 import { GodRayShader } from './shaders/effects/GodRayShader.js';
 import { ShipManager3D } from './world/ShipManager3D.js';
+import { EnemyManager3D } from './world/EnemyManager3D.js';
 import { SpawnFlight } from './effects/SpawnFlight.js';
+import { CombatEffects } from './effects/CombatEffects.js';
 
 export function createGame() {
   const container = document.getElementById('game-container');
@@ -97,6 +99,95 @@ export function createGame() {
 
   // --- Ships ---
   const shipManager = new ShipManager3D(sceneManager.scene, animationLoop, galaxy);
+
+  // --- Enemy ships + combat effects ---
+  const enemyManager = new EnemyManager3D(sceneManager.scene, animationLoop, galaxy);
+  const combatEffects = new CombatEffects(sceneManager.scene);
+
+  // Combat visual events
+  gameState.on('defenseFired', ({ planetId, defenseType, targetId, damage }) => {
+    if (planetId !== gameState.focusedPlanet) return;
+    const stationPos = galaxy.getSystem(planetId)?.stationWorldPosition;
+    // Find target position from enemy manager (approximate from planet pos)
+    const planetPos = galaxy.getPlanetWorldPosition(planetId);
+    if (stationPos && planetPos) {
+      // Target position: offset from planet toward a random orbit point
+      const angle = Math.random() * Math.PI * 2;
+      const targetPos = planetPos.clone();
+      targetPos.x += Math.cos(angle) * 13;
+      targetPos.z += Math.sin(angle) * 13;
+      targetPos.y += (Math.random() - 0.5) * 4;
+      combatEffects.laser(stationPos, targetPos, defenseType === 'satellite' ? 0x44aaff : 0xff4444);
+    }
+  });
+
+  gameState.on('enemyDestroyed', ({ planetId, enemy }) => {
+    if (planetId !== gameState.focusedPlanet) return;
+    const planetPos = galaxy.getPlanetWorldPosition(planetId);
+    if (planetPos) {
+      const pos = planetPos.clone();
+      pos.x += (Math.random() - 0.5) * 20;
+      pos.y += (Math.random() - 0.5) * 6;
+      pos.z += (Math.random() - 0.5) * 20;
+      combatEffects.explosion(pos, enemy.type === 'bomber' ? 1.5 : 1.0);
+      cameraController.zoomPunch(0.02);
+    }
+  });
+
+  gameState.on('mothershipDestroyed', ({ planetId }) => {
+    if (planetId !== gameState.focusedPlanet) return;
+    const planetPos = galaxy.getPlanetWorldPosition(planetId);
+    if (planetPos) {
+      const pos = planetPos.clone();
+      pos.y += 8;
+      combatEffects.explosion(pos, 3.0, 0xff2200);
+      cameraController.zoomPunch(0.1);
+    }
+  });
+
+  gameState.on('shieldDamaged', ({ planetId }) => {
+    if (planetId !== gameState.focusedPlanet) return;
+    const sys = galaxy.getSystem(planetId);
+    if (sys) combatEffects.shieldHit(sys.stationWorldPosition);
+  });
+
+  gameState.on('abilityActivated', ({ planetId, abilityId }) => {
+    if (planetId !== gameState.focusedPlanet) return;
+    const planetPos = galaxy.getPlanetWorldPosition(planetId);
+    if (!planetPos) return;
+    if (abilityId === 'emp') combatEffects.empBurst(planetPos);
+    if (abilityId === 'orbitalStrike') combatEffects.orbitalStrike(planetPos);
+    if (abilityId === 'shieldBoost') {
+      const sys = galaxy.getSystem(planetId);
+      if (sys) combatEffects.shieldHit(sys.stationWorldPosition, 0x44ff88);
+    }
+    cameraController.zoomPunch(0.06);
+  });
+
+  gameState.on('planetFell', (planetId) => {
+    const planetPos = galaxy.getPlanetWorldPosition(planetId);
+    if (planetPos) {
+      combatEffects.explosion(planetPos, 4.0, 0xff0000);
+      cameraController.zoomPunch(0.15);
+    }
+  });
+
+  // Update station damage visuals per-frame
+  gameState.on('stationDamaged', ({ planetId }) => {
+    const sys = galaxy.getSystem(planetId);
+    const ps = gameState.getPlanetState(planetId);
+    if (sys?.station && ps) {
+      sys.station.setDamageState(ps.combat.stationHP / ps.combat.stationMaxHP);
+    }
+  });
+
+  gameState.on('repairTick', ({ planetId }) => {
+    const sys = galaxy.getSystem(planetId);
+    const ps = gameState.getPlanetState(planetId);
+    if (sys?.station && ps) {
+      sys.station.setDamageState(ps.combat.stationHP / ps.combat.stationMaxHP);
+    }
+  });
 
   // --- Spawn flight: robot flies from panel to station ---
   const spawnFlight = new SpawnFlight(sceneManager.scene, camera, galaxy);
@@ -183,6 +274,7 @@ export function createGame() {
     galaxy.update(camera, dt, time);
     skybox.update(time, camera);
     clickFeedback.update(dt);
+    combatEffects.update(dt);
     spawnFlight.update(dt);
     renderPipeline.tick(time);
 

@@ -2,6 +2,7 @@ import { gameState, colonyLaunchEnergyCost, colonyTravelDuration } from '../Game
 import { PLANETS } from '../data/planets.js';
 import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult } from '../data/upgrades.js';
 import { createRoute, SHIPPABLE_RESOURCES } from '../data/routes.js';
+import { DefensePanel } from './DefensePanel.js';
 import * as THREE from 'three';
 import { AudioManager } from '../audio/AudioManager.js';
 
@@ -51,6 +52,7 @@ export class PlanetPanel {
 
     this._colonyPopupEl = document.getElementById('colony-ship-popup');
     this._colonyPopupVisible = false;
+    this._defensePanel = new DefensePanel();
 
     // Close button
     document.getElementById('panel-close')?.addEventListener('pointerdown', () => {
@@ -78,6 +80,13 @@ export class PlanetPanel {
     gameState.on('depositUnlocked',    rerender);
     gameState.on('colonyShipQueued',   rerender);
     gameState.on('colonyShipBuilt',    rerender);
+    gameState.on('defenseBuilt',       rerender);
+    gameState.on('defenseUpgraded',    rerender);
+    gameState.on('attackStarted',      rerender);
+    gameState.on('attackEnded',        rerender);
+    gameState.on('abilityActivated',   rerender);
+    gameState.on('planetFell',         rerender);
+    gameState.on('planetRecolonized',  rerender);
     gameState.on('colonyShipLaunched', rerender);
     gameState.on('productionTick', () => {
       if (!this._visible) return;
@@ -149,6 +158,7 @@ export class PlanetPanel {
     this._renderHire(ps, def);
     this._renderActiveRobots(ps);
     this._renderRobotUpgrades(ps);
+    this._renderDefenses();
   }
 
   _renderBase(ps, def) {
@@ -531,6 +541,21 @@ export class PlanetPanel {
       }
       row.appendChild(btn);
       el.appendChild(row);
+    }
+  }
+
+  // ─── Defense panel ────────────────────────────────────────────────────────
+
+  _renderDefenses() {
+    let el = document.getElementById('panel-defenses');
+    if (!el) {
+      // Create defense container in right panel if it doesn't exist
+      el = document.createElement('div');
+      el.id = 'panel-defenses';
+      this._rightEl.appendChild(el);
+    }
+    if (this._planetId) {
+      this._defensePanel.render(el, this._planetId);
     }
   }
 
