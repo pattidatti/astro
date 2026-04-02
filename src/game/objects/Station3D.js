@@ -647,6 +647,13 @@ export class Station3D {
     this._flashCount = 0;
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // PURCHASE PULSE — all emissive materials glow bright then fade back
+  // ─────────────────────────────────────────────────────────────────────────
+  flashPurchase() {
+    this._purchasePulse = 1.0; // starts at full intensity, decays to 0
+  }
+
   _updateFlash(dt) {
     this._flashTimer += dt;
     if (this._flashTimer >= 0.1) {
@@ -727,6 +734,16 @@ export class Station3D {
     // Window shimmer (very subtle)
     for (const w of this._windows) {
       w.mat.emissiveIntensity = 1.1 + Math.sin(time * 0.9 + w.phase) * 0.12;
+    }
+
+    // Purchase pulse — boost all emissives then decay
+    if (this._purchasePulse > 0) {
+      this._purchasePulse = Math.max(0, this._purchasePulse - dt / 1.2);
+      const boost = this._purchasePulse * 4.0;
+      if (this._reactor) this._reactor.material.emissiveIntensity += boost;
+      for (const eng of this._engines) eng.mat.emissiveIntensity += boost;
+      for (const m of this._hangarMats) m.emissiveIntensity += boost;
+      for (const w of this._windows) w.mat.emissiveIntensity += boost * 0.5;
     }
   }
 

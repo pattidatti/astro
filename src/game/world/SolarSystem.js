@@ -201,6 +201,12 @@ export class SolarSystem {
     gameState.on('planetChanged', this._onPlanetChanged);
     gameState.on('stateLoaded', this._onStateLoaded);
 
+    // Station purchase pulse on hire/upgrade for this planet
+    const pulseIfMine = (e) => { if (e?.planetId === this.id) this.station.flashPurchase(); };
+    gameState.on('robotHired', pulseIfMine);
+    gameState.on('baseUpgraded', pulseIfMine);
+    gameState.on('robotUpgraded', pulseIfMine);
+
     // Set initial orbit position
     this._updateOrbit(0);
   }

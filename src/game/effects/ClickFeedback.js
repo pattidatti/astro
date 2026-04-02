@@ -4,6 +4,8 @@ const MAX_RINGS            = 8;
 const RING_LIFETIME        = 0.6;
 const MAX_DELIVERY_RINGS   = 4;
 const DELIVERY_LIFETIME    = 1.0;
+const SPAWN_BURST_LIFETIME = 0.8;
+const SHOCKWAVE_LIFETIME   = 1.2;
 
 /**
  * 3D click feedback: expanding ring + floating number at click point.
@@ -12,8 +14,10 @@ const DELIVERY_LIFETIME    = 1.0;
 export class ClickFeedback {
   constructor(scene) {
     this.scene = scene;
-    this.activeRings        = [];
+    this.activeRings         = [];
     this.activeDeliveryRings = [];
+    this.activeSpawnBursts   = [];
+    this.activeShockwaves    = [];
   }
 
   /**
@@ -152,6 +156,58 @@ export class ClickFeedback {
     return sprite;
   }
 
+  /**
+   * Spawn burst when a hired robot arrives at station — cyan/electric glow.
+   */
+  spawnBurst(worldPos) {
+    const ringGeo = new THREE.RingGeometry(0.5, 0.9, 40);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x44ccff,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.copy(worldPos);
+    ring.rotation.x = Math.PI / 2;
+    this.scene.add(ring);
+    this.activeSpawnBursts.push({ ring, age: 0 });
+    while (this.activeSpawnBursts.length > 4) {
+      const old = this.activeSpawnBursts.shift();
+      this.scene.remove(old.ring);
+      old.ring.geometry.dispose();
+      old.ring.material.dispose();
+    }
+  }
+
+  /**
+   * Large shockwave ring for base upgrades / colonization.
+   */
+  shockwave(worldPos) {
+    const ringGeo = new THREE.RingGeometry(1.0, 1.5, 64);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffd866,
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.copy(worldPos);
+    ring.rotation.x = Math.PI / 2;
+    this.scene.add(ring);
+    this.activeShockwaves.push({ ring, age: 0 });
+    while (this.activeShockwaves.length > 3) {
+      const old = this.activeShockwaves.shift();
+      this.scene.remove(old.ring);
+      old.ring.geometry.dispose();
+      old.ring.material.dispose();
+    }
+  }
+
   _disposeDeliveryEntry(entry) {
     this.scene.remove(entry.ring);
     this.scene.remove(entry.sprite);
@@ -205,6 +261,38 @@ export class ClickFeedback {
       entry.sprite.position.copy(entry.startPos)
         .add(entry.normal.clone().multiplyScalar(0.5 + t * 3));
       entry.sprite.material.opacity = 1 - t;
+    }
+
+    // Spawn bursts (cyan)
+    for (let i = this.activeSpawnBursts.length - 1; i >= 0; i--) {
+      const e = this.activeSpawnBursts[i];
+      e.age += dt;
+      if (e.age >= SPAWN_BURST_LIFETIME) {
+        this.scene.remove(e.ring);
+        e.ring.geometry.dispose();
+        e.ring.material.dispose();
+        this.activeSpawnBursts.splice(i, 1);
+        continue;
+      }
+      const t = e.age / SPAWN_BURST_LIFETIME;
+      e.ring.scale.setScalar(1 + t * 10);
+      e.ring.material.opacity = (1 - t) * 0.9;
+    }
+
+    // Shockwaves (gold, larger)
+    for (let i = this.activeShockwaves.length - 1; i >= 0; i--) {
+      const e = this.activeShockwaves[i];
+      e.age += dt;
+      if (e.age >= SHOCKWAVE_LIFETIME) {
+        this.scene.remove(e.ring);
+        e.ring.geometry.dispose();
+        e.ring.material.dispose();
+        this.activeShockwaves.splice(i, 1);
+        continue;
+      }
+      const t = e.age / SHOCKWAVE_LIFETIME;
+      e.ring.scale.setScalar(1 + t * 15);
+      e.ring.material.opacity = (1 - t) * 0.7;
     }
   }
 }

@@ -12,6 +12,7 @@ import { Skybox } from './world/Skybox.js';
 import { ClickFeedback } from './effects/ClickFeedback.js';
 import { GodRayShader } from './shaders/effects/GodRayShader.js';
 import { ShipManager3D } from './world/ShipManager3D.js';
+import { SpawnFlight } from './effects/SpawnFlight.js';
 
 export function createGame() {
   const container = document.getElementById('game-container');
@@ -102,6 +103,28 @@ export function createGame() {
   // --- Ships ---
   const shipManager = new ShipManager3D(sceneManager.scene, animationLoop, galaxy);
 
+  // --- Spawn flight: robot flies from panel to station ---
+  const spawnFlight = new SpawnFlight(sceneManager.scene, camera, galaxy);
+  spawnFlight.onArrival = (worldPos) => {
+    clickFeedback.spawnBurst(worldPos);
+  };
+  gameState.on('robotHired', ({ planetId, robotType }) => {
+    spawnFlight.launch(planetId, robotType);
+    cameraController.zoomPunch(0.03);
+  });
+
+  // --- Camera punch + shockwave on upgrades/colonization ---
+  gameState.on('baseUpgraded', ({ planetId }) => {
+    cameraController.zoomPunch(0.05);
+    const sys = galaxy.getSystem(planetId);
+    if (sys) clickFeedback.shockwave(sys.stationWorldPosition);
+  });
+  gameState.on('planetColonized', (id) => {
+    cameraController.zoomPunch(0.08);
+    const sys = galaxy.getSystem(id);
+    if (sys) clickFeedback.shockwave(sys.planetWorldPosition);
+  });
+
   // Focus on active planet at start — track the orbiting planet
   const startSystem = galaxy.getSystem(gameState.activePlanet);
   if (startSystem) {
@@ -134,6 +157,7 @@ export function createGame() {
     galaxy.update(camera, dt, time);
     skybox.update(time, camera);
     clickFeedback.update(dt);
+    spawnFlight.update(dt);
     renderPipeline.tick(time);
 
     // God rays: activate when a star-type planet is near and on-screen
