@@ -78,6 +78,28 @@ class GameState extends EventEmitter {
         this.emit('colonyShipArrived', ship);
       }
     });
+    this._setupStatsTracking();
+  }
+
+  _setupStatsTracking() {
+    this.on('productionTick', (delta) => {
+      for (const planetId in delta) {
+        const d = delta[planetId];
+        this.stats.totalOreProduced += d.ore || 0;
+        this.stats.totalEnergyProduced += d.energy || 0;
+        this.stats.totalCrystalProduced += d.crystal || 0;
+      }
+    });
+    this.on('shipArrived', (ship) => {
+      this.stats.totalShipDeliveries++;
+      this.stats.totalResourcesShipped += ship.amount || 0;
+    });
+    this.on('robotHired', () => {
+      this.stats.totalRobotsHired++;
+    });
+    this.on('planetColonized', () => {
+      this.stats.planetsColonized++;
+    });
   }
 
   _initFresh() {
@@ -98,6 +120,18 @@ class GameState extends EventEmitter {
     this.hyperlanePatrols = [];   // [{ id, lane, position, enemies }]
     this.lastAttackTime = {};     // planetId → timestamp of last attack end
     this.colonizationTime = {};   // planetId → timestamp of colonization (for grace period)
+
+    // Lifetime statistics
+    this.stats = {
+      totalOreProduced: 0,
+      totalEnergyProduced: 0,
+      totalCrystalProduced: 0,
+      totalShipDeliveries: 0,
+      totalResourcesShipped: 0,
+      totalRobotsHired: 0,
+      planetsColonized: 0,
+      playTimeSeconds: 0,
+    };
 
     // Bootstrap Xerion with starter energy (player must build base manually)
     const xerionDef = PLANETS.find(p => p.id === 'xerion');
@@ -151,11 +185,17 @@ class GameState extends EventEmitter {
     if (!ps) return 0;
     const silo = ps.silos[resource];
     if (!silo || silo.capacity === 0) return 0;
+    const wasFull = silo.amount >= silo.capacity * 0.995;
     const space = silo.capacity - silo.amount;
     const added = Math.min(amount, space);
     if (added > 0) {
       silo.amount += added;
       this.emit('siloChanged', { planetId, resource, amount: silo.amount });
+    }
+    // Emit siloFull once when transitioning to full
+    const isFull = silo.amount >= silo.capacity * 0.995;
+    if (isFull && !wasFull) {
+      this.emit('siloFull', { planetId, resource });
     }
     return added;
   }
@@ -720,6 +760,7 @@ class GameState extends EventEmitter {
       lastAttackTime: { ...this.lastAttackTime },
       colonizationTime: { ...this.colonizationTime },
       tutorialStep: this.tutorialStep,
+      stats: { ...this.stats },
       lastSaved: Date.now(),
     };
   }
@@ -746,6 +787,11 @@ class GameState extends EventEmitter {
     this.lastAttackTime      = data.lastAttackTime ?? {};
     this.colonizationTime    = data.colonizationTime ?? {};
     this.tutorialStep   = data.tutorialStep ?? -1; // assume tutorial complete for existing saves
+    this.stats = data.stats ?? {
+      totalOreProduced: 0, totalEnergyProduced: 0, totalCrystalProduced: 0,
+      totalShipDeliveries: 0, totalResourcesShipped: 0, totalRobotsHired: 0,
+      planetsColonized: 0, playTimeSeconds: 0,
+    };
     this.lastSaved      = data.lastSaved ?? Date.now();
 
     // Ensure Xerion always has a state entry

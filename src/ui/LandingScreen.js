@@ -3,6 +3,7 @@ import { getCurrentUser, isGoogleUser, upgradeToGoogle } from '../auth.js';
 import { loadFromFirestore } from '../db.js';
 import { isFirebaseConfigured } from '../firebase.js';
 import { AudioManager } from '../game/audio/AudioManager.js';
+import { gameState } from '../game/GameState.js';
 
 function fmtOre(n) {
   if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
@@ -69,6 +70,10 @@ export class LandingScreen {
           <button class="landing-btn" id="btn-settings">
             SETTINGS
             <span class="landing-btn-sub">Audio, graphics &amp; more</span>
+          </button>
+          <button class="landing-btn" id="btn-stats">
+            STATISTICS
+            <span class="landing-btn-sub">View your progress</span>
           </button>
           <button class="landing-btn" id="btn-login">
             LOGIN WITH GOOGLE
@@ -139,6 +144,7 @@ export class LandingScreen {
     document.getElementById('btn-cloud').addEventListener('click', () => { menuClick(); this._showCloudSavesPanel(); });
     document.getElementById('btn-new').addEventListener('click', () => { menuClick(); this._handleNewGame(); });
     document.getElementById('btn-settings').addEventListener('click', () => { menuClick(); this._showSettingsPanel(); });
+    document.getElementById('btn-stats').addEventListener('click', () => { menuClick(); this._showStatisticsPanel(); });
     document.getElementById('btn-login').addEventListener('click', () => { menuClick(); this._handleLogin(); });
   }
 
@@ -341,6 +347,69 @@ export class LandingScreen {
       if (!nowMuted) AudioManager.play('UI_MUTE');
       e.currentTarget.textContent = nowMuted ? 'ON' : 'OFF';
     });
+    document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
+  }
+
+  _showStatisticsPanel() {
+    this._closeSubPanel();
+    const panel = document.getElementById('landing-subpanel');
+    const s = gameState.stats;
+
+    const fmtTime = (secs) => {
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const sec = Math.floor(secs % 60);
+      if (h > 0) return `${h}h ${m}m ${sec}s`;
+      if (m > 0) return `${m}m ${sec}s`;
+      return `${sec}s`;
+    };
+
+    panel.innerHTML = `
+      <div class="landing-panel-box">
+        <div class="landing-panel-title">STATISTICS</div>
+
+        <div class="stats-section-title">PRODUCTION</div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">TOTAL ORE</span>
+          <span class="landing-setting-ctrl stats-val stats-ore">${fmtOre(s.totalOreProduced)}</span>
+        </div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">TOTAL ENERGY</span>
+          <span class="landing-setting-ctrl stats-val stats-energy">${fmtOre(s.totalEnergyProduced)}</span>
+        </div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">TOTAL CRYSTAL</span>
+          <span class="landing-setting-ctrl stats-val stats-crystal">${fmtOre(s.totalCrystalProduced)}</span>
+        </div>
+
+        <div class="stats-section-title">LOGISTICS</div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">SHIP DELIVERIES</span>
+          <span class="landing-setting-ctrl stats-val">${s.totalShipDeliveries.toLocaleString()}</span>
+        </div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">RESOURCES SHIPPED</span>
+          <span class="landing-setting-ctrl stats-val">${fmtOre(s.totalResourcesShipped)}</span>
+        </div>
+
+        <div class="stats-section-title">PROGRESS</div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">PLANETS OWNED</span>
+          <span class="landing-setting-ctrl stats-val">${gameState.ownedPlanets.length} / 8</span>
+        </div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">ROBOTS HIRED</span>
+          <span class="landing-setting-ctrl stats-val">${s.totalRobotsHired.toLocaleString()}</span>
+        </div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">PLAY TIME</span>
+          <span class="landing-setting-ctrl stats-val">${fmtTime(s.playTimeSeconds)}</span>
+        </div>
+
+        <button class="landing-btn-back" id="panel-back">BACK</button>
+      </div>
+    `;
+    panel.classList.add('open');
     document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
   }
 

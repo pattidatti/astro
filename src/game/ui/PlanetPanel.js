@@ -14,6 +14,12 @@ const fmt = (n) => {
   return Math.floor(n) + '';
 };
 
+const BASE_ORE_RATE = 0.5;
+const BASE_ENERGY_RATE = 0.4;
+const BASE_CRYSTAL_RATE = 0.2;
+const _passiveUpg = BASE_UPGRADES.find(u => u.id === 'base_passive');
+const _passiveRates = _passiveUpg?.passiveRate || [2, 8, 30];
+
 const RESOURCE_ICONS = { ore: '⬡', energy: '⚡', crystal: '◈' };
 const RESOURCE_LABELS = { ore: 'ORE', energy: 'ENERGY', crystal: 'CRYSTAL' };
 const ROBOT_ICONS = { miner: '⛏', energyBot: '🔋', builder: '🔧', scout: '📡' };
@@ -323,6 +329,42 @@ export class PlanetPanel {
     el.appendChild(grid);
   }
 
+  _computeRate(planetId, resource) {
+    const ps = gameState.getPlanetState(planetId);
+    if (!ps) return 0;
+    const def = PLANETS.find(p => p.id === planetId);
+    if (!def) return 0;
+
+    if (resource === 'ore') {
+      const { count, speedLevel, loadLevel } = ps.robots.miner;
+      if (count === 0) return 0;
+      const oreZones = ps.deposits.ore.unlocked;
+      return count * BASE_ORE_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
+             * def.planetMult.ore * Math.max(1, oreZones);
+    }
+    if (resource === 'energy') {
+      let rate = 0;
+      const { count, speedLevel, loadLevel } = ps.robots.energyBot;
+      if (count > 0) {
+        const energyZones = ps.deposits.energy.unlocked;
+        rate += count * BASE_ENERGY_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
+                * def.planetMult.energy * Math.max(1, energyZones);
+      }
+      const passiveLv = ps.baseLevels.passiveEnergy;
+      if (passiveLv > 0) rate += _passiveRates[passiveLv - 1] || 0;
+      return rate;
+    }
+    if (resource === 'crystal') {
+      const crystalZones = ps.deposits.crystal.unlocked;
+      if (crystalZones === 0) return 0;
+      const { count, speedLevel, loadLevel } = ps.robots.miner;
+      if (count === 0) return 0;
+      return count * BASE_CRYSTAL_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
+             * def.planetMult.crystal * crystalZones;
+    }
+    return 0;
+  }
+
   _renderSilos() {
     const el = document.getElementById('panel-silos');
     if (!el) return;
@@ -338,19 +380,27 @@ export class PlanetPanel {
 
       const pct = silo.capacity > 0 ? (silo.amount / silo.capacity) * 100 : 0;
       const full = pct >= 99.5;
+      const warning = pct > 90 && !full;
       const prevKey = this._planetId + '_' + resource;
       const prev = this._prevSiloAmounts[prevKey];
       const drained = prev !== undefined && silo.amount < prev - 1;
       this._prevSiloAmounts[prevKey] = silo.amount;
+
+      const rate = this._computeRate(this._planetId, resource);
+      const rateStr = rate > 0 ? `+${rate >= 10 ? fmt(rate) : rate.toFixed(1)}/s` : '';
+
+      const fillClass = `silo-fill ${resource}${full ? ' full' : ''}${warning ? ' warning' : ''}`;
 
       const row = document.createElement('div');
       row.className = 'silo-bar-row';
       row.innerHTML = `
         <span class="silo-label">${RESOURCE_LABELS[resource]}</span>
         <div class="silo-track${drained ? ' silo-track--drain' : ''}">
-          <div class="silo-fill ${resource}${full ? ' full' : ''}" style="width:${pct.toFixed(1)}%"></div>
+          <div class="${fillClass}" style="width:${pct.toFixed(1)}%"></div>
         </div>
         <span class="silo-amount">${fmt(silo.amount)}/${fmt(silo.capacity)}</span>
+        ${full ? '<span class="silo-full-badge">FULL</span>' : ''}
+        ${rateStr ? `<span class="silo-rate ${resource}">${rateStr}</span>` : ''}
       `;
       el.appendChild(row);
     }

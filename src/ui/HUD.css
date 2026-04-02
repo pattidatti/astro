@@ -196,12 +196,34 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
+.silo-fill.warning { animation: silo-pulse 1.2s ease-in-out infinite; }
 .silo-amount {
   font-family: 'Orbitron', sans-serif;
   font-size: 14px;
   color: var(--dune-sand-dim);
   width: 100px;
   text-align: right;
+  flex-shrink: 0;
+}
+.silo-rate {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  opacity: 0.7;
+  width: 64px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.silo-rate.ore     { color: var(--dune-gold); }
+.silo-rate.energy  { color: #4af0ff; }
+.silo-rate.crystal { color: #cc44ff; }
+.silo-full-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  color: #ff4444;
+  background: rgba(136,34,34,0.4);
+  padding: 1px 6px;
+  border-radius: 3px;
+  animation: silo-pulse 1.2s ease-in-out infinite;
   flex-shrink: 0;
 }
 
@@ -828,33 +850,82 @@
 }
 
 /* ══════════════════════════════════════════════════════
-   TOAST NOTIFICATIONS
+   STATISTICS PANEL
    ══════════════════════════════════════════════════════ */
-#toast {
+.stats-section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--dune-gold-dim);
+  margin: 14px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(212, 168, 67, 0.15);
+}
+.stats-val {
+  font-family: 'Orbitron', sans-serif;
+  color: var(--dune-gold-bright);
+}
+.stats-ore     { color: var(--dune-gold) !important; }
+.stats-energy  { color: #4af0ff !important; }
+.stats-crystal { color: #cc44ff !important; }
+
+/* ══════════════════════════════════════════════════════
+   MINIMAP
+   ══════════════════════════════════════════════════════ */
+#minimap-canvas {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--dune-border);
+  z-index: 50;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+#minimap-canvas.minimap-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════════════
+   TOAST NOTIFICATIONS (queue)
+   ══════════════════════════════════════════════════════ */
+#toast-container {
   position: fixed;
   bottom: 40px;
   left: 50%;
-  transform: translateX(-50%) translateY(16px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  z-index: 200;
+  pointer-events: none;
+}
+.toast-item {
   background: rgba(10,12,16,0.96);
   border: 1px solid var(--dune-gold-dim);
+  border-left: 3px solid var(--dune-gold);
   padding: 10px 24px;
   font-family: 'Orbitron', sans-serif;
-  font-size: 16px;
+  font-size: 14px;
   letter-spacing: 2px;
   color: var(--dune-gold);
   text-shadow: 0 0 8px rgba(212,168,67,0.3);
   box-shadow: 0 0 20px rgba(212,168,67,0.1);
   border-radius: 4px;
-  z-index: 200;
-  opacity: 0;
-  transition: opacity 0.22s, transform 0.22s;
-  pointer-events: none;
   white-space: nowrap;
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
-#toast.on {
+.toast-item.toast-visible {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
 }
+.toast-info    { border-left-color: var(--dune-gold); }
+.toast-success { border-left-color: var(--dune-green); }
+.toast-warn    { border-left-color: #c67b30; }
+.toast-error   { border-left-color: var(--dune-red); }
 
 /* ══════════════════════════════════════════════════════
    COLONY SHIP
