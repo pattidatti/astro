@@ -10,9 +10,10 @@ const MAX_COLONY_SHIPS = 3;
  * Driven by RouteSystem via shipLaunched/shipArrived GameState events.
  */
 export class ShipManager3D {
-  constructor(scene, animationLoop, galaxy) {
-    this._scene  = scene;
-    this._galaxy = galaxy;
+  constructor(scene, animationLoop, galaxy, inputManager = null) {
+    this._scene        = scene;
+    this._galaxy       = galaxy;
+    this._inputManager = inputManager;
     this._pool   = [];
     this._active = new Map(); // shipId → { ship3d, routeData }
 
@@ -35,9 +36,14 @@ export class ShipManager3D {
     gameState.on('shipLaunched',       (data) => this._onShipLaunched(data));
     gameState.on('shipArrived',        (data) => this._onShipArrived(data));
     gameState.on('colonyShipLaunched', (data) => this._onShipLaunched(data));
+    gameState.on('colonyShipArrived',  (data) => this._onColonyShipArrived(data));
+    gameState.on('stateLoaded',        ()     => this._reconstructArrivingShips());
 
     // Per-frame update
     animationLoop.onUpdate((dt) => this._update(dt));
+
+    // Reconstruct colony ships that were in arrival orbit when game was last saved
+    this._reconstructArrivingShips();
   }
 
   _onShipLaunched(data) {
@@ -59,11 +65,24 @@ export class ShipManager3D {
     }
 
     this._active.set(data.id, { ship3d, data });
+
+    // Register cargo ships as clickable
+    if (!data.isColony && this._inputManager) {
+      const shipId = data.id;
+      this._inputManager.addClickable(ship3d._fuselage, () => {
+        gameState.emit('cargoShipClicked', { shipId });
+      });
+    }
   }
 
   _onShipArrived(data) {
     const entry = this._active.get(data.id);
     if (!entry) return;
+
+    // Unregister clickable before deactivating
+    if (!data.isColony && this._inputManager) {
+      this._inputManager.removeClickable(entry.ship3d._fuselage);
+    }
 
     entry.ship3d.deactivate();
     if (entry.data.isColony) {
@@ -74,15 +93,66 @@ export class ShipManager3D {
     this._active.delete(data.id);
   }
 
+  _onColonyShipArrived(data) {
+    // Find the colony ship that was orbiting the destination planet
+    for (const [shipId, entry] of this._active) {
+      if (entry.data.isColony && entry.data.toPlanet === data.toPlanetId) {
+        entry.ship3d.deactivate();
+        this._colonyPool.push(entry.ship3d);
+        this._active.delete(shipId);
+        break;
+      }
+    }
+  }
+
+  _reconstructArrivingShips() {
+    for (const ship of gameState.colonyShipsArriving) {
+      if (this._active.has(ship.id)) continue; // already tracked
+      if (this._colonyPool.length === 0) break;
+      const ship3d = this._colonyPool.pop();
+      ship3d.group.visible = true;
+      this._active.set(ship.id, {
+        ship3d,
+        data: {
+          id: ship.id,
+          fromPlanet: ship.fromPlanetId,
+          toPlanet: ship.toPlanetId,
+          isColony: true,
+          duration: 1,
+          t: 1,
+          orbitPhase: true,
+          orbitTime: 0,
+        },
+      });
+    }
+  }
+
   _update(_dt) {
     for (const [shipId, entry] of this._active) {
       // Colony ships self-manage their t (not tracked in gameState.activeShips)
       if (entry.data.isColony) {
+        if (entry.data.orbitPhase) {
+          // Orbiting destination planet — wait for baseBuilt to trigger colonyShipArrived
+          entry.data.orbitTime = (entry.data.orbitTime || 0) + _dt;
+          const toPos = this._galaxy.getPlanetWorldPosition(entry.data.toPlanet);
+          if (toPos) {
+            const radius = 20;
+            const angle = entry.data.orbitTime * 0.08 + Math.PI;
+            entry.ship3d.group.position.set(
+              toPos.x + Math.cos(angle) * radius,
+              toPos.y + Math.sin(angle * 0.3) * 2,
+              toPos.z + Math.sin(angle) * radius
+            );
+            entry.ship3d.group.rotation.y = -angle + Math.PI / 2;
+          }
+          continue;
+        }
+
         entry.data.t += _dt / entry.data.duration;
         if (entry.data.t >= 1) {
-          entry.ship3d.deactivate();
-          this._colonyPool.push(entry.ship3d);
-          this._active.delete(shipId);
+          entry.data.t = 1;
+          entry.data.orbitPhase = true;
+          entry.data.orbitTime = 0;
           continue;
         }
         const fromPos = this._galaxy.getPlanetWorldPosition(entry.data.fromPlanet);
@@ -112,6 +182,12 @@ export class ShipManager3D {
 
   /** Get world position of an active colony ship (for camera tracking) */
   getColonyShipPosition(shipId) {
+    const entry = this._active.get(shipId);
+    return entry?.ship3d?.group?.position ?? null;
+  }
+
+  /** Get world position of an active cargo ship (for camera tracking) */
+  getShipPosition(shipId) {
     const entry = this._active.get(shipId);
     return entry?.ship3d?.group?.position ?? null;
   }

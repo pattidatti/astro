@@ -23,18 +23,35 @@ const SOUNDS = {
 const AudioManager = {
   _ctx: null,
   _masterGain: null,
+  _sfxGain: null,
+  _musicGain: null,
   _buffers: new Map(),
   _unlocked: false,
   _muted: false,
   _volume: 0.7,
+  _sfxVolume: 0.8,
+  _musicVolume: 0.8,
 
   async init() {
-    this._volume = parseFloat(localStorage.getItem('astro_audio_vol') ?? '0.7');
-    this._muted  = localStorage.getItem('astro_audio_mute') === '1';
+    this._volume      = parseFloat(localStorage.getItem('astro_audio_vol')   ?? '0.7');
+    this._sfxVolume   = parseFloat(localStorage.getItem('astro_sfx_vol')     ?? '0.8');
+    this._musicVolume = parseFloat(localStorage.getItem('astro_music_vol')   ?? '0.8');
+    this._muted       = localStorage.getItem('astro_audio_mute') === '1';
+
     this._ctx = new AudioContext();
+
     this._masterGain = this._ctx.createGain();
     this._masterGain.gain.value = this._muted ? 0 : this._volume;
     this._masterGain.connect(this._ctx.destination);
+
+    this._sfxGain = this._ctx.createGain();
+    this._sfxGain.gain.value = this._sfxVolume;
+    this._sfxGain.connect(this._masterGain);
+
+    this._musicGain = this._ctx.createGain();
+    this._musicGain.gain.value = this._musicVolume;
+    this._musicGain.connect(this._masterGain);
+
     await this._loadAll();
   },
 
@@ -54,7 +71,7 @@ const AudioManager = {
     const gain = this._ctx.createGain();
     gain.gain.value = Math.min(1, volume);
     src.connect(gain);
-    gain.connect(this._masterGain);
+    gain.connect(this._sfxGain);
     src.start(0);
   },
 
@@ -66,9 +83,25 @@ const AudioManager = {
     localStorage.setItem('astro_audio_vol', String(this._volume));
   },
 
-  getVolume() {
-    return this._volume;
+  getVolume() { return this._volume; },
+
+  setSfxVolume(v) {
+    this._sfxVolume = Math.max(0, Math.min(1, v));
+    if (this._sfxGain) this._sfxGain.gain.value = this._sfxVolume;
+    localStorage.setItem('astro_sfx_vol', String(this._sfxVolume));
   },
+
+  getSfxVolume() { return this._sfxVolume; },
+
+  setMusicVolume(v) {
+    this._musicVolume = Math.max(0, Math.min(1, v));
+    if (this._musicGain) this._musicGain.gain.value = this._musicVolume;
+    localStorage.setItem('astro_music_vol', String(this._musicVolume));
+  },
+
+  getMusicVolume() { return this._musicVolume; },
+
+  getMusicGainNode() { return this._musicGain; },
 
   toggleMute() {
     this._muted = !this._muted;
@@ -79,9 +112,7 @@ const AudioManager = {
     return this._muted;
   },
 
-  isMuted() {
-    return this._muted;
-  },
+  isMuted() { return this._muted; },
 
   async _loadAll() {
     const entries = Object.entries(SOUNDS);

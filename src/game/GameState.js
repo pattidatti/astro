@@ -70,6 +70,14 @@ class GameState extends EventEmitter {
   constructor() {
     super();
     this._initFresh();
+    // When base is built on a planet, remove any waiting arrival colony ship
+    this.on('baseBuilt', (planetId) => {
+      const idx = this.colonyShipsArriving.findIndex(s => s.toPlanetId === planetId);
+      if (idx !== -1) {
+        const ship = this.colonyShipsArriving.splice(idx, 1)[0];
+        this.emit('colonyShipArrived', ship);
+      }
+    });
   }
 
   _initFresh() {
@@ -81,6 +89,7 @@ class GameState extends EventEmitter {
     this.activeShips = []; // NOT serialized — runtime only
     this.colonyShipsInOrbit = []; // [{ id, fromPlanetId }]
     this.colonyShipsInFlight = []; // [{ id, fromPlanetId, toPlanetId, duration, elapsed }]
+    this.colonyShipsArriving = []; // [{ id, fromPlanetId, toPlanetId }] — in orbit at destination, waiting for base
     this.tutorialStep = 0;
     this.lastSaved = Date.now();
 
@@ -258,12 +267,10 @@ class GameState extends EventEmitter {
       ship.elapsed += dt;
       if (ship.elapsed >= ship.duration) {
         this.colonyShipsInFlight.splice(i, 1);
+        const arrived = { id: ship.id, fromPlanetId: ship.fromPlanetId, toPlanetId: ship.toPlanetId };
+        this.colonyShipsArriving.push(arrived);
         this._finalizeColonization(ship.fromPlanetId, ship.toPlanetId);
-        this.emit('colonyShipArrived', {
-          id: ship.id,
-          fromPlanetId: ship.fromPlanetId,
-          toPlanetId: ship.toPlanetId,
-        });
+        this.emit('colonyShipArriving', arrived);
       }
     }
   }
@@ -707,6 +714,7 @@ class GameState extends EventEmitter {
       routes: JSON.parse(JSON.stringify(this.routes)),
       colonyShipsInOrbit: JSON.parse(JSON.stringify(this.colonyShipsInOrbit)),
       colonyShipsInFlight: JSON.parse(JSON.stringify(this.colonyShipsInFlight)),
+      colonyShipsArriving: JSON.parse(JSON.stringify(this.colonyShipsArriving)),
       activeAttacks: attacks,
       hyperlanePatrols: JSON.parse(JSON.stringify(this.hyperlanePatrols)),
       lastAttackTime: { ...this.lastAttackTime },
@@ -732,6 +740,7 @@ class GameState extends EventEmitter {
     this.activeShips         = []; // reconstructed by RouteSystem
     this.colonyShipsInOrbit  = data.colonyShipsInOrbit ?? [];
     this.colonyShipsInFlight = data.colonyShipsInFlight ?? [];
+    this.colonyShipsArriving = data.colonyShipsArriving ?? [];
     this.activeAttacks       = data.activeAttacks ?? [];
     this.hyperlanePatrols    = data.hyperlanePatrols ?? [];
     this.lastAttackTime      = data.lastAttackTime ?? {};

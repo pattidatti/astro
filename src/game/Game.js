@@ -72,10 +72,40 @@ export function createGame() {
   }));
   cameraController.setPlanetColliders(planetColliders);
 
+  // --- Ship tooltip ---
+  let _selectedShipId = null;
+  const _shipTooltipEl = document.createElement('div');
+  _shipTooltipEl.id = 'ship-tooltip';
+  _shipTooltipEl.style.display = 'none';
+  document.getElementById('hud-overlay').appendChild(_shipTooltipEl);
+
+  const _fmtEta = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}m ${s}s`;
+  };
+
+  const _deselectShip = () => {
+    _selectedShipId = null;
+    _shipTooltipEl.style.display = 'none';
+  };
+
+  gameState.on('cargoShipClicked', ({ shipId }) => {
+    const ship = gameState.activeShips.find(s => s.id === shipId);
+    if (!ship) return;
+    _selectedShipId = shipId;
+    cameraController.trackObject(() => shipManager.getShipPosition(shipId), 15);
+  });
+
+  gameState.on('shipArrived', (data) => {
+    if (data.id === _selectedShipId) _deselectShip();
+  });
+
   // Register click targets
   for (const target of galaxy.getClickTargets()) {
     inputManager.addClickable(target.mesh, (hit) => {
       const { planetId, system } = target;
+      _deselectShip();
 
       if (gameState.ownedPlanets.includes(planetId)) {
         AudioManager.play('PLANET_CLICK_3D');
@@ -92,13 +122,14 @@ export function createGame() {
   // Register station click targets
   for (const target of galaxy.getStationClickTargets()) {
     inputManager.addClickable(target.mesh, () => {
+      _deselectShip();
       AudioManager.play('PLANET_CLICK_3D');
       cameraController.trackObject(() => target.system.stationWorldPosition, 12);
     });
   }
 
   // --- Ships ---
-  const shipManager = new ShipManager3D(sceneManager.scene, animationLoop, galaxy);
+  const shipManager = new ShipManager3D(sceneManager.scene, animationLoop, galaxy, inputManager);
 
   // --- Enemy ships + combat effects ---
   const enemyManager = new EnemyManager3D(sceneManager.scene, animationLoop, galaxy);
@@ -278,6 +309,34 @@ export function createGame() {
     combatEffects.update(dt);
     spawnFlight.update(dt);
     renderPipeline.tick(time);
+
+    // Ship tooltip: update position and ETA each frame
+    if (_selectedShipId !== null) {
+      const ship = gameState.activeShips.find(s => s.id === _selectedShipId);
+      if (ship) {
+        const pos = shipManager.getShipPosition(ship.id);
+        if (pos) {
+          const ndc = pos.clone().project(camera);
+          const sx = (ndc.x * 0.5 + 0.5) * window.innerWidth;
+          const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+          const remaining = Math.max(0, (1 - ship.t) * ship.duration);
+          const fromDef = PLANETS.find(p => p.id === ship.fromPlanet);
+          const toDef   = PLANETS.find(p => p.id === ship.toPlanet);
+          const resIcons = { ore: '⬡', energy: '⚡', crystal: '◈' };
+          _shipTooltipEl.style.display = 'block';
+          _shipTooltipEl.style.left = (sx + 18) + 'px';
+          _shipTooltipEl.style.top  = (sy - 20) + 'px';
+          _shipTooltipEl.innerHTML = `
+            <div class="ship-tt-title">CARGO SHIP</div>
+            <div class="ship-tt-cargo">${resIcons[ship.resource] || '⬡'} ${Math.floor(ship.amount)} ${ship.resource.toUpperCase()}</div>
+            <div class="ship-tt-route">${fromDef?.name || ship.fromPlanet} → ${toDef?.name || ship.toPlanet}</div>
+            <div class="ship-tt-eta">ETA: ${_fmtEta(remaining)}</div>
+          `;
+        }
+      } else {
+        _deselectShip();
+      }
+    }
 
     // God rays: activate when a star-type planet is near and on-screen
     const activeDef = gameState.activePlanetDef;

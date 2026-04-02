@@ -6,6 +6,7 @@ import { SolarSystem } from './SolarSystem.js';
 import { Star3D } from '../objects/Star3D.js';
 import { NebulaVolume } from '../effects/NebulaVolume.js';
 import { PatrolDot3D } from '../objects/PatrolDot3D.js';
+import { RouteLane3D } from './RouteLane3D.js';
 import { gameState } from '../GameState.js';
 
 /**
@@ -29,6 +30,7 @@ export class Galaxy {
     this._createCosmicNebulas();
     this._createPatrolDots();
     this._createThreatIndicators();
+    this._initRouteLanes();
   }
 
   _createCosmicNebulas() {
@@ -115,6 +117,29 @@ export class Galaxy {
       this._patrolDots.push(dot);
     }
     this._activePatrolDots = new Map(); // patrolId → PatrolDot3D
+  }
+
+  _initRouteLanes() {
+    this._routeLanes = new Map(); // routeId → RouteLane3D
+
+    // Create lanes for any routes already in state (loaded save)
+    for (const route of gameState.routes) {
+      this._routeLanes.set(route.id, new RouteLane3D(route, this.group));
+    }
+
+    gameState.on('routeAdded', (route) => {
+      if (!this._routeLanes.has(route.id)) {
+        this._routeLanes.set(route.id, new RouteLane3D(route, this.group));
+      }
+    });
+
+    gameState.on('routeRemoved', (routeId) => {
+      const lane = this._routeLanes.get(routeId);
+      if (lane) {
+        lane.dispose();
+        this._routeLanes.delete(routeId);
+      }
+    });
   }
 
   _createThreatIndicators() {
@@ -211,6 +236,16 @@ export class Galaxy {
     // Update patrol dots and threat indicators
     this._updatePatrolDots(time);
     this._updateThreatIndicators(time);
+
+    // Update route lanes
+    for (const [routeId, lane] of this._routeLanes) {
+      const route = gameState.routes.find(r => r.id === routeId);
+      if (!route) continue;
+      const fromPos = this.getPlanetWorldPosition(route.fromPlanet);
+      const toPos   = this.getPlanetWorldPosition(route.toPlanet);
+      const hasShip = gameState.activeShips.some(s => s.routeId === routeId);
+      lane.update(dt, fromPos, toPos, route.active, hasShip);
+    }
 
     // Update each planet system's LOD — distance measured to planet, not center
     for (const id in this.systems) {

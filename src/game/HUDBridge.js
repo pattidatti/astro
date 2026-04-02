@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { gameState } from './GameState.js';
 import { PLANETS } from './data/planets.js';
 import { PlanetPanel } from './ui/PlanetPanel.js';
@@ -25,12 +26,15 @@ export class HUDBridge {
     this._suppressNextPlanetChanged = false;
 
     this.dom = {
-      upgTooltip:       document.getElementById('upg-tooltip'),
-      planetTooltip:    document.getElementById('planet-tooltip'),
-      stationTargetBox: document.getElementById('station-target-box'),
-      toast:            document.getElementById('toast'),
+      upgTooltip:          document.getElementById('upg-tooltip'),
+      planetTooltip:       document.getElementById('planet-tooltip'),
+      stationTargetBox:    document.getElementById('station-target-box'),
+      colonyShipTargetBox: document.getElementById('colony-ship-target-box'),
+      toast:               document.getElementById('toast'),
     };
     this._hoveredStationId = null;
+    this._hoveredColonyShipPlanetId = null;
+    this._tmpVec = new THREE.Vector3();
 
     if (onMenu) {
       document.getElementById('menu-btn')?.addEventListener('pointerdown', (e) => {
@@ -41,6 +45,7 @@ export class HUDBridge {
 
     this._setupPlanetHover();
     this._setupStationHover();
+    this._setupColonyShipHover();
     this._setupEvents();
 
     // Show welcome toast
@@ -125,6 +130,12 @@ export class HUDBridge {
       tt.classList.add('visible');
       tt.style.left = (x + 16) + 'px';
       tt.style.top  = (y - 10) + 'px';
+    });
+  }
+
+  _setupColonyShipHover() {
+    this.game.inputManager.onHoverColonyShip((planetId) => {
+      this._hoveredColonyShipPlanetId = planetId;
     });
   }
 
@@ -231,6 +242,24 @@ export class HUDBridge {
       }
     } else {
       this.dom.stationTargetBox.classList.remove('visible');
+    }
+
+    // Update colony ship target box screen position
+    if (this._hoveredColonyShipPlanetId) {
+      const sys = galaxy.getSystem(this._hoveredColonyShipPlanetId);
+      if (sys?.colonyShip) {
+        sys.colonyShip.group.getWorldPosition(this._tmpVec);
+        this._tmpVec.project(camera);
+        const x = (this._tmpVec.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-this._tmpVec.y * 0.5 + 0.5) * window.innerHeight;
+        this.dom.colonyShipTargetBox.style.left = x + 'px';
+        this.dom.colonyShipTargetBox.style.top  = y + 'px';
+        this.dom.colonyShipTargetBox.classList.add('visible');
+      } else {
+        this.dom.colonyShipTargetBox.classList.remove('visible');
+      }
+    } else {
+      this.dom.colonyShipTargetBox.classList.remove('visible');
     }
 
     // Check camera distance to focused planet to decide panel visibility

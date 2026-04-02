@@ -15,6 +15,8 @@ export class InputManager {
     this._onHoverCallbacks = [];
     this._hoveredStation = null;
     this._onHoverStationCallbacks = [];
+    this._hoveredColonyShip = null;
+    this._onHoverColonyShipCallbacks = [];
     this._onMissedClickCallbacks = [];
 
     // Click handler — only fire on pointerup if it wasn't a drag
@@ -41,6 +43,11 @@ export class InputManager {
   /** Register a station hover callback: fn(stationPlanetId|null, clientX, clientY) */
   onHoverStation(fn) {
     this._onHoverStationCallbacks.push(fn);
+  }
+
+  /** Register a colony ship hover callback: fn(fromPlanetId|null, clientX, clientY) */
+  onHoverColonyShip(fn) {
+    this._onHoverColonyShipCallbacks.push(fn);
   }
 
   /** Register a callback fired when a click lands on nothing registered */
@@ -98,14 +105,31 @@ export class InputManager {
       if (stationId) break;
     }
 
+    // Colony ship hover (only if no station hovered)
+    let colonyShipPlanetId = null;
+    if (!stationId) {
+      for (const hit of hits) {
+        if (hit.object.userData?.isColonyShip) {
+          colonyShipPlanetId = hit.object.userData.colonyShipPlanetId;
+          break;
+        }
+      }
+    }
+
     // Station hover
     if (stationId !== this._hoveredStation) {
       this._hoveredStation = stationId;
       for (const fn of this._onHoverStationCallbacks) fn(stationId, e.clientX, e.clientY);
     }
 
-    // Planet hover — suppress if hovering station
-    const effectivePlanetId = stationId ? null : planetId;
+    // Colony ship hover
+    if (colonyShipPlanetId !== this._hoveredColonyShip) {
+      this._hoveredColonyShip = colonyShipPlanetId;
+      for (const fn of this._onHoverColonyShipCallbacks) fn(colonyShipPlanetId, e.clientX, e.clientY);
+    }
+
+    // Planet hover — suppress if hovering station or colony ship
+    const effectivePlanetId = (stationId || colonyShipPlanetId) ? null : planetId;
     if (effectivePlanetId !== this._hoveredPlanet) {
       this._hoveredPlanet = effectivePlanetId;
       for (const fn of this._onHoverCallbacks) fn(effectivePlanetId, e.clientX, e.clientY);

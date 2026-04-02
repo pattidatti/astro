@@ -1,7 +1,7 @@
 import { gameState, colonyLaunchEnergyCost, colonyTravelDuration } from '../GameState.js';
 import { PLANETS } from '../data/planets.js';
 import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult } from '../data/upgrades.js';
-import { createRoute, SHIPPABLE_RESOURCES } from '../data/routes.js';
+import { createRoute, calcTravelDuration, SHIPPABLE_RESOURCES } from '../data/routes.js';
 import { DefensePanel } from './DefensePanel.js';
 import * as THREE from 'three';
 import { AudioManager } from '../audio/AudioManager.js';
@@ -360,23 +360,49 @@ export class PlanetPanel {
     const el = document.getElementById('panel-routes');
     if (!el) return;
 
+    const ps = gameState.getPlanetState(this._planetId);
     const myRoutes = gameState.routes.filter(r => r.fromPlanet === this._planetId);
 
     el.innerHTML = `<div class="panel-section-title">SHIP ROUTES</div>`;
 
     for (const route of myRoutes) {
       const toDef = PLANETS.find(p => p.id === route.toPlanet);
+
+      // Compute display % from current silo capacity
+      const silo = ps?.silos?.[route.resource];
+      const pct  = silo?.capacity > 0 ? Math.round(route.amount / silo.capacity * 100) : '?';
+
+      // Travel time
+      const speedLv = ps?.baseLevels?.shipSpeed ?? 0;
+      const travelSec = calcTravelDuration(route.fromPlanet, route.toPlanet, speedLv);
+      const travelStr = `~${Math.floor(travelSec / 60)}m ${Math.floor(travelSec % 60)}s`;
+
+      // In-transit ship
+      const inTransitShip = gameState.activeShips.find(s => s.routeId === route.id);
+      const etaStr = inTransitShip
+        ? (() => {
+            const rem = Math.max(0, (1 - inTransitShip.t) * inTransitShip.duration);
+            return `${Math.floor(rem / 60)}m ${Math.floor(rem % 60)}s`;
+          })()
+        : null;
+
       const row = document.createElement('div');
       row.className = 'route-item';
       row.innerHTML = `
         <div class="route-status ${route.active ? '' : 'inactive'}"></div>
-        <div class="route-from-to">${toDef?.name || route.toPlanet}</div>
-        <div class="route-resource">${RESOURCE_ICONS[route.resource]} ${fmt(route.amount)}</div>
+        <div class="route-main">
+          <div class="route-top-row">
+            <span class="route-from-to">${toDef?.name || route.toPlanet}</span>
+            <span class="route-resource">${RESOURCE_ICONS[route.resource]} ${pct}% <span class="route-amount-hint">(${fmt(route.amount)})</span></span>
+          </div>
+          <div class="route-meta">every ${route.intervalMinutes}m · ${travelStr}</div>
+          ${etaStr ? `<div class="route-transit-indicator">🚀 in transit — ETA ${etaStr}</div>` : ''}
+        </div>
         <button class="route-delete" title="Remove route">✕</button>
       `;
       row.querySelector('.route-delete').addEventListener('pointerdown', (e) => {
         e.stopPropagation();
-        gameState.removeRoute(route.id); // routeRemoved event in HUDBridge plays the sound
+        gameState.removeRoute(route.id);
       });
       el.appendChild(row);
     }
@@ -397,7 +423,7 @@ export class PlanetPanel {
     addBtn.style.display = 'none';
 
     const form = document.createElement('div');
-    form.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:8px;';
+    form.className = 'route-add-form';
 
     const ownedExcludingSelf = gameState.ownedPlanets.filter(id => id !== this._planetId);
     if (ownedExcludingSelf.length === 0) {
@@ -408,31 +434,80 @@ export class PlanetPanel {
 
     const ps = gameState.getPlanetState(this._planetId);
     const availableResources = ps ? Object.keys(ps.silos).filter(r => ps.silos[r].capacity > 0) : ['ore'];
+    const defaultResource = availableResources[0] || 'ore';
+    const defaultSilo = ps?.silos?.[defaultResource];
+    const defaultCapacity = defaultSilo?.capacity ?? 1000;
+    const defaultPct = 50;
+    const defaultAmt = Math.round(defaultPct / 100 * defaultCapacity);
+    const defaultTo = ownedExcludingSelf[0];
+    const speedLv = ps?.baseLevels?.shipSpeed ?? 0;
+    const defaultTravel = calcTravelDuration(this._planetId, defaultTo, speedLv);
 
     form.innerHTML = `
-      <select class="route-select" id="rf-to" style="background:#0a0c10;color:var(--dune-sand);border:1px solid var(--dune-border);padding:4px;font-size:11px;border-radius:3px">
+      <div class="rf-label">DESTINATION</div>
+      <select class="route-select" id="rf-to">
         ${ownedExcludingSelf.map(id => {
           const def = PLANETS.find(p => p.id === id);
           return `<option value="${id}">${def?.name || id}</option>`;
         }).join('')}
       </select>
-      <select class="route-select" id="rf-res" style="background:#0a0c10;color:var(--dune-sand);border:1px solid var(--dune-border);padding:4px;font-size:11px;border-radius:3px">
+
+      <div class="rf-label">RESOURCE</div>
+      <select class="route-select" id="rf-res">
         ${availableResources.map(r => `<option value="${r}">${RESOURCE_LABELS[r]}</option>`).join('')}
       </select>
-      <input id="rf-amt" type="number" value="100" min="1" placeholder="Amount" style="background:#0a0c10;color:var(--dune-sand);border:1px solid var(--dune-border);padding:4px;font-size:11px;border-radius:3px">
-      <input id="rf-int" type="number" value="5" min="1" placeholder="Interval (min)" style="background:#0a0c10;color:var(--dune-sand);border:1px solid var(--dune-border);padding:4px;font-size:11px;border-radius:3px">
-      <div style="display:flex;gap:6px">
-        <button id="rf-confirm" style="flex:1;padding:6px;background:rgba(212,168,67,0.1);border:1px solid var(--dune-border-bright);color:var(--dune-gold);font-size:10px;border-radius:3px;cursor:pointer">CONFIRM</button>
-        <button id="rf-cancel" style="flex:1;padding:6px;background:transparent;border:1px solid var(--dune-border);color:var(--dune-text-dim);font-size:10px;border-radius:3px;cursor:pointer">CANCEL</button>
+
+      <div class="rf-label">AMOUNT PER TRIP</div>
+      <div class="route-pct-row">
+        <input type="range" id="rf-pct" min="1" max="100" value="${defaultPct}" class="route-pct-slider">
+        <span id="rf-pct-label" class="route-pct-label">${defaultPct}% — ${fmt(defaultAmt)}</span>
+      </div>
+
+      <div class="rf-label">INTERVAL (MINUTES)</div>
+      <input id="rf-int" type="number" value="5" min="1" class="route-select">
+
+      <div id="rf-travel" class="route-travel-hint">Travel time: ~${Math.floor(defaultTravel / 60)}m ${Math.floor(defaultTravel % 60)}s</div>
+
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <button id="rf-confirm" class="rf-btn rf-btn-confirm">CONFIRM</button>
+        <button id="rf-cancel"  class="rf-btn rf-btn-cancel">CANCEL</button>
       </div>
     `;
     container.appendChild(form);
+
+    // Live slider update
+    const updateSliderLabel = () => {
+      const resource  = form.querySelector('#rf-res').value;
+      const silo      = ps?.silos?.[resource];
+      const capacity  = silo?.capacity ?? 1000;
+      const sliderEl  = form.querySelector('#rf-pct');
+      const pct       = parseInt(sliderEl.value, 10);
+      const amt       = Math.round(pct / 100 * capacity);
+      sliderEl.style.setProperty('--val', pct + '%');
+      form.querySelector('#rf-pct-label').textContent = `${pct}% — ${fmt(amt)}`;
+    };
+    // Initialize gradient on load
+    form.querySelector('#rf-pct').style.setProperty('--val', defaultPct + '%');
+
+    const updateTravelTime = () => {
+      const to    = form.querySelector('#rf-to').value;
+      const travel = calcTravelDuration(this._planetId, to, speedLv);
+      form.querySelector('#rf-travel').textContent =
+        `Travel time: ~${Math.floor(travel / 60)}m ${Math.floor(travel % 60)}s`;
+    };
+
+    form.querySelector('#rf-pct').addEventListener('input', updateSliderLabel);
+    form.querySelector('#rf-res').addEventListener('change', updateSliderLabel);
+    form.querySelector('#rf-to').addEventListener('change', updateTravelTime);
 
     form.querySelector('#rf-confirm').addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       const to       = form.querySelector('#rf-to').value;
       const resource = form.querySelector('#rf-res').value;
-      const amount   = parseFloat(form.querySelector('#rf-amt').value) || 100;
+      const silo     = ps?.silos?.[resource];
+      const capacity = silo?.capacity ?? 1000;
+      const pct      = parseInt(form.querySelector('#rf-pct').value, 10);
+      const amount   = Math.max(1, Math.round(pct / 100 * capacity));
       const interval = parseFloat(form.querySelector('#rf-int').value) || 5;
       const route = createRoute(this._planetId, to, resource, amount, interval);
       gameState.addRoute(route);

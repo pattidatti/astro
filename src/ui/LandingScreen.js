@@ -27,6 +27,7 @@ export class LandingScreen {
     this._resolve = null;
     this._newGamePending = false;
     this._newGameTimer = null;
+    this._subpanelTimer = null;
     this._onKeyDown = (e) => { if (e.key === 'Escape') this._handleResume(); };
     this._overlay = this._buildDOM();
     document.body.appendChild(this._overlay);
@@ -219,6 +220,7 @@ export class LandingScreen {
 
   async _showCloudSavesPanel() {
     this._closeSubPanel();
+    clearTimeout(this._subpanelTimer);
     const panel = document.getElementById('landing-subpanel');
     panel.innerHTML = `
       <div class="landing-panel-box">
@@ -286,20 +288,32 @@ export class LandingScreen {
 
   _showSettingsPanel() {
     this._closeSubPanel();
+    clearTimeout(this._subpanelTimer);
     const panel = document.getElementById('landing-subpanel');
-    const muted = AudioManager.isMuted();
-    const vol   = AudioManager.getVolume();
+    const muted      = AudioManager.isMuted();
+    const vol        = AudioManager.getVolume();
+    const musicVol   = AudioManager.getMusicVolume();
+    const sfxVol     = AudioManager.getSfxVolume();
+    const sliderStyle = 'width:90px;accent-color:var(--dune-gold);vertical-align:middle';
+    const muteStyle   = 'cursor:pointer;background:transparent;border:1px solid var(--dune-border);color:var(--dune-gold);padding:2px 10px;font-family:inherit;font-size:inherit';
     panel.innerHTML = `
       <div class="landing-panel-box">
         <div class="landing-panel-title">SETTINGS</div>
         <div class="landing-setting-row">
-          <span class="landing-setting-label">VOLUME</span>
-          <input type="range" id="audio-vol-slider" min="0" max="1" step="0.05" value="${vol}"
-            style="width:90px;accent-color:var(--dune-gold);vertical-align:middle">
+          <span class="landing-setting-label">MASTER</span>
+          <input type="range" id="audio-master-slider" min="0" max="1" step="0.05" value="${vol}" style="${sliderStyle}">
+        </div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">MUSIKK</span>
+          <input type="range" id="audio-music-slider" min="0" max="1" step="0.05" value="${musicVol}" style="${sliderStyle}">
+        </div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">EFFEKTER</span>
+          <input type="range" id="audio-sfx-slider" min="0" max="1" step="0.05" value="${sfxVol}" style="${sliderStyle}">
         </div>
         <div class="landing-setting-row">
           <span class="landing-setting-label">MUTE</span>
-          <button id="audio-mute-btn" class="landing-setting-ctrl" style="cursor:pointer;background:transparent;border:1px solid var(--dune-border);color:var(--dune-gold);padding:2px 10px;font-family:inherit;font-size:inherit">${muted ? 'ON' : 'OFF'}</button>
+          <button id="audio-mute-btn" class="landing-setting-ctrl" style="${muteStyle}">${muted ? 'ON' : 'OFF'}</button>
         </div>
         <div class="landing-setting-row">
           <span class="landing-setting-label">RENDER QUALITY</span>
@@ -309,13 +323,18 @@ export class LandingScreen {
           <span class="landing-setting-label">BLOOM EFFECT</span>
           <span class="landing-setting-ctrl">ON</span>
         </div>
-        <div class="landing-coming-soon">— MORE SETTINGS IN FUTURE UPDATE —</div>
         <button class="landing-btn-back" id="panel-back">BACK</button>
       </div>
     `;
     panel.classList.add('open');
-    document.getElementById('audio-vol-slider').addEventListener('input', (e) => {
+    document.getElementById('audio-master-slider').addEventListener('input', (e) => {
       AudioManager.setVolume(parseFloat(e.target.value));
+    });
+    document.getElementById('audio-music-slider').addEventListener('input', (e) => {
+      AudioManager.setMusicVolume(parseFloat(e.target.value));
+    });
+    document.getElementById('audio-sfx-slider').addEventListener('input', (e) => {
+      AudioManager.setSfxVolume(parseFloat(e.target.value));
     });
     document.getElementById('audio-mute-btn').addEventListener('click', (e) => {
       const nowMuted = AudioManager.toggleMute();
@@ -326,9 +345,10 @@ export class LandingScreen {
   }
 
   _closeSubPanel() {
+    clearTimeout(this._subpanelTimer);
     const panel = document.getElementById('landing-subpanel');
     panel.classList.remove('open');
-    setTimeout(() => { panel.innerHTML = ''; }, 300);
+    this._subpanelTimer = setTimeout(() => { panel.innerHTML = ''; }, 300);
   }
 
   _updateFooter() {

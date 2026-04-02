@@ -1,5 +1,6 @@
 import { gameState } from './game/GameState.js';
 import { AudioManager } from './game/audio/AudioManager.js';
+import { MusicManager } from './game/audio/MusicManager.js';
 import { loadFromLocal, startAutoSave } from './storage.js';
 import { initFirebase, isFirebaseConfigured } from './firebase.js';
 import { onAuthReady, signInAnon, getCurrentUser } from './auth.js';
@@ -34,7 +35,9 @@ async function openPauseMenu() {
 
 async function boot() {
   // ── Phase 1: Infrastructure + 3D rendering ────────────────────
-  AudioManager.init().catch(e => console.warn('[AudioManager] init failed:', e));
+  AudioManager.init()
+    .then(() => MusicManager.init(AudioManager._ctx, AudioManager.getMusicGainNode()))
+    .catch(e => console.warn('[AudioManager] init failed:', e));
   initFirebase();
 
   if (isFirebaseConfigured()) {
@@ -90,6 +93,9 @@ async function boot() {
   }
 
   startAutoSave();
+
+  AudioManager.unlock();
+  MusicManager.start();
 
   // ── Phase 3: Game systems ──────────────────────────────────────
   new ProductionSystem(game.animationLoop);
