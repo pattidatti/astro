@@ -102,6 +102,9 @@ async function boot() {
   const routeSystem = new RouteSystem(game.animationLoop, hyperlanePatrolSystem);
   routeSystem.reconstructActiveShips();
 
+  // Track play time
+  game.animationLoop.onUpdate((dt) => { gameState.stats.playTimeSeconds += dt; });
+
   // ── Pause menu setup (defined before UI so onMenu callback is valid) ──
   let menuOpen = false;
   const openMenu = async () => {

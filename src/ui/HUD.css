@@ -695,6 +695,26 @@
 }
 
 /* ══════════════════════════════════════════════════════
+   STATISTICS PANEL
+   ══════════════════════════════════════════════════════ */
+.stats-section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--dune-gold-dim);
+  margin: 14px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(212, 168, 67, 0.15);
+}
+.stats-val {
+  font-family: 'Orbitron', sans-serif;
+  color: var(--dune-gold-bright);
+}
+.stats-ore     { color: var(--dune-gold) !important; }
+.stats-energy  { color: #4af0ff !important; }
+.stats-crystal { color: #cc44ff !important; }
+
+/* ══════════════════════════════════════════════════════
    MINIMAP
    ══════════════════════════════════════════════════════ */
 #minimap-canvas {
