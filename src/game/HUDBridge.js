@@ -211,6 +211,10 @@ export class HUDBridge {
       const p = PLANETS.find(x => x.id === planetId);
       this.toast(`🌍 RECOLONIZED: ${p?.name || planetId}`, 'success');
     });
+    gameState.on('siloFull', ({ planetId, resource }) => {
+      const p = PLANETS.find(x => x.id === planetId);
+      this.toast(`⚠ SILO FULL: ${resource.toUpperCase()} on ${p?.name || planetId}`, 'warn');
+    });
   }
 
   update(_dt) {

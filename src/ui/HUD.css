@@ -196,12 +196,34 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
+.silo-fill.warning { animation: silo-pulse 1.2s ease-in-out infinite; }
 .silo-amount {
   font-family: 'Orbitron', sans-serif;
   font-size: 14px;
   color: var(--dune-sand-dim);
   width: 100px;
   text-align: right;
+  flex-shrink: 0;
+}
+.silo-rate {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  opacity: 0.7;
+  width: 64px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.silo-rate.ore     { color: var(--dune-gold); }
+.silo-rate.energy  { color: #4af0ff; }
+.silo-rate.crystal { color: #cc44ff; }
+.silo-full-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  color: #ff4444;
+  background: rgba(136,34,34,0.4);
+  padding: 1px 6px;
+  border-radius: 3px;
+  animation: silo-pulse 1.2s ease-in-out infinite;
   flex-shrink: 0;
 }
 

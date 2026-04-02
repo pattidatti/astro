@@ -142,11 +142,17 @@ class GameState extends EventEmitter {
     if (!ps) return 0;
     const silo = ps.silos[resource];
     if (!silo || silo.capacity === 0) return 0;
+    const wasFull = silo.amount >= silo.capacity * 0.995;
     const space = silo.capacity - silo.amount;
     const added = Math.min(amount, space);
     if (added > 0) {
       silo.amount += added;
       this.emit('siloChanged', { planetId, resource, amount: silo.amount });
+    }
+    // Emit siloFull once when transitioning to full
+    const isFull = silo.amount >= silo.capacity * 0.995;
+    if (isFull && !wasFull) {
+      this.emit('siloFull', { planetId, resource });
     }
     return added;
   }
