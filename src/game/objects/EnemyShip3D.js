@@ -14,8 +14,8 @@ export class EnemyShip3D {
     this._type = null;
     this._targetPos = new THREE.Vector3();
     this._orbitAngle = Math.random() * Math.PI * 2;
-    this._orbitRadius = 12 + Math.random() * 6;
-    this._verticalOffset = (Math.random() - 0.5) * 4;
+    this._orbitRadius = 8 + Math.random() * 4;
+    this._verticalOffset = 18 + Math.random() * 6;
     this._speed = 1.0;
 
     this._buildMesh();
@@ -132,6 +132,8 @@ export class EnemyShip3D {
     this._targetPos.copy(targetPos);
     this._speed = speed || 1.0;
     this._orbitAngle = Math.random() * Math.PI * 2;
+    this._orbitRadius = 8 + Math.random() * 4;
+    this._verticalOffset = 18 + Math.random() * 6;
     this.group.visible = true;
 
     // Initialize position

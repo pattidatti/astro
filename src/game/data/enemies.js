@@ -11,7 +11,7 @@ export const ENEMY_TYPES = {
     id: 'interceptor',
     name: 'INTERCEPTOR',
     hp: 400,
-    damage: 5,        // DPS to target
+    damage: 1,        // DPS to target
     speed: 1.2,        // movement speed multiplier
     target: 'robots',  // what it attacks
     stealRate: 0,
@@ -22,7 +22,7 @@ export const ENEMY_TYPES = {
     id: 'bomber',
     name: 'BOMBER',
     hp: 750,
-    damage: 15,
+    damage: 2,
     speed: 0.8,
     target: 'station',
     stealRate: 0,
@@ -33,7 +33,7 @@ export const ENEMY_TYPES = {
     id: 'raider',
     name: 'RAIDER',
     hp: 500,
-    damage: 3,
+    damage: 1,
     speed: 1.0,
     target: 'silo',
     stealRate: 5,      // resources stolen per second
@@ -44,7 +44,7 @@ export const ENEMY_TYPES = {
     id: 'mothership',
     name: 'MOTHERSHIP',
     hp: 5000,
-    damage: 25,
+    damage: 5,
     speed: 0.3,
     target: 'station',
     stealRate: 0,

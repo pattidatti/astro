@@ -10,7 +10,7 @@ export const DEFENSE_TYPES = {
     desc: 'Turret mounted on the station. High damage, moderate fire rate.',
     maxLevel: 5,
     // Stats per level (index = level - 1)
-    damage:   [10, 14, 19, 25, 33],
+    damage:   [5, 7, 10, 13, 17],
     fireRate: [1.5, 1.6, 1.8, 2.0, 2.3],  // shots per second
     range: 'planet',  // fires at any enemy near the planet
     energyCost: [50, 150, 500, 2000, 8000],
@@ -21,7 +21,7 @@ export const DEFENSE_TYPES = {
     icon: '🛰',
     desc: 'Orbiting satellite. Lower damage but fast fire rate.',
     maxLevel: 5,
-    damage:   [6, 9, 12, 16, 22],
+    damage:   [3, 5, 6, 8, 11],
     fireRate: [2.0, 2.3, 2.6, 3.0, 3.5],
     range: 'orbit',
     energyCost: [80, 250, 800, 3000, 12000],
@@ -32,7 +32,7 @@ export const DEFENSE_TYPES = {
     icon: '🛡',
     desc: 'Armed patrol vessel. Can clear hyperlane threats.',
     maxLevel: 3,
-    damage:   [8, 13, 20],
+    damage:   [4, 7, 10],
     fireRate: [1.0, 1.2, 1.5],
     range: 'hyperlane',  // can also patrol hyperlanes
     energyCost: [200, 1000, 5000],
