@@ -5,6 +5,8 @@ import { getAllWorldPositions } from '../utils/CoordinateMapper.js';
 import { SolarSystem } from './SolarSystem.js';
 import { Star3D } from '../objects/Star3D.js';
 import { NebulaVolume } from '../effects/NebulaVolume.js';
+import { GalacticAsteroidBelt } from '../effects/GalacticAsteroidBelt.js';
+import { DustCloud } from '../effects/DustCloud.js';
 import { RouteLane3D } from './RouteLane3D.js';
 import { gameState } from '../GameState.js';
 
@@ -26,12 +28,52 @@ export class Galaxy {
     this.group.add(this.centralStar.group);
 
     this._createSystems();
+    this._createGalacticBelt();
+    this._createAmbientDustClouds();
     this._createCosmicNebulas();
     this._createThreatIndicators();
     this._initRouteLanes();
 
     /** Set by Game.js after scene is available. */
     this.roamingFleetManager = null;
+  }
+
+  _createGalacticBelt() {
+    this._galacticBelt = new GalacticAsteroidBelt({
+      particleCount: 4000,
+      innerRadius: 370,
+      outerRadius: 450,
+      heightVariation: 20,
+    });
+    this.group.add(this._galacticBelt.group);
+  }
+
+  _createAmbientDustClouds() {
+    const configs = [
+      { r: 200,  a: 0.8,  y:  12, scale: 5,  color: 0x4488ee },
+      { r: 290,  a: 2.5,  y:  -8, scale: 6,  color: 0xff6633 },
+      { r: 390,  a: 4.1,  y:  15, scale: 6,  color: 0xcc88ff },
+      { r: 430,  a: 1.2,  y:  -5, scale: 5,  color: 0xffee66 },
+      { r: 560,  a: 3.6,  y:  18, scale: 7,  color: 0xaaddff },
+      { r: 610,  a: 5.2,  y: -12, scale: 6,  color: 0xff88cc },
+      { r: 760,  a: 0.3,  y:   8, scale: 8,  color: 0x4488ee },
+      { r: 900,  a: 2.9,  y: -20, scale: 8,  color: 0xff7744 },
+      { r: 1020, a: 4.8,  y:  22, scale: 9,  color: 0xffaa33 },
+      { r: 1200, a: 1.7,  y: -10, scale: 10, color: 0xbb44bb },
+    ];
+
+    this._ambientDustClouds = configs.map(({ r, a, y, scale, color }) => {
+      const cloud = new DustCloud(color);
+      cloud.group.position.set(
+        Math.cos(a) * r,
+        y,
+        Math.sin(a) * r
+      );
+      cloud.group.scale.setScalar(scale);
+      cloud.setOpacity(0.18);
+      this.group.add(cloud.group);
+      return cloud;
+    });
   }
 
   _createCosmicNebulas() {
@@ -211,6 +253,14 @@ export class Galaxy {
       neb.update(time, camera);
     }
 
+    // Update galactic asteroid belt
+    this._galacticBelt.update(dt);
+
+    // Update ambient dust clouds
+    for (const cloud of this._ambientDustClouds) {
+      cloud.update(dt);
+    }
+
     // Update fleet visuals and threat indicators
     if (this.roamingFleetManager) this.roamingFleetManager.update(dt, time);
     this._updateThreatIndicators(time);
@@ -250,6 +300,10 @@ export class Galaxy {
     }
     for (const neb of this._cosmicNebulas) {
       neb.dispose();
+    }
+    this._galacticBelt.dispose();
+    for (const cloud of this._ambientDustClouds) {
+      cloud.dispose();
     }
   }
 }
