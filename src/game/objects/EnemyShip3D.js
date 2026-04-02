@@ -26,10 +26,35 @@ export class EnemyShip3D {
     this._approachTime = 0;
     this._approachDuration = 1.5;
 
+    // Orbit sync — smooth entry into orbit after approach
+    this._inOrbitSync = false;
+    this._orbitSyncFrom = new THREE.Vector3();
+    this._orbitSyncTime = 0;
+    this._orbitSyncDuration = 0.5;
+
+    // Transit animation state (used when in fleet, not orbiting)
+    this._acroTime = Math.random() * 100;  // start at random phase
+    this._barrelRoll = null;               // { time, duration, dir }
+    this._bankAngle = 0;
+
+    // Scale and visual feedback
+    this._baseScale = 1.0;
+    this._targetScale = 1.0;
+    this._isAttacking = false;
+    this._flashTime = 0;
+    this._flashDuration = 0.15;
+    this._isFlashing = false;
+    this._flashMaterials = [];
+    this._originalColors = [];
+    this._originalEmissives = [];
+
     this._buildMesh();
     this._createTrail();
     this._createHPBar();
     this._createEngineGlow();
+
+    // Store materials for flashing after _buildMesh
+    this._flashMaterials = [this._obsidianMat, this._armorMat, this._glassMat];
   }
 
   _buildMesh() {
@@ -268,14 +293,23 @@ export class EnemyShip3D {
 
     if (type === 'bomber') {
       this._bomberGroup.visible = true;
-      this._meshGroup.scale.setScalar(1.2); 
+      this._baseScale = 1.2;
     } else if (type === 'raider') {
       this._raiderGroup.visible = true;
-      this._meshGroup.scale.setScalar(1.0);
+      this._baseScale = 1.0;
     } else {
       this._interceptorGroup.visible = true;
-      this._meshGroup.scale.setScalar(1.0);
+      this._baseScale = 1.0;
     }
+
+    this._targetScale = this._baseScale;
+    this._meshGroup.scale.setScalar(this._baseScale);
+
+    // Capture original colors for flashing
+    this._originalColors = this._flashMaterials.map(m => m.color.clone());
+    this._originalEmissives = this._flashMaterials.map(m =>
+      m.emissive ? m.emissive.clone() : new THREE.Color(0)
+    );
   }
 
   /**
@@ -308,6 +342,25 @@ export class EnemyShip3D {
 
   deactivate() {
     this.group.visible = false;
+  }
+
+  /**
+   * Toggle attacking state — scales ship up 2x when attacking, back to base scale when not.
+   */
+  setAttacking(isAttacking) {
+    this._targetScale = isAttacking ? this._baseScale * 2.0 : this._baseScale;
+  }
+
+  /**
+   * Flash ship white briefly when hit by a defense.
+   */
+  flashHit() {
+    this._isFlashing = true;
+    this._flashTime = 0;
+    for (const mat of this._flashMaterials) {
+      mat.color.set(0xffffff);
+      if (mat.emissive) mat.emissive.set(0xffffff);
+    }
   }
 
   /**
@@ -362,6 +415,28 @@ export class EnemyShip3D {
   update(dt, targetPos) {
     if (targetPos) this._targetPos.copy(targetPos);
 
+    // Scale lerp toward target
+    const cs = this._meshGroup.scale.x;
+    if (Math.abs(cs - this._targetScale) > 0.001) {
+      this._meshGroup.scale.setScalar(
+        THREE.MathUtils.lerp(cs, this._targetScale, Math.min(1, dt * 5))
+      );
+    }
+
+    // Flash fade when hit
+    if (this._isFlashing) {
+      this._flashTime += dt;
+      const t = Math.min(1, this._flashTime / this._flashDuration);
+      for (let i = 0; i < this._flashMaterials.length; i++) {
+        const mat = this._flashMaterials[i];
+        mat.color.lerpColors(new THREE.Color(0xffffff), this._originalColors[i], t);
+        if (mat.emissive) {
+          mat.emissive.lerpColors(new THREE.Color(0xffffff), this._originalEmissives[i], t);
+        }
+      }
+      if (t >= 1) this._isFlashing = false;
+    }
+
     // Handle approach animation
     if (this._inApproach) {
       this._approachTime += dt;
@@ -392,8 +467,47 @@ export class EnemyShip3D {
 
       if (rawT >= 1) {
         this._inApproach = false;
-        // Orbit angle was set in activate() and _approachTo was computed from it.
-        // Leave orbit angle unchanged; normal orbiting starts from there.
+        this._inOrbitSync = true;
+        this._orbitSyncFrom.copy(newPos);
+        this._orbitSyncTime = 0;
+      }
+      return;
+    }
+
+    // Orbit sync — smooth entry into orbit after approach
+    if (this._inOrbitSync) {
+      this._orbitAngle += dt * 0.5 * this._speed;
+      const orbitPos = this._calcOrbitPos();
+      const syncT = Math.min(1, this._orbitSyncTime / this._orbitSyncDuration);
+      const eased = syncT * syncT * (3 - 2 * syncT);
+      const syncPos = new THREE.Vector3().lerpVectors(this._orbitSyncFrom, orbitPos, eased);
+      this.group.position.copy(syncPos);
+      for (let i = TRAIL_LENGTH - 1; i > 0; i--) {
+        this._trailPositions[i].copy(this._trailPositions[i - 1]);
+      }
+      this._trailPositions[0].copy(syncPos);
+      const arr = this._trailGeo.attributes.position.array;
+      for (let i = 0; i < TRAIL_LENGTH; i++) {
+        const local = this._trailPositions[i].clone().sub(syncPos);
+        arr[i * 3] = local.x; arr[i * 3 + 1] = local.y; arr[i * 3 + 2] = local.z;
+      }
+      this._trailGeo.attributes.position.needsUpdate = true;
+      const R = this._orbitRadius;
+      const t = this._orbitAngle;
+      const incl = this._orbitInclination;
+      const azim = this._orbitAzimuth;
+      const ldx = -Math.sin(t) * R;
+      const ldy = Math.cos(t) * R * Math.sin(incl);
+      const ldz = Math.cos(t) * R * Math.cos(incl);
+      const lookPos = syncPos.clone().add(new THREE.Vector3(
+        ldx * Math.cos(azim) - ldz * Math.sin(azim),
+        ldy,
+        ldx * Math.sin(azim) + ldz * Math.cos(azim),
+      ));
+      this._meshGroup.lookAt(lookPos);
+      this._orbitSyncTime += dt;
+      if (this._orbitSyncTime >= this._orbitSyncDuration) {
+        this._inOrbitSync = false;
       }
       return;
     }
@@ -418,6 +532,11 @@ export class EnemyShip3D {
     );
     this._meshGroup.lookAt(lookPos);
 
+    // Add banking roll based on orbit (ships bank as they turn)
+    const bankRoll = Math.sin(this._orbitAngle) * 0.4;
+    const bankQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), bankRoll);
+    this._meshGroup.quaternion.multiply(bankQuat);
+
     // The engine light follows the rotation approximately
     this._engineLight.position.set(0, 0, -0.2).applyQuaternion(this._meshGroup.quaternion);
 
@@ -435,6 +554,47 @@ export class EnemyShip3D {
       arr[i * 3 + 2] = local.z;
     }
     this._trailGeo.attributes.position.needsUpdate = true;
+  }
+
+  /**
+   * Animate this ship in fleet transit mode (acrobatics, banking, barrel rolls).
+   * Called from RoamingFleet3D for ships in formation.
+   */
+  animateTransit(dt, time, turnRate = 0) {
+    this._acroTime += dt;
+
+    // Phase offset unique to this ship (based on orbit params)
+    const phase = this._orbitAzimuth;
+
+    // Barrel roll occasionally
+    if (!this._barrelRoll && Math.random() < dt * 0.001) {
+      this._barrelRoll = {
+        time: 0,
+        duration: 1.2,
+        dir: Math.random() < 0.5 ? 1 : -1,
+      };
+    }
+
+    // Base roll: bank into turns + gentle sinusoid variation
+    let rollAngle = turnRate * 1.5;
+    rollAngle += Math.sin(time * 0.8 + phase) * 0.15;
+
+    if (this._barrelRoll) {
+      this._barrelRoll.time += dt;
+      const t = this._barrelRoll.time / this._barrelRoll.duration;
+      if (t >= 1) {
+        this._barrelRoll = null;
+      } else {
+        const ease = t * t * (3 - 2 * t);
+        rollAngle += ease * Math.PI * 2 * this._barrelRoll.dir;
+      }
+    }
+
+    // Gentle pitch nod
+    const pitchAngle = Math.sin(time * 0.4 + phase * 1.5) * 0.1;
+
+    this._meshGroup.rotation.z = rollAngle;
+    this._meshGroup.rotation.x = pitchAngle;
   }
 
   dispose() {

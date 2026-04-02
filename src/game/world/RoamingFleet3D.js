@@ -45,6 +45,11 @@ export class RoamingFleet3D {
     this._worldPos = new THREE.Vector3();
     this._avoidPlanets = [];     // Array of nearby planet positions
 
+    // Animation tracking
+    this._time = 0;
+    this._prevRotationY = 0;
+    this._turnRate = 0;
+
     // Invisible click sphere — registered with InputManager
     const hitGeo = new THREE.SphereGeometry(9, 8, 6);
     const hitMat = new THREE.MeshBasicMaterial({ visible: false });
@@ -85,8 +90,17 @@ export class RoamingFleet3D {
 
   update(fromPos, toPos, fleet, avoidPositions = []) {
     if (!fromPos || !toPos) return;
+    this._time += 0.016; // ~60fps; better to pass dt if available
     this._avoidPlanets = avoidPositions;
     this._updateTransform(fromPos, toPos, fleet.position);
+
+    // Animate fleet ships with acrobatics
+    for (const sm of this._shipMeshes) {
+      if (sm.ship) {
+        sm.ship.animateTransit(0.016, this._time, this._turnRate);
+      }
+    }
+
     this._updateHpBars(fleet);
   }
 
@@ -284,8 +298,19 @@ export class RoamingFleet3D {
     const dirVec = new THREE.Vector3().subVectors(ahead, curPos);
     if (dirVec.lengthSq() > 0.001) {
       dirVec.normalize();
-      const angle = Math.atan2(dirVec.x, dirVec.z);
-      this.group.rotation.y = angle;
+      const targetAngle = Math.atan2(dirVec.x, dirVec.z);
+
+      // Smooth rotation toward target angle
+      let diff = targetAngle - this.group.rotation.y;
+      // Normalize angle difference to [-π, π]
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+
+      // Lerp rotation smoothly
+      this.group.rotation.y += diff * Math.min(1, 0.016 * 5);
+
+      // Compute turn rate for ship banking
+      this._turnRate = diff / 0.016;
     }
   }
 

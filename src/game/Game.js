@@ -212,8 +212,8 @@ export function createGame() {
   });
 
   // --- Enemy ships + combat effects ---
-  const enemyManager = new EnemyManager3D(sceneManager.scene, animationLoop, galaxy);
   const combatEffects = new CombatEffects(sceneManager.scene);
+  const enemyManager = new EnemyManager3D(sceneManager.scene, animationLoop, galaxy, combatEffects);
 
   // --- Roaming fleet visuals ---
   const fleetManager = new RoamingFleetManager3D(sceneManager.scene, galaxy);
@@ -301,6 +301,10 @@ export function createGame() {
       })();
 
     if (toPos) combatEffects.projectile(fromPos, toPos, laserColor);
+
+    // Flash the hit enemy
+    const hitShip = enemyManager.getShip(targetId);
+    if (hitShip) hitShip.flashHit();
   });
 
   gameState.on('enemyDestroyed', ({ planetId, enemy }) => {

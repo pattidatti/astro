@@ -12,13 +12,15 @@ const MAX_MOTHERSHIPS = 2;
  * Driven by GameState events: attackStarted, enemyDestroyed, mothershipDestroyed, attackEnded.
  */
 export class EnemyManager3D {
-  constructor(scene, animationLoop, galaxy) {
+  constructor(scene, animationLoop, galaxy, combatEffects) {
     this._scene = scene;
     this._galaxy = galaxy;
+    this._combatEffects = combatEffects ?? null;
 
     // Enemy ship pool
     this._shipPool = [];
     this._activeShips = new Map(); // enemyId → EnemyShip3D
+    this._shipFireTimers = new Map(); // enemyId → seconds until next shot
 
     for (let i = 0; i < MAX_ENEMY_SHIPS; i++) {
       const ship = new EnemyShip3D();
@@ -63,6 +65,7 @@ export class EnemyManager3D {
     ship.deactivate();
     this._shipPool.push(ship);
     this._activeShips.delete(enemy.id);
+    this._shipFireTimers.delete(enemy.id);
   }
 
   _onMothershipDestroyed({ attackId }) {
@@ -142,6 +145,10 @@ export class EnemyManager3D {
     ship.setType(enemy.type, def?.color || '#ff3333');
     ship.activate(planetPos, enemy.speed);
     ship.setHP(enemy.hp, enemy.maxHP);
+    ship._isAttacking = false;
+    ship.setAttacking(false);
+    const interval = this._getFireInterval(enemy);
+    this._shipFireTimers.set(enemy.id, Math.random() * interval);
     this._activeShips.set(enemy.id, ship);
   }
 
@@ -165,6 +172,7 @@ export class EnemyManager3D {
       this._shipPool.push(ship);
     }
     this._activeShips.clear();
+    this._shipFireTimers.clear();
 
     for (const [id, ms] of this._activeMotherships) {
       ms.deactivate();
@@ -191,11 +199,30 @@ export class EnemyManager3D {
         ship.deactivate();
         this._shipPool.push(ship);
         this._activeShips.delete(enemyId);
+        this._shipFireTimers.delete(enemyId);
         continue;
       }
 
       ship.update(dt, planetPos);
       ship.setHP(enemyData.hp, enemyData.maxHP);
+
+      // Transition to attack phase when approach ends
+      if (!ship._inApproach && !ship._isAttacking) {
+        ship._isAttacking = true;
+        ship.setAttacking(true);
+      }
+
+      // Enemy fires projectile toward station
+      if (!ship._inApproach && enemyData.hp > 0 && this._combatEffects) {
+        let timer = this._shipFireTimers.get(enemyId) ?? 0;
+        timer -= dt;
+        if (timer <= 0) {
+          this._shipFireTimers.set(enemyId, this._getFireInterval(enemyData));
+          this._fireEnemyProjectile(ship, enemyData, focusedPlanet);
+        } else {
+          this._shipFireTimers.set(enemyId, timer);
+        }
+      }
     }
 
     // Update motherships
@@ -245,6 +272,41 @@ export class EnemyManager3D {
       }
     }
     return null;
+  }
+
+  /**
+   * Get an active enemy ship by its logical id.
+   * Returns null if the enemy is not actively spawned.
+   */
+  getShip(enemyId) {
+    return this._activeShips.get(enemyId) ?? null;
+  }
+
+  /**
+   * Compute fire interval based on enemy damage (1.5s–3.0s).
+   */
+  _getFireInterval(enemy) {
+    return Math.max(1.5, 3.0 - (enemy.damage ?? 0) * 0.3);
+  }
+
+  /**
+   * Fire a visual projectile from a ship toward the station.
+   */
+  _fireEnemyProjectile(ship, enemyData, planetId) {
+    const sys = this._galaxy.getSystem(planetId);
+    if (!sys?.stationWorldPosition) return;
+
+    const fromPos = new THREE.Vector3();
+    ship.group.getWorldPosition(fromPos);
+
+    const colorMap = {
+      bomber: 0xff4400,
+      raider: 0xff8800,
+      interceptor: 0xff2222,
+    };
+    const color = colorMap[enemyData.type] ?? 0xff3333;
+
+    this._combatEffects.projectile(fromPos, sys.stationWorldPosition, color);
   }
 
   dispose() {
