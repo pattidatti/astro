@@ -79,13 +79,8 @@ export function createGame() {
         AudioManager.play('PLANET_CLICK_3D');
         gameState.switchPlanet(planetId);
       } else {
-        // Colonize from the currently focused planet
-        const toDef = PLANETS.find(p => p.id === planetId);
-        const { ore: oreCost = 0, energy: energyCost = 0 } = toDef?.baseCost ?? {};
-        const canAfford = gameState.siloHas(gameState.focusedPlanet, 'ore', oreCost) &&
-                          gameState.siloHas(gameState.focusedPlanet, 'energy', energyCost);
-        AudioManager.play(canAfford ? 'PLANET_CLICK_3D' : 'COLONIZE_DENIED');
-        gameState.colonizePlanet(gameState.focusedPlanet, planetId);
+        // Unowned planet — need colony ship to colonize
+        AudioManager.play('COLONIZE_DENIED');
       }
 
       cameraController.trackObject(() => system.planetWorldPosition, 55);
@@ -146,6 +141,37 @@ export function createGame() {
     const system = galaxy.getSystem(id);
     if (system) cameraController.trackObject(() => system.planetWorldPosition, 55);
     skybox.setPlanetPalette(gameState.activePlanetDef);
+  });
+
+  // Colony ship camera follow during flight
+  gameState.on('colonyShipLaunched', (data) => {
+    const getPos = () => shipManager.getColonyShipPosition(data.id);
+    cameraController.trackObject(getPos, 20);
+  });
+  gameState.on('colonyShipArrived', (data) => {
+    const sys = galaxy.getSystem(data.toPlanetId);
+    if (sys) cameraController.trackObject(() => sys.planetWorldPosition, 55);
+  });
+
+  // Colony ship built: register click target
+  gameState.on('colonyShipBuilt', ({ fromPlanetId }) => {
+    const sys = galaxy.getSystem(fromPlanetId);
+    if (!sys || !sys.colonyShip) return;
+    const hitbox = sys.colonyShip.hitbox;
+    hitbox.userData.colonyShipPlanetId = fromPlanetId;
+    inputManager.addClickable(hitbox, () => {
+      AudioManager.play('PLANET_CLICK_3D');
+      // The popup is managed by PlanetPanel — it listens for this event
+      gameState.emit('colonyShipClicked', { planetId: fromPlanetId });
+    });
+  });
+
+  // Colony ship launched: unregister click target
+  gameState.on('colonyShipLaunched', (data) => {
+    const sys = galaxy.getSystem(data.fromPlanet);
+    if (sys?.colonyShip) {
+      inputManager.removeClickable(sys.colonyShip.hitbox);
+    }
   });
 
   // Reusable vector to avoid per-frame allocation for god rays

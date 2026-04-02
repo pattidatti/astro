@@ -4,6 +4,7 @@ const CARGO_THRESHOLD_DISPLAY = 3; // matches Robot3D CARGO_THRESHOLD for the "+
 
 import { Planet3D } from '../objects/Planet3D.js';
 import { Station3D } from '../objects/Station3D.js';
+import { ColonyShip3D } from '../objects/ColonyShip3D.js';
 import { RobotManager3D } from '../objects/RobotManager3D.js';
 import { DustCloud } from '../effects/DustCloud.js';
 import { NebulaVolume } from '../effects/NebulaVolume.js';
@@ -191,6 +192,21 @@ export class SolarSystem {
     // Label sprite
     this._createLabel(planetDef.name);
 
+    // Colony ship in orbit
+    this.colonyShip = null;
+    this._onColonyShipBuilt = ({ fromPlanetId }) => {
+      if (fromPlanetId === this.id) this._spawnColonyShip();
+    };
+    this._onColonyShipLaunched = (data) => {
+      if (data.fromPlanet === this.id) this._removeColonyShip();
+    };
+    this._onColonyStateLoaded = () => this._restoreColonyShip();
+    gameState.on('colonyShipBuilt', this._onColonyShipBuilt);
+    gameState.on('colonyShipLaunched', this._onColonyShipLaunched);
+    gameState.on('stateLoaded', this._onColonyStateLoaded);
+    // Restore if ship already exists at load
+    this._restoreColonyShip();
+
     // Robot sync
     this._onRobotsChanged = () => this._syncRobots();
     this._onPlanetChanged = () => this._syncRobots();
@@ -235,6 +251,33 @@ export class SolarSystem {
     });
     this.orbitLine = new THREE.Line(geo, this.orbitLineMaterial);
     this.group.add(this.orbitLine);
+  }
+
+  _spawnColonyShip() {
+    if (this.colonyShip) return;
+    this.colonyShip = new ColonyShip3D();
+    this.colonyShip.group.visible = false;
+    this.orbitGroup.add(this.colonyShip.group);
+  }
+
+  _removeColonyShip() {
+    if (!this.colonyShip) return;
+    this.orbitGroup.remove(this.colonyShip.group);
+    this.colonyShip.dispose();
+    this.colonyShip = null;
+  }
+
+  _restoreColonyShip() {
+    const hasShip = gameState.colonyShipsInOrbit.some(s => s.fromPlanetId === this.id);
+    if (hasShip && !this.colonyShip) {
+      this._spawnColonyShip();
+    } else if (!hasShip && this.colonyShip) {
+      this._removeColonyShip();
+    }
+  }
+
+  get colonyShipClickTarget() {
+    return this.colonyShip?.hitbox ?? null;
   }
 
   _syncRobots() {
@@ -348,6 +391,16 @@ export class SolarSystem {
       }
     }
 
+    // Colony ship in orbit
+    if (this.colonyShip) {
+      if (distance < 80) {
+        this.colonyShip.group.visible = true;
+        this.colonyShip.updateOrbit(time);
+      } else {
+        this.colonyShip.group.visible = false;
+      }
+    }
+
     // Robots
     const robotsVisible = distance < 60;
     this.robotManager.group.visible = robotsVisible;
@@ -442,6 +495,10 @@ export class SolarSystem {
     gameState.off('planetChanged', this._onPlanetChanged);
     gameState.off('focusedPlanet', this._onPlanetChanged);
     gameState.off('stateLoaded',   this._onStateLoaded);
+    gameState.off('colonyShipBuilt',    this._onColonyShipBuilt);
+    gameState.off('colonyShipLaunched', this._onColonyShipLaunched);
+    gameState.off('stateLoaded',        this._onColonyStateLoaded);
+    if (this.colonyShip) this.colonyShip.dispose();
     this.planet.dispose();
     this.station.dispose();
     this.robotManager.dispose();

@@ -1,7 +1,9 @@
 import { gameState } from '../GameState.js';
 import { Ship3D } from './Ship3D.js';
+import { ColonyShip3D } from '../objects/ColonyShip3D.js';
 
 const MAX_SHIPS = 20;
+const MAX_COLONY_SHIPS = 3;
 
 /**
  * Manages a pool of Ship3D instances that travel between planets.
@@ -21,6 +23,14 @@ export class ShipManager3D {
       this._pool.push(ship);
     }
 
+    // Colony ship pool
+    this._colonyPool = [];
+    for (let i = 0; i < MAX_COLONY_SHIPS; i++) {
+      const cs = new ColonyShip3D();
+      scene.add(cs.group);
+      this._colonyPool.push(cs);
+    }
+
     // Listen for ship events
     gameState.on('shipLaunched',       (data) => this._onShipLaunched(data));
     gameState.on('shipArrived',        (data) => this._onShipArrived(data));
@@ -32,9 +42,15 @@ export class ShipManager3D {
 
   _onShipLaunched(data) {
     if (this._active.has(data.id)) return;
-    if (this._pool.length === 0) return; // pool exhausted
 
-    const ship3d = this._pool.pop();
+    let ship3d;
+    if (data.isColony) {
+      if (this._colonyPool.length === 0) return;
+      ship3d = this._colonyPool.pop();
+    } else {
+      if (this._pool.length === 0) return;
+      ship3d = this._pool.pop();
+    }
     const fromPos = this._galaxy.getPlanetWorldPosition(data.fromPlanet);
     const toPos   = this._galaxy.getPlanetWorldPosition(data.toPlanet);
 
@@ -50,7 +66,11 @@ export class ShipManager3D {
     if (!entry) return;
 
     entry.ship3d.deactivate();
-    this._pool.push(entry.ship3d);
+    if (entry.data.isColony) {
+      this._colonyPool.push(entry.ship3d);
+    } else {
+      this._pool.push(entry.ship3d);
+    }
     this._active.delete(data.id);
   }
 
@@ -61,7 +81,7 @@ export class ShipManager3D {
         entry.data.t += _dt / entry.data.duration;
         if (entry.data.t >= 1) {
           entry.ship3d.deactivate();
-          this._pool.push(entry.ship3d);
+          this._colonyPool.push(entry.ship3d);
           this._active.delete(shipId);
           continue;
         }
@@ -90,8 +110,15 @@ export class ShipManager3D {
     }
   }
 
+  /** Get world position of an active colony ship (for camera tracking) */
+  getColonyShipPosition(shipId) {
+    const entry = this._active.get(shipId);
+    return entry?.ship3d?.group?.position ?? null;
+  }
+
   dispose() {
     for (const ship of this._pool) ship.dispose();
+    for (const ship of this._colonyPool) ship.dispose();
     for (const { ship3d } of this._active.values()) ship3d.dispose();
   }
 }

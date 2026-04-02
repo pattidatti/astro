@@ -1,4 +1,4 @@
-import { gameState } from '../GameState.js';
+import { gameState, colonyLaunchEnergyCost, colonyTravelDuration } from '../GameState.js';
 import { PLANETS } from '../data/planets.js';
 import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult } from '../data/upgrades.js';
 import { createRoute, SHIPPABLE_RESOURCES } from '../data/routes.js';
@@ -49,23 +49,40 @@ export class PlanetPanel {
     this._tooltipEl = document.getElementById('upg-tooltip');
     this._prevSiloAmounts = {}; // track previous amounts for drain flash
 
+    this._colonyPopupEl = document.getElementById('colony-ship-popup');
+    this._colonyPopupVisible = false;
+
     // Close button
     document.getElementById('panel-close')?.addEventListener('pointerdown', () => {
       this.hide();
     });
 
+    // Colony ship click: show target popup
+    gameState.on('colonyShipClicked', ({ planetId }) => {
+      if (this._planetId === planetId) {
+        this._showColonyShipPopup(planetId);
+      }
+    });
+
+    // Hide popup on launch
+    gameState.on('colonyShipLaunched', () => this._hideColonyShipPopup());
+
     // Listen for relevant state changes to trigger re-render
     const rerender = () => { if (this._visible) this._renderAll(); };
-    gameState.on('baseBuilt',        rerender);
-    gameState.on('baseUpgraded',     rerender);
-    gameState.on('robotHired',       rerender);
-    gameState.on('robotUpgraded',    rerender);
-    gameState.on('routeAdded',       rerender);
-    gameState.on('routeRemoved',     rerender);
-    gameState.on('depositUnlocked',  rerender);
+    gameState.on('baseBuilt',          rerender);
+    gameState.on('baseUpgraded',       rerender);
+    gameState.on('robotHired',         rerender);
+    gameState.on('robotUpgraded',      rerender);
+    gameState.on('routeAdded',         rerender);
+    gameState.on('routeRemoved',       rerender);
+    gameState.on('depositUnlocked',    rerender);
+    gameState.on('colonyShipQueued',   rerender);
+    gameState.on('colonyShipBuilt',    rerender);
+    gameState.on('colonyShipLaunched', rerender);
     gameState.on('productionTick', () => {
       if (!this._visible) return;
       this._renderSilos();
+      this._updateColonyShipProgress();
       const now = performance.now();
       if (now - this._renderTimer > 1000) {
         this._renderTimer = now;
@@ -95,6 +112,7 @@ export class PlanetPanel {
     this._planetId = null;
     this._leftEl.classList.remove('visible');
     this._rightEl.classList.remove('visible');
+    this._hideColonyShipPopup();
   }
 
   /** Call each frame to reposition panels to match the camera's look-at target screen Y */
@@ -125,6 +143,7 @@ export class PlanetPanel {
     if (nameEl) nameEl.textContent = def.name + ' BASE';
 
     this._renderBase(ps, def);
+    this._renderColonyShip(ps, def);
     this._renderSilos();
     this._renderRoutes();
     this._renderHire(ps, def);
@@ -513,6 +532,161 @@ export class PlanetPanel {
       row.appendChild(btn);
       el.appendChild(row);
     }
+  }
+
+  // ─── Colony ship ──────────────────────────────────────────────────────────
+
+  _renderColonyShip(ps, def) {
+    const el = document.getElementById('panel-colony-ship');
+    if (!el) return;
+
+    // No base = no colony ship option
+    if (!ps || !ps.hasBase) { el.innerHTML = ''; return; }
+
+    const buildQueue = ps.colonyShipBuildQueue || [];
+    const inOrbit = gameState.colonyShipsInOrbit.some(s => s.fromPlanetId === this._planetId);
+
+    // Building in progress
+    if (buildQueue.length > 0) {
+      const pct = Math.min(100, (buildQueue[0].progress / 20) * 100);
+      el.innerHTML = `
+        <div class="panel-section-title">COLONY SHIP</div>
+        <div class="colony-ship-progress">
+          <div class="colony-ship-progress-fill" style="width:${pct.toFixed(1)}%"></div>
+          <div class="colony-ship-progress-label">BUILDING... ${Math.floor(pct)}%</div>
+        </div>
+      `;
+      return;
+    }
+
+    // Ship in orbit — ready to launch
+    if (inOrbit) {
+      el.innerHTML = `
+        <div class="panel-section-title">COLONY SHIP</div>
+        <div class="colony-ship-status">🚀 READY — CLICK SHIP IN ORBIT</div>
+      `;
+      return;
+    }
+
+    // Default: build button
+    const oreCost = 300;
+    const canAfford = gameState.siloHas(this._planetId, 'ore', oreCost);
+
+    el.innerHTML = `<div class="panel-section-title">COLONY SHIP</div>`;
+    const btn = document.createElement('button');
+    btn.className = 'colony-ship-btn';
+    btn.disabled = !canAfford;
+    btn.innerHTML = `
+      <span>🚀 BUILD COLONY SHIP</span>
+      <span class="cs-cost ${canAfford ? '' : 'cant'}">⬡ ${fmt(oreCost)} ORE</span>
+    `;
+
+    if (canAfford) {
+      btn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        AudioManager.play('UI_CLICK');
+        gameState.queueColonyShipBuild(this._planetId);
+      });
+    } else {
+      btn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        AudioManager.play('UI_CLICK_DENIED');
+      });
+    }
+    el.appendChild(btn);
+  }
+
+  /** Update colony ship build progress bar each frame */
+  _updateColonyShipProgress() {
+    const ps = gameState.getPlanetState(this._planetId);
+    if (!ps) return;
+    const queue = ps.colonyShipBuildQueue;
+    if (!queue || queue.length === 0) return;
+    const fill = document.querySelector('#panel-colony-ship .colony-ship-progress-fill');
+    const label = document.querySelector('#panel-colony-ship .colony-ship-progress-label');
+    if (!fill) return;
+    const pct = Math.min(100, (queue[0].progress / 20) * 100);
+    fill.style.width = pct.toFixed(1) + '%';
+    if (label) label.textContent = `BUILDING... ${Math.floor(pct)}%`;
+  }
+
+  _showColonyShipPopup(planetId) {
+    const popup = this._colonyPopupEl;
+    if (!popup) return;
+
+    const fromDef = PLANETS.find(p => p.id === planetId);
+    if (!fromDef) return;
+    const fromRadius = fromDef.orbit.radius;
+    const ship = gameState.colonyShipsInOrbit.find(s => s.fromPlanetId === planetId);
+    if (!ship) return;
+
+    // Build target list
+    const unowned = PLANETS.filter(p => !gameState.ownedPlanets.includes(p.id));
+    if (unowned.length === 0) {
+      popup.innerHTML = `
+        <div class="csp-title">NO TARGETS</div>
+        <div style="font-size:10px;color:var(--dune-text-dim);text-align:center;padding:8px">All planets colonized</div>
+      `;
+      popup.classList.add('visible');
+      this._colonyPopupVisible = true;
+      return;
+    }
+
+    let html = `<div class="csp-title">SELECT TARGET</div><button class="csp-close">✕</button>`;
+    for (const target of unowned) {
+      const dist = Math.abs(target.orbit.radius - fromRadius);
+      const travelTime = colonyTravelDuration(dist);
+      const energyCost = colonyLaunchEnergyCost(dist);
+      const canAfford = gameState.siloHas(planetId, 'energy', energyCost);
+      const timeStr = travelTime >= 60
+        ? `~${Math.floor(travelTime / 60)}m ${Math.floor(travelTime % 60)}s`
+        : `~${Math.floor(travelTime)}s`;
+
+      html += `
+        <div class="target-row" data-target="${target.id}" data-dist="${dist}">
+          <div class="target-color" style="background:${target.col}"></div>
+          <div class="target-info">
+            <div class="target-name">${target.name}</div>
+            <div class="target-meta">${timeStr} · ⚡${fmt(energyCost)}</div>
+          </div>
+          <button class="launch-btn" ${canAfford ? '' : 'disabled'}>LAUNCH</button>
+        </div>
+      `;
+    }
+
+    popup.innerHTML = html;
+
+    // Close button
+    popup.querySelector('.csp-close')?.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this._hideColonyShipPopup();
+    });
+
+    // Launch buttons
+    popup.querySelectorAll('.target-row').forEach(row => {
+      const btn = row.querySelector('.launch-btn');
+      if (btn.disabled) return;
+      btn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        AudioManager.play('UI_CLICK');
+        const targetId = row.dataset.target;
+        const dist = parseFloat(row.dataset.dist);
+        gameState.launchColonyShip(ship.id, targetId, dist);
+      });
+    });
+
+    // Position at center of screen (will be updated per-frame if we have 3D pos)
+    popup.style.left = (window.innerWidth / 2 - 140) + 'px';
+    popup.style.top = (window.innerHeight / 2 - 100) + 'px';
+    popup.classList.add('visible');
+    this._colonyPopupVisible = true;
+  }
+
+  _hideColonyShipPopup() {
+    if (this._colonyPopupEl) {
+      this._colonyPopupEl.classList.remove('visible');
+    }
+    this._colonyPopupVisible = false;
   }
 
   // ─── Tooltip helpers ──────────────────────────────────────────────────────

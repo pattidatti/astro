@@ -5,7 +5,18 @@ const SAVE_VERSION = 2;
 
 const COLONY_SHIP_BUILD_COST = { ore: 300 };
 const COLONY_SHIP_BUILD_TIME = 20;   // seconds
-const COLONY_SHIP_TRAVEL_TIME = 6;   // seconds
+const COLONY_LAUNCH_BASE_COST = 50;  // base energy cost for launch
+const COLONY_LAUNCH_DIST_MULT = 0.3; // energy per orbit-radius unit
+
+/** Energy cost to launch a colony ship based on orbit-radius distance */
+export function colonyLaunchEnergyCost(distance) {
+  return Math.ceil(COLONY_LAUNCH_BASE_COST + distance * COLONY_LAUNCH_DIST_MULT);
+}
+
+/** Travel duration in seconds based on orbit-radius distance */
+export function colonyTravelDuration(distance) {
+  return distance * 0.15;
+}
 
 class EventEmitter {
   constructor() { this._listeners = {}; }
@@ -54,6 +65,7 @@ class GameState extends EventEmitter {
     this.routes = [];
     this.activeShips = []; // NOT serialized — runtime only
     this.colonyShipsInOrbit = []; // [{ id, fromPlanetId }]
+    this.colonyShipsInFlight = []; // [{ id, fromPlanetId, toPlanetId, duration, elapsed }]
     this.tutorialStep = 0;
     this.lastSaved = Date.now();
 
@@ -154,7 +166,10 @@ class GameState extends EventEmitter {
   queueColonyShipBuild(planetId) {
     if (!this.ownedPlanets.includes(planetId)) return false;
     const ps = this.getPlanetState(planetId);
-    if (!ps) return false;
+    if (!ps || !ps.hasBase) return false;
+    // Max 1 colony ship per planet (building or in orbit)
+    if (ps.colonyShipBuildQueue.length > 0) return false;
+    if (this.colonyShipsInOrbit.some(s => s.fromPlanetId === planetId)) return false;
     const { ore = 0, energy = 0 } = COLONY_SHIP_BUILD_COST;
     if (ore > 0 && !this.siloHas(planetId, 'ore', ore)) return false;
     if (energy > 0 && !this.siloHas(planetId, 'energy', energy)) return false;
@@ -181,8 +196,8 @@ class GameState extends EventEmitter {
     }
   }
 
-  /** Launch a colony ship in orbit toward a target planet. Deducts baseCost at launch. */
-  launchColonyShip(shipId, targetPlanetId) {
+  /** Launch a colony ship in orbit toward a target planet. Deducts energy launch cost. */
+  launchColonyShip(shipId, targetPlanetId, distance) {
     const shipIdx = this.colonyShipsInOrbit.findIndex(s => s.id === shipId);
     if (shipIdx < 0) return false;
     if (this.ownedPlanets.includes(targetPlanetId)) return false;
@@ -191,30 +206,53 @@ class GameState extends EventEmitter {
     if (!toDef) return false;
 
     const { fromPlanetId } = this.colonyShipsInOrbit[shipIdx];
-    const { ore: oreCost = 0, energy: energyCost = 0 } = toDef.baseCost;
-    if (oreCost > 0 && !this.siloHas(fromPlanetId, 'ore', oreCost)) return false;
-    if (energyCost > 0 && !this.siloHas(fromPlanetId, 'energy', energyCost)) return false;
-    if (oreCost > 0) this.deductFromSilo(fromPlanetId, 'ore', oreCost);
-    if (energyCost > 0) this.deductFromSilo(fromPlanetId, 'energy', energyCost);
+    const energyCost = colonyLaunchEnergyCost(distance);
+    if (!this.siloHas(fromPlanetId, 'energy', energyCost)) return false;
+    this.deductFromSilo(fromPlanetId, 'energy', energyCost);
 
+    const duration = colonyTravelDuration(distance);
     this.colonyShipsInOrbit.splice(shipIdx, 1);
-    this._finalizeColonization(fromPlanetId, targetPlanetId);
-    this.emit('colonyShipDeparted', {
+
+    // Deferred colonization — ship must arrive first
+    this.colonyShipsInFlight.push({
+      id: shipId, fromPlanetId, toPlanetId: targetPlanetId,
+      duration, elapsed: 0,
+    });
+
+    this.emit('colonyShipLaunched', {
       id: shipId,
-      fromPlanetId,
-      toPlanetId: targetPlanetId,
-      duration: COLONY_SHIP_TRAVEL_TIME,
+      fromPlanet: fromPlanetId,
+      toPlanet: targetPlanetId,
+      duration,
       t: 0,
+      isColony: true,
     });
     return true;
   }
 
-  /** Internal: initialize new planet as owned with a base. */
+  /** Advance in-flight colony ships. Called each frame by ProductionSystem. */
+  tickColonyShipFlights(dt) {
+    for (let i = this.colonyShipsInFlight.length - 1; i >= 0; i--) {
+      const ship = this.colonyShipsInFlight[i];
+      ship.elapsed += dt;
+      if (ship.elapsed >= ship.duration) {
+        this.colonyShipsInFlight.splice(i, 1);
+        this._finalizeColonization(ship.fromPlanetId, ship.toPlanetId);
+        this.emit('colonyShipArrived', {
+          id: ship.id,
+          fromPlanetId: ship.fromPlanetId,
+          toPlanetId: ship.toPlanetId,
+        });
+      }
+    }
+  }
+
+  /** Internal: initialize new planet as owned (no base — player must build manually). */
   _finalizeColonization(fromPlanetId, toPlanetId) {
     const toDef = PLANETS.find(p => p.id === toPlanetId);
     if (!toDef) return;
     const ps = makePlanetState(toDef);
-    ps.hasBase = true;
+    ps.hasBase = false;
     this.planetState[toPlanetId] = ps;
     this.ownedPlanets.push(toPlanetId);
     this.focusedPlanet = toPlanetId;
@@ -371,6 +409,7 @@ class GameState extends EventEmitter {
       focusedPlanet: this.focusedPlanet,
       routes: JSON.parse(JSON.stringify(this.routes)),
       colonyShipsInOrbit: JSON.parse(JSON.stringify(this.colonyShipsInOrbit)),
+      colonyShipsInFlight: JSON.parse(JSON.stringify(this.colonyShipsInFlight)),
       tutorialStep: this.tutorialStep,
       lastSaved: Date.now(),
     };
@@ -391,6 +430,7 @@ class GameState extends EventEmitter {
     this.routes              = data.routes ?? [];
     this.activeShips         = []; // reconstructed by RouteSystem
     this.colonyShipsInOrbit  = data.colonyShipsInOrbit ?? [];
+    this.colonyShipsInFlight = data.colonyShipsInFlight ?? [];
     this.tutorialStep   = data.tutorialStep ?? -1; // assume tutorial complete for existing saves
     this.lastSaved      = data.lastSaved ?? Date.now();
 
