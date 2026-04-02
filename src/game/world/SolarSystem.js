@@ -11,6 +11,7 @@ import { NebulaVolume } from '../effects/NebulaVolume.js';
 import { AsteroidBelt } from '../effects/AsteroidBelt.js';
 import { LensFlare } from '../effects/LensFlare.js';
 import { MiningBurst } from '../effects/MiningBurst.js';
+import { DefenseManager3D } from './DefenseManager3D.js';
 import { gameState } from '../GameState.js';
 
 /**
@@ -52,6 +53,9 @@ export class SolarSystem {
     this.station = new Station3D();
     this.station.init(planetDef.id);
     this.orbitGroup.add(this.station.group);
+
+    // Defense objects (satellites, patrol ships, cannon turrets)
+    this.defenseManager = new DefenseManager3D(planetDef.id, this.orbitGroup, this.station);
 
     // Robots
     this.robotManager = new RobotManager3D();
@@ -338,6 +342,11 @@ export class SolarSystem {
     return this.station.stationWorldPosition;
   }
 
+  /** Lock-on targets for all defense objects on this planet */
+  getDefenseLockOnTargets() {
+    return this.defenseManager.getLockOnTargets();
+  }
+
   /** System center (sun position) */
   get worldPosition() {
     return this.group.position;
@@ -486,6 +495,13 @@ export class SolarSystem {
     // Lights
     this.rimLight.visible = distance < 100;
     this.fillLight.visible = distance < 100;
+
+    // Defense objects — satellites and patrol ships visible at planet level
+    const defenseVisible = distance < 200 && !!_ps?.hasBase;
+    this.defenseManager.setVisible(defenseVisible);
+    if (defenseVisible && dt !== undefined) {
+      this.defenseManager.update(dt, time);
+    }
   }
 
   dispose() {
@@ -499,6 +515,7 @@ export class SolarSystem {
     if (this.colonyShip) this.colonyShip.dispose();
     this.planet.dispose();
     this.station.dispose();
+    this.defenseManager.dispose();
     this.robotManager.dispose();
     this.miningBurst.dispose();
     this.dustCloud.dispose();

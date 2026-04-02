@@ -82,6 +82,23 @@ export function createGame() {
   _shipTooltipEl.style.display = 'none';
   document.getElementById('hud-overlay').appendChild(_shipTooltipEl);
 
+  // --- Lock-on tooltip (for defense objects) ---
+  const _lockOnTooltipEl = document.getElementById('lockOn-tooltip');
+  const _lockOnTooltip = {
+    show(infoFn) {
+      const info = typeof infoFn === 'function' ? infoFn() : infoFn;
+      if (!_lockOnTooltipEl) return;
+      _lockOnTooltipEl.innerHTML =
+        `<div class="lockon-label">LOCK-ON</div>` +
+        `<div class="lockon-type">${info.type.toUpperCase()}</div>` +
+        `<div class="lockon-level">Level ${info.level}</div>`;
+      _lockOnTooltipEl.style.display = 'block';
+    },
+    hide() {
+      if (_lockOnTooltipEl) _lockOnTooltipEl.style.display = 'none';
+    },
+  };
+
   const _fmtEta = (seconds) => {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
@@ -91,6 +108,7 @@ export function createGame() {
   const _deselectShip = () => {
     _selectedShipId = null;
     _shipTooltipEl.style.display = 'none';
+    _lockOnTooltip.hide();
   };
 
   gameState.on('cargoShipClicked', ({ shipId }) => {
@@ -132,6 +150,17 @@ export function createGame() {
       _deselectShip();
       AudioManager.play('PLANET_CLICK_3D');
       cameraController.trackObject(() => target.system.stationWorldPosition, 12);
+    });
+  }
+
+  // Register defense lock-on targets (satellites + patrol ships — all hitboxes pre-created)
+  for (const target of galaxy.getDefenseLockOnTargets()) {
+    inputManager.addClickable(target.mesh, () => {
+      if (!target.isActive()) return;   // object is pooled/inactive — ignore click
+      _deselectShip();
+      AudioManager.play('PLANET_CLICK_3D');
+      cameraController.trackObject(target.getWorldPosition, 10);
+      _lockOnTooltip.show(target.info);
     });
   }
 
@@ -191,18 +220,34 @@ export function createGame() {
   // Combat visual events
   gameState.on('defenseFired', ({ planetId, defenseType, targetId, damage }) => {
     if (planetId !== gameState.focusedPlanet) return;
-    const stationPos = galaxy.getSystem(planetId)?.stationWorldPosition;
-    // Find target position from enemy manager (approximate from planet pos)
-    const planetPos = galaxy.getPlanetWorldPosition(planetId);
-    if (stationPos && planetPos) {
-      // Target position: offset from planet toward a random orbit point
-      const angle = Math.random() * Math.PI * 2;
-      const targetPos = planetPos.clone();
-      targetPos.x += Math.cos(angle) * 13;
-      targetPos.z += Math.sin(angle) * 13;
-      targetPos.y += (Math.random() - 0.5) * 4;
-      combatEffects.laser(stationPos, targetPos, defenseType === 'satellite' ? 0x44aaff : 0xff4444);
-    }
+
+    // Pick laser color by defense type
+    const colorMap = {
+      cannon:      0xd4a843,  // amber gold
+      satellite:   0x44ddff,  // cyan
+      defenseShip: 0xffffff,  // white
+      shield:      0x4488ff,  // blue (rare)
+    };
+    const laserColor = colorMap[defenseType] ?? 0xd4a843;
+
+    // Fire origin: use actual defense object position when available
+    const defMgr = galaxy.getDefenseManager(planetId);
+    const fromPos = defMgr?.getFirePosition(defenseType)
+      ?? galaxy.getSystem(planetId)?.stationWorldPosition;
+
+    if (!fromPos) return;
+
+    // Target: try to hit the actual enemy visual; fall back to orbit approximation
+    const toPos = enemyManager.getEnemyWorldPosition(targetId)
+      ?? enemyManager.getAnyEnemyWorldPosition()
+      ?? (() => {
+        const pPos = galaxy.getPlanetWorldPosition(planetId);
+        if (!pPos) return null;
+        const a = Math.random() * Math.PI * 2;
+        return pPos.clone().add(new THREE.Vector3(Math.cos(a) * 13, (Math.random() - 0.5) * 4, Math.sin(a) * 13));
+      })();
+
+    if (toPos) combatEffects.laser(fromPos, toPos, laserColor);
   });
 
   gameState.on('enemyDestroyed', ({ planetId, enemy }) => {

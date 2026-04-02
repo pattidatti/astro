@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { gameState } from '../GameState.js';
 import { EnemyShip3D } from '../objects/EnemyShip3D.js';
 import { Mothership3D } from '../objects/Mothership3D.js';
@@ -209,6 +210,40 @@ export class EnemyManager3D {
       ms.update(dt);
       ms.setHP(attack.mothership.hp, attack.mothership.maxHP);
     }
+  }
+
+  /**
+   * Get the world position of an active enemy ship by its logical id.
+   * Returns null if the enemy has no active visual.
+   */
+  getEnemyWorldPosition(enemyId) {
+    const ship = this._activeShips.get(enemyId);
+    if (!ship || !ship.group.visible) return null;
+    const v = new THREE.Vector3();
+    ship.group.getWorldPosition(v);
+    return v;
+  }
+
+  /**
+   * Get the world position of any active enemy (for generic targeting).
+   * Returns null if no enemies are visible.
+   */
+  getAnyEnemyWorldPosition() {
+    for (const [, ship] of this._activeShips) {
+      if (ship.group.visible) {
+        const v = new THREE.Vector3();
+        ship.group.getWorldPosition(v);
+        return v;
+      }
+    }
+    for (const [, ms] of this._activeMotherships) {
+      if (ms.group.visible) {
+        const v = new THREE.Vector3();
+        ms.group.getWorldPosition(v);
+        return v;
+      }
+    }
+    return null;
   }
 
   dispose() {

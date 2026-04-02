@@ -115,6 +115,22 @@ export class Galaxy {
     }));
   }
 
+  /** Get all defense lock-on targets from all systems */
+  getDefenseLockOnTargets() {
+    const targets = [];
+    for (const id in this.systems) {
+      for (const t of this.systems[id].getDefenseLockOnTargets()) {
+        targets.push({ ...t, planetId: id, system: this.systems[id] });
+      }
+    }
+    return targets;
+  }
+
+  /** Get the DefenseManager3D for a specific planet */
+  getDefenseManager(planetId) {
+    return this.systems[planetId]?.defenseManager ?? null;
+  }
+
   _initRouteLanes() {
     this._routeLanes = new Map(); // routeId → RouteLane3D
 

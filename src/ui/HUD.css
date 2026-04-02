@@ -601,6 +601,38 @@
   color: #4af0ff;
 }
 
+/* ── Lock-on tooltip (defense objects) ── */
+#lockOn-tooltip {
+  position: fixed;
+  bottom: 120px;
+  right: 20px;
+  z-index: 50;
+  pointer-events: none;
+  background: rgba(10, 14, 20, 0.88);
+  border: 1px solid rgba(212, 168, 67, 0.6);
+  border-radius: 5px;
+  padding: 10px 14px;
+  backdrop-filter: blur(6px);
+  min-width: 130px;
+  display: none;
+}
+.lockon-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: rgba(212, 168, 67, 0.6);
+  margin-bottom: 4px;
+}
+.lockon-type {
+  font-size: 13px;
+  color: var(--dune-gold);
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+}
+.lockon-level {
+  font-size: 11px;
+  color: var(--dune-text-secondary);
+}
+
 /* ── Robot hire buttons ── */
 .hire-grid {
   display: grid;

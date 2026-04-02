@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gameState } from '../GameState.js';
 
 const HULL      = 0xc8c0b0;
 const HULL_MID  = 0x9a9490;
@@ -838,6 +839,120 @@ export class Station3D {
     this._damageParticles = new THREE.Points(geo, this._damageParticleMat);
     this._damageParticles.visible = false;
     this.group.add(this._damageParticles);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CANNON TURRETS — mounted on hull, visible from planet level
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Create or remove cannon turrets to match the purchased count.
+   * Turrets orbit the station along its observation ring (radius 1.35).
+   * @param {number} count - Number of turrets (0 removes all)
+   */
+  syncCannonTurrets(count) {
+    if (!this._turretGroup) {
+      this._turretGroup = new THREE.Group();
+      this.group.add(this._turretGroup);
+      this._turretPivots = []; // { pivot: Group, sweepOffset: number }
+    }
+
+    const current = this._turretPivots.length;
+    if (current === count) return;
+
+    // Clear all turrets and rebuild
+    this._turretGroup.clear();
+    this._turretPivots = [];
+
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const r = 1.35; // observation ring radius (station-local, pre-scale)
+      const x = Math.cos(angle) * r;
+      const z = Math.sin(angle) * r;
+
+      // Base mount
+      const baseGeo = new THREE.CylinderGeometry(0.10, 0.12, 0.10, 6);
+      const baseMat = new THREE.MeshStandardMaterial({
+        color: GOLD, emissive: GOLD, emissiveIntensity: 0.3,
+        metalness: 0.85, roughness: 0.2,
+      });
+      const base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.set(x, 0.08, z);
+      this._turretGroup.add(base);
+
+      // Barrel pivot group (rotates to aim)
+      const pivot = new THREE.Group();
+      pivot.position.set(x, 0.15, z);
+      this._turretGroup.add(pivot);
+
+      // Barrel
+      const bGeo = new THREE.CylinderGeometry(0.022, 0.030, 0.38, 6);
+      const bMat = new THREE.MeshStandardMaterial({
+        color: 0xbbbbcc, metalness: 0.92, roughness: 0.1,
+      });
+      const barrel = new THREE.Mesh(bGeo, bMat);
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.z = -0.22;
+      pivot.add(barrel);
+
+      // Muzzle glow
+      const mGeo = new THREE.CircleGeometry(0.026, 6);
+      const mMat = new THREE.MeshBasicMaterial({
+        color: REACTOR, transparent: true, opacity: 0.8,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      const muzzle = new THREE.Mesh(mGeo, mMat);
+      muzzle.position.z = -0.41;
+      pivot.add(muzzle);
+
+      this._turretPivots.push({
+        pivot,
+        sweepOffset: angle, // stagger sweep phase
+        baseAngle: angle,
+      });
+    }
+  }
+
+  /**
+   * Smoothly aim all turret pivots toward the nearest enemy in the planet.
+   * Falls back to a slow sweep when not in combat.
+   * Called by DefenseManager3D each frame.
+   * @param {string} planetId
+   */
+  aimTurretsAtNearest(planetId) {
+    if (!this._turretPivots || this._turretPivots.length === 0) return;
+
+    const attack = gameState.activeAttacks.find(a => a.planetId === planetId);
+    const alive = attack?.enemies.filter(e => e.hp > 0) ?? [];
+
+    // Get station world position for reference
+    const stationWorldPos = this.stationWorldPosition;
+
+    for (const td of this._turretPivots) {
+      if (alive.length > 0 && attack) {
+        // Pick a random alive enemy and rotate toward where enemy ships orbit
+        const enemy = alive[Math.floor(Math.random() * alive.length)];
+        // Enemy visual positions not directly accessible; sweep toward orbit radius
+        // Use a combat sweep: rotate quickly around the orbit axis
+        td.sweepOffset += 0.008; // fast sweep during combat
+      } else {
+        td.sweepOffset += 0.002; // slow idle sweep
+      }
+      // Rotate barrel pivot (yaw around Y-axis)
+      td.pivot.rotation.y = td.sweepOffset - td.baseAngle;
+    }
+  }
+
+  /**
+   * Return world position of a random cannon turret.
+   * Used by DefenseManager3D for laser fire origin.
+   */
+  getRandomTurretWorldPosition() {
+    if (!this._turretPivots || this._turretPivots.length === 0) return null;
+    const td = this._turretPivots[Math.floor(Math.random() * this._turretPivots.length)];
+    const v = new THREE.Vector3();
+    td.pivot.getWorldPosition(v);
+    return v;
   }
 
   dispose() {
