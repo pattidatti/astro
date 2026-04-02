@@ -14,7 +14,7 @@ export class EnemyShip3D {
     this._type = null;
     this._targetPos = new THREE.Vector3();
     this._orbitAngle = Math.random() * Math.PI * 2;
-    this._orbitRadius = 8 + Math.random() * 4;
+    this._orbitRadius = 15 + Math.random() * 15;
     this._verticalOffset = 18 + Math.random() * 6;
     this._speed = 1.0;
 
@@ -25,32 +25,168 @@ export class EnemyShip3D {
   }
 
   _buildMesh() {
-    // Shared enemy hull — angular, aggressive look
-    const bodyGeo = new THREE.ConeGeometry(0.15, 0.7, 6);
-    bodyGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-    this._bodyMat = new THREE.MeshStandardMaterial({
-      color: 0xff3333,
-      metalness: 0.7,
+    this._meshGroup = new THREE.Group();
+    this.group.add(this._meshGroup);
+
+    // Shared materials
+    this._obsidianMat = new THREE.MeshStandardMaterial({
+      color: 0x15151b, // Dark obsidian
+      metalness: 0.8,
       roughness: 0.3,
+    });
+    this._armorMat = new THREE.MeshStandardMaterial({
+      color: 0x25252d, // Dark metal armor
+      metalness: 0.6,
+      roughness: 0.5,
+    });
+    this._glowMat = new THREE.MeshBasicMaterial({
+      color: 0xff3333,
+    });
+    this._glassMat = new THREE.MeshStandardMaterial({
+      color: 0x050505,
+      metalness: 1.0,
+      roughness: 0.1,
       emissive: new THREE.Color(0x330000),
     });
-    this._body = new THREE.Mesh(bodyGeo, this._bodyMat);
-    this.group.add(this._body);
 
-    // Wing fins
-    const wingGeo = new THREE.BoxGeometry(0.5, 0.03, 0.25);
-    const wingMat = new THREE.MeshStandardMaterial({
-      color: 0x882222,
-      metalness: 0.8,
-      roughness: 0.2,
-    });
-    this._wingL = new THREE.Mesh(wingGeo, wingMat);
-    this._wingL.position.set(-0.15, 0, 0.05);
-    this.group.add(this._wingL);
+    this._interceptorGroup = this._buildInterceptor();
+    this._bomberGroup = this._buildBomber();
+    this._raiderGroup = this._buildRaider();
 
-    this._wingR = new THREE.Mesh(wingGeo.clone(), wingMat.clone());
-    this._wingR.position.set(0.15, 0, 0.05);
-    this.group.add(this._wingR);
+    this._meshGroup.add(this._interceptorGroup);
+    this._meshGroup.add(this._bomberGroup);
+    this._meshGroup.add(this._raiderGroup);
+  }
+
+  _buildInterceptor() {
+    const group = new THREE.Group();
+    // Needle core
+    const coreGeo = new THREE.CylinderGeometry(0.015, 0.05, 0.35, 6);
+    coreGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    const core = new THREE.Mesh(coreGeo, this._obsidianMat);
+    group.add(core);
+
+    // Forward swept wings
+    const wingGeo = new THREE.BoxGeometry(0.25, 0.02, 0.08);
+    const wingL = new THREE.Mesh(wingGeo, this._armorMat);
+    wingL.position.set(-0.11, 0, -0.05);
+    wingL.rotation.y = -Math.PI / 6;
+    group.add(wingL);
+
+    const wingR = new THREE.Mesh(wingGeo, this._armorMat);
+    wingR.position.set(0.11, 0, -0.05);
+    wingR.rotation.y = Math.PI / 6;
+    group.add(wingR);
+
+    // Engines
+    const engineGeo = new THREE.CylinderGeometry(0.015, 0.025, 0.1, 8);
+    engineGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    const engL = new THREE.Mesh(engineGeo, this._obsidianMat);
+    engL.position.set(-0.04, 0, -0.15);
+    group.add(engL);
+    
+    const engR = engL.clone();
+    engR.position.set(0.04, 0, -0.15);
+    group.add(engR);
+
+    // Glow
+    const glowGeo = new THREE.CircleGeometry(0.02, 8);
+    const glL = new THREE.Mesh(glowGeo, this._glowMat);
+    glL.position.set(-0.04, 0, -0.201);
+    glL.rotation.y = Math.PI;
+    group.add(glL);
+    
+    const glR = new THREE.Mesh(glowGeo, this._glowMat);
+    glR.position.set(0.04, 0, -0.201);
+    glR.rotation.y = Math.PI;
+    group.add(glR);
+
+    return group;
+  }
+
+  _buildBomber() {
+    const group = new THREE.Group();
+    // Bulky core
+    const coreGeo = new THREE.BoxGeometry(0.15, 0.08, 0.25);
+    const core = new THREE.Mesh(coreGeo, this._armorMat);
+    group.add(core);
+
+    // Thick wings
+    const wingGeo = new THREE.BoxGeometry(0.35, 0.04, 0.15);
+    const wings = new THREE.Mesh(wingGeo, this._obsidianMat);
+    wings.position.set(0, 0, -0.02);
+    group.add(wings);
+
+    // Bomb pods
+    const podGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.2, 8);
+    podGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    const podL = new THREE.Mesh(podGeo, this._obsidianMat);
+    podL.position.set(-0.12, -0.04, 0);
+    group.add(podL);
+    
+    const podR = podL.clone();
+    podR.position.set(0.12, -0.04, 0);
+    group.add(podR);
+
+    // Engine
+    const engineGeo = new THREE.BoxGeometry(0.12, 0.06, 0.08);
+    const engine = new THREE.Mesh(engineGeo, this._obsidianMat);
+    engine.position.set(0, 0, -0.15);
+    group.add(engine);
+
+    // Glow
+    const glowGeo = new THREE.PlaneGeometry(0.1, 0.05);
+    const glow = new THREE.Mesh(glowGeo, this._glowMat);
+    glow.position.set(0, 0, -0.191);
+    glow.rotation.y = Math.PI;
+    group.add(glow);
+
+    // Cockpit
+    const glassGeo = new THREE.BoxGeometry(0.08, 0.04, 0.08);
+    const glass = new THREE.Mesh(glassGeo, this._glassMat);
+    glass.position.set(0, 0.05, 0.08);
+    group.add(glass);
+
+    return group;
+  }
+
+  _buildRaider() {
+    const group = new THREE.Group();
+    // Fork shape (TIE style prongs)
+    const coreGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.15, 6);
+    coreGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    const core = new THREE.Mesh(coreGeo, this._obsidianMat);
+    core.position.set(0, 0, -0.05);
+    group.add(core);
+
+    const prongGeo = new THREE.BoxGeometry(0.03, 0.15, 0.25);
+    const prongL = new THREE.Mesh(prongGeo, this._armorMat);
+    prongL.position.set(-0.12, 0, 0.02);
+    group.add(prongL);
+
+    const prongR = prongL.clone();
+    prongR.position.set(0.12, 0, 0.02);
+    group.add(prongR);
+
+    const wingGeo = new THREE.BoxGeometry(0.24, 0.02, 0.06);
+    const wings = new THREE.Mesh(wingGeo, this._obsidianMat);
+    wings.position.set(0, 0, -0.05);
+    group.add(wings);
+
+    // Engine
+    const glowGeo = new THREE.CircleGeometry(0.02, 6);
+    const glow = new THREE.Mesh(glowGeo, this._glowMat);
+    glow.position.set(0, 0, -0.126);
+    glow.rotation.y = Math.PI;
+    group.add(glow);
+
+    // Cockpit glass sphere
+    const glassGeo = new THREE.SphereGeometry(0.035, 8, 8);
+    const glass = new THREE.Mesh(glassGeo, this._glassMat);
+    glass.position.set(0, 0, 0.08);
+    group.add(glass);
+
+    return group;
   }
 
   _createTrail() {
@@ -71,7 +207,7 @@ export class EnemyShip3D {
 
   _createHPBar() {
     // HP bar background
-    const bgGeo = new THREE.PlaneGeometry(0.6, 0.06);
+    const bgGeo = new THREE.PlaneGeometry(0.4, 0.04);
     const bgMat = new THREE.MeshBasicMaterial({
       color: 0x222222,
       transparent: true,
@@ -80,11 +216,12 @@ export class EnemyShip3D {
       side: THREE.DoubleSide,
     });
     this._hpBg = new THREE.Mesh(bgGeo, bgMat);
-    this._hpBg.position.set(0, 0.5, 0);
+    // Lowered HP bar due to scale reduction
+    this._hpBg.position.set(0, 0.25, 0);
     this.group.add(this._hpBg);
 
     // HP bar foreground
-    const fgGeo = new THREE.PlaneGeometry(0.58, 0.04);
+    const fgGeo = new THREE.PlaneGeometry(0.38, 0.03);
     this._hpFgMat = new THREE.MeshBasicMaterial({
       color: 0x44ff44,
       transparent: true,
@@ -93,13 +230,14 @@ export class EnemyShip3D {
       side: THREE.DoubleSide,
     });
     this._hpFg = new THREE.Mesh(fgGeo, this._hpFgMat);
-    this._hpFg.position.set(0, 0.5, 0.001);
+    this._hpFg.position.set(0, 0.25, 0.001);
     this.group.add(this._hpFg);
   }
 
   _createEngineGlow() {
-    this._engineLight = new THREE.PointLight(0xff4444, 0.4, 3);
-    this._engineLight.position.set(0, 0, -0.4);
+    this._engineLight = new THREE.PointLight(0xff4444, 0.3, 2);
+    // Positioned slightly behind the group
+    this._engineLight.position.set(0, 0, -0.2);
     this.group.add(this._engineLight);
   }
 
@@ -108,20 +246,27 @@ export class EnemyShip3D {
    */
   setType(type, color) {
     this._type = type;
-    this._bodyMat.color.set(color);
-    this._bodyMat.emissive.set(new THREE.Color(color).multiplyScalar(0.2));
+    
+    // Set glowing colors
+    this._glowMat.color.set(color);
+    this._glassMat.emissive.set(new THREE.Color(color).multiplyScalar(0.3));
     this._trailMat.color.set(color);
     this._engineLight.color.set(color);
 
-    // Bomber: slightly larger
+    // Toggle visuals based on type
+    this._interceptorGroup.visible = false;
+    this._bomberGroup.visible = false;
+    this._raiderGroup.visible = false;
+
     if (type === 'bomber') {
-      this._body.scale.setScalar(1.4);
-      this._wingL.scale.set(1.3, 1, 1.3);
-      this._wingR.scale.set(1.3, 1, 1.3);
+      this._bomberGroup.visible = true;
+      this._meshGroup.scale.setScalar(1.2); 
+    } else if (type === 'raider') {
+      this._raiderGroup.visible = true;
+      this._meshGroup.scale.setScalar(1.0);
     } else {
-      this._body.scale.setScalar(1.0);
-      this._wingL.scale.set(1, 1, 1);
-      this._wingR.scale.set(1, 1, 1);
+      this._interceptorGroup.visible = true;
+      this._meshGroup.scale.setScalar(1.0);
     }
   }
 
@@ -132,7 +277,7 @@ export class EnemyShip3D {
     this._targetPos.copy(targetPos);
     this._speed = speed || 1.0;
     this._orbitAngle = Math.random() * Math.PI * 2;
-    this._orbitRadius = 8 + Math.random() * 4;
+    this._orbitRadius = 15 + Math.random() * 15;
     this._verticalOffset = 18 + Math.random() * 6;
     this.group.visible = true;
 
@@ -152,7 +297,8 @@ export class EnemyShip3D {
   setHP(current, max) {
     const frac = Math.max(0, current / max);
     this._hpFg.scale.x = frac;
-    this._hpFg.position.x = -(1 - frac) * 0.29;
+    // Scale goes from -0.19 to 0 (for a width of 0.38)
+    this._hpFg.position.x = -(1 - frac) * 0.19;
 
     // Color: green → yellow → red
     if (frac > 0.6) {
@@ -197,7 +343,10 @@ export class EnemyShip3D {
       this._targetPos.y + this._verticalOffset,
       this._targetPos.z + Math.sin(lookAngle) * this._orbitRadius,
     );
-    this._body.lookAt(lookPos);
+    this._meshGroup.lookAt(lookPos);
+
+    // The engine light follows the rotation approximately
+    this._engineLight.position.set(0, 0, -0.2).applyQuaternion(this._meshGroup.quaternion);
 
     // Update trail
     for (let i = TRAIL_LENGTH - 1; i > 0; i--) {
