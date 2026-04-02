@@ -200,9 +200,9 @@ export class HUDBridge {
       const p = PLANETS.find(x => x.id === planetId);
       const name = p?.name || planetId;
       if (type === 'invasion') {
-        this.toast(`👾 INVASION: ${name}`, 'warn');
+        this.toast(`👾 INVASION: ${name}`, 'warn', planetId);
       } else {
-        this.toast(`⚔ RAID: ${name}`, 'warn');
+        this.toast(`⚔ RAID: ${name}`, 'warn', planetId);
       }
     });
     gameState.on('attackEnded', ({ planetId, reason }) => {
@@ -223,7 +223,7 @@ export class HUDBridge {
     });
     gameState.on('fleetTargetingPlayer', ({ planetId }) => {
       const p = PLANETS.find(x => x.id === planetId);
-      this.toast(`🚨 ENEMY FLEET INCOMING: ${p?.name ?? planetId}`, 'warn');
+      this.toast(`🚨 ENEMY FLEET INCOMING: ${p?.name ?? planetId}`, 'warn', planetId);
     });
     gameState.on('planetRecolonized', ({ planetId }) => {
       const p = PLANETS.find(x => x.id === planetId);
@@ -297,11 +297,23 @@ export class HUDBridge {
     this._combatHUD.updateSummary();
   }
 
-  toast(msg, severity = 'info') {
+  toast(msg, severity = 'info', planetId = null) {
     const container = this.dom.toastContainer;
     const el = document.createElement('div');
     el.className = `toast-item toast-${severity}`;
     el.textContent = msg;
+
+    if (planetId) {
+      el.classList.add('toast-clickable');
+      el.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        const sys = this.game.galaxy.getSystem(planetId);
+        if (!sys) return;
+        gameState.switchPlanet(planetId);
+        this.game.cameraController.trackObject(() => sys.planetWorldPosition, 55);
+      });
+    }
+
     container.appendChild(el);
 
     // Trigger enter animation on next frame

@@ -10,7 +10,7 @@ export const ENEMY_TYPES = {
   interceptor: {
     id: 'interceptor',
     name: 'INTERCEPTOR',
-    hp: 30,
+    hp: 400,
     damage: 5,        // DPS to target
     speed: 1.2,        // movement speed multiplier
     target: 'robots',  // what it attacks
@@ -21,7 +21,7 @@ export const ENEMY_TYPES = {
   bomber: {
     id: 'bomber',
     name: 'BOMBER',
-    hp: 60,
+    hp: 750,
     damage: 15,
     speed: 0.8,
     target: 'station',
@@ -32,7 +32,7 @@ export const ENEMY_TYPES = {
   raider: {
     id: 'raider',
     name: 'RAIDER',
-    hp: 40,
+    hp: 500,
     damage: 3,
     speed: 1.0,
     target: 'silo',
@@ -43,7 +43,7 @@ export const ENEMY_TYPES = {
   mothership: {
     id: 'mothership',
     name: 'MOTHERSHIP',
-    hp: 500,
+    hp: 5000,
     damage: 25,
     speed: 0.3,
     target: 'station',
@@ -61,8 +61,8 @@ export const ENEMY_TYPES = {
  */
 export const RAID_TEMPLATES = [
   // Tier 0: threat 1-2 — light probe
-  { tier: 0, minThreat: 1, composition: [{ type: 'interceptor', count: 1 }] },
-  { tier: 0, minThreat: 1, composition: [{ type: 'raider', count: 1 }] },
+  { tier: 0, minThreat: 1, composition: [{ type: 'interceptor', count: 2 }] },
+  { tier: 0, minThreat: 1, composition: [{ type: 'raider', count: 2 }] },
   // Tier 1: threat 3-4
   { tier: 1, minThreat: 3, composition: [{ type: 'interceptor', count: 2 }] },
   { tier: 1, minThreat: 3, composition: [{ type: 'interceptor', count: 1 }, { type: 'raider', count: 1 }] },

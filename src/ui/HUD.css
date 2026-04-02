@@ -1070,6 +1070,36 @@
 .toast-warn    { border-left-color: #c67b30; }
 .toast-error   { border-left-color: var(--dune-red); }
 
+/* Clickable toast: enable pointer events and cursor */
+.toast-item.toast-clickable {
+  pointer-events: auto;
+  cursor: pointer;
+  padding-right: 38px;
+  position: relative;
+}
+
+/* Arrow indicator appended via ::after pseudo-element */
+.toast-item.toast-clickable::after {
+  content: '→';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.6;
+  font-size: 16px;
+  transition: opacity 0.15s, right 0.15s;
+}
+
+/* Hover state: brighten background and shift arrow slightly */
+.toast-item.toast-clickable:hover {
+  background: rgba(10,12,16,1);
+  box-shadow: 0 0 24px rgba(212,168,67,0.18);
+}
+.toast-item.toast-clickable:hover::after {
+  opacity: 1;
+  right: 10px;
+}
+
 /* ══════════════════════════════════════════════════════
    COLONY SHIP
    ══════════════════════════════════════════════════════ */
