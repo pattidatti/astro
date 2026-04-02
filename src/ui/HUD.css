@@ -673,33 +673,44 @@
 }
 
 /* ══════════════════════════════════════════════════════
-   TOAST NOTIFICATIONS
+   TOAST NOTIFICATIONS (queue)
    ══════════════════════════════════════════════════════ */
-#toast {
+#toast-container {
   position: fixed;
   bottom: 40px;
   left: 50%;
-  transform: translateX(-50%) translateY(16px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  z-index: 200;
+  pointer-events: none;
+}
+.toast-item {
   background: rgba(10,12,16,0.96);
   border: 1px solid var(--dune-gold-dim);
+  border-left: 3px solid var(--dune-gold);
   padding: 10px 24px;
   font-family: 'Orbitron', sans-serif;
-  font-size: 16px;
+  font-size: 14px;
   letter-spacing: 2px;
   color: var(--dune-gold);
   text-shadow: 0 0 8px rgba(212,168,67,0.3);
   box-shadow: 0 0 20px rgba(212,168,67,0.1);
   border-radius: 4px;
-  z-index: 200;
-  opacity: 0;
-  transition: opacity 0.22s, transform 0.22s;
-  pointer-events: none;
   white-space: nowrap;
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
-#toast.on {
+.toast-item.toast-visible {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
 }
+.toast-info    { border-left-color: var(--dune-gold); }
+.toast-success { border-left-color: var(--dune-green); }
+.toast-warn    { border-left-color: #c67b30; }
+.toast-error   { border-left-color: var(--dune-red); }
 
 /* ══════════════════════════════════════════════════════
    COLONY SHIP

@@ -28,7 +28,7 @@ export class HUDBridge {
       upgTooltip:       document.getElementById('upg-tooltip'),
       planetTooltip:    document.getElementById('planet-tooltip'),
       stationTargetBox: document.getElementById('station-target-box'),
-      toast:            document.getElementById('toast'),
+      toastContainer:   document.getElementById('toast-container'),
     };
     this._hoveredStationId = null;
 
@@ -133,7 +133,7 @@ export class HUDBridge {
       AudioManager.play('PLANET_COLONIZED');
       this._suppressNextPlanetChanged = true; // colonize emits focusedPlanet right after — avoid double-sound
       const p = PLANETS.find(x => x.id === id);
-      this.toast('🌍 COLONIZED: ' + (p ? p.name : id));
+      this.toast('🌍 COLONIZED: ' + (p ? p.name : id), 'success');
     });
     gameState.on('focusedPlanet', (id) => {
       if (this._suppressNextPlanetChanged) {
@@ -164,11 +164,11 @@ export class HUDBridge {
     gameState.on('shipArrived', (ship) => {
       AudioManager.play('SHIP_ARRIVED');
       const toDef = PLANETS.find(p => p.id === ship.toPlanet);
-      if (toDef) this.toast(`📦 DELIVERY: ${fmt(ship.amount)} to ${toDef.name}`);
+      if (toDef) this.toast(`📦 DELIVERY: ${fmt(ship.amount)} to ${toDef.name}`, 'info');
     });
     gameState.on('depositUnlocked', ({ planetId, resource, zones }) => {
       AudioManager.play('DEPOSIT_UNLOCKED');
-      this.toast(`🔭 NEW DEPOSIT: ${resource.toUpperCase()} (${zones} zones)`);
+      this.toast(`🔭 NEW DEPOSIT: ${resource.toUpperCase()} (${zones} zones)`, 'success');
     });
     gameState.on('routeAdded', () => {
       AudioManager.play('UI_ROUTE_ADD');
@@ -186,30 +186,30 @@ export class HUDBridge {
       const p = PLANETS.find(x => x.id === planetId);
       const name = p?.name || planetId;
       if (type === 'invasion') {
-        this.toast(`👾 INVASION: ${name}`);
+        this.toast(`👾 INVASION: ${name}`, 'warn');
       } else {
-        this.toast(`⚔ RAID: ${name}`);
+        this.toast(`⚔ RAID: ${name}`, 'warn');
       }
     });
     gameState.on('attackEnded', ({ planetId, reason }) => {
       if (reason === 'victory') {
         const p = PLANETS.find(x => x.id === planetId);
-        this.toast(`✓ DEFENDED: ${p?.name || planetId}`);
+        this.toast(`✓ DEFENDED: ${p?.name || planetId}`, 'success');
       }
     });
     gameState.on('planetFell', (planetId) => {
       const p = PLANETS.find(x => x.id === planetId);
-      this.toast(`✖ STATION LOST: ${p?.name || planetId}`);
+      this.toast(`✖ STATION LOST: ${p?.name || planetId}`, 'error');
     });
     gameState.on('defenseBuilt', ({ planetId, defenseId }) => {
       this.toast(`🛡 DEFENSE BUILT: ${defenseId.toUpperCase()}`);
     });
     gameState.on('cargoIntercepted', ({ ship }) => {
-      this.toast(`⚠ CARGO LOST: ${fmt(ship.amount)} ${ship.resource.toUpperCase()}`);
+      this.toast(`⚠ CARGO LOST: ${fmt(ship.amount)} ${ship.resource.toUpperCase()}`, 'warn');
     });
     gameState.on('planetRecolonized', ({ planetId }) => {
       const p = PLANETS.find(x => x.id === planetId);
-      this.toast(`🌍 RECOLONIZED: ${p?.name || planetId}`);
+      this.toast(`🌍 RECOLONIZED: ${p?.name || planetId}`, 'success');
     });
   }
 
@@ -257,11 +257,27 @@ export class HUDBridge {
     this._combatHUD.updateSummary();
   }
 
-  toast(msg) {
-    const el = this.dom.toast;
+  toast(msg, severity = 'info') {
+    const container = this.dom.toastContainer;
+    const el = document.createElement('div');
+    el.className = `toast-item toast-${severity}`;
     el.textContent = msg;
-    el.classList.add('on');
-    if (this._toastTimer) clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => el.classList.remove('on'), 2600);
+    container.appendChild(el);
+
+    // Trigger enter animation on next frame
+    requestAnimationFrame(() => el.classList.add('toast-visible'));
+
+    // Remove oldest if more than 3
+    while (container.children.length > 3) {
+      container.firstElementChild.remove();
+    }
+
+    // Auto-remove after 3s
+    setTimeout(() => {
+      el.classList.remove('toast-visible');
+      el.addEventListener('transitionend', () => el.remove(), { once: true });
+      // Fallback removal in case transitionend doesn't fire
+      setTimeout(() => { if (el.parentNode) el.remove(); }, 400);
+    }, 3000);
   }
 }
