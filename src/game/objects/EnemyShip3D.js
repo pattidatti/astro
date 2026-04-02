@@ -15,7 +15,8 @@ export class EnemyShip3D {
     this._targetPos = new THREE.Vector3();
     this._orbitAngle = Math.random() * Math.PI * 2;
     this._orbitRadius = 15 + Math.random() * 15;
-    this._verticalOffset = 18 + Math.random() * 6;
+    this._orbitInclination = 0.5 + Math.random() * 0.8;  // 29–74 degrees from horizontal
+    this._orbitAzimuth = Math.random() * Math.PI * 2;     // random orbit plane orientation
     this._speed = 1.0;
 
     // Approach animation state
@@ -285,20 +286,17 @@ export class EnemyShip3D {
     this._speed = speed || 1.0;
     this._orbitAngle = Math.random() * Math.PI * 2;
     this._orbitRadius = 15 + Math.random() * 15;
-    this._verticalOffset = 18 + Math.random() * 6;
+    this._orbitInclination = 0.5 + Math.random() * 0.8;
+    this._orbitAzimuth = Math.random() * Math.PI * 2;
     this.group.visible = true;
 
     // Set up approach animation
     const orbitPos = this._calcOrbitPos();
     this._approachTo.copy(orbitPos);
 
-    // Start position: planet pos + random outward direction, ~60 units away
-    const angle = Math.random() * Math.PI * 2;
-    this._approachFrom.set(
-      targetPos.x + Math.cos(angle) * 60,
-      targetPos.y + this._verticalOffset + (Math.random() - 0.5) * 10,
-      targetPos.z + Math.sin(angle) * 60,
-    );
+    // Start position: 60 units away along the direction to the orbit position
+    const approachDir = new THREE.Vector3().subVectors(this._approachTo, targetPos).normalize();
+    this._approachFrom.copy(targetPos).addScaledVector(approachDir, 60);
 
     this._inApproach = true;
     this._approachTime = 0;
@@ -340,10 +338,21 @@ export class EnemyShip3D {
   }
 
   _calcOrbitPos() {
+    const R = this._orbitRadius;
+    const t = this._orbitAngle;
+    const incl = this._orbitInclination;
+    const azim = this._orbitAzimuth;
+
+    // Position in tilted orbit plane
+    const lx = Math.cos(t) * R;
+    const ly = Math.sin(t) * R * Math.sin(incl);
+    const lz = Math.sin(t) * R * Math.cos(incl);
+
+    // Rotate around Y axis by azimuth for varied orbit orientations
     return new THREE.Vector3(
-      this._targetPos.x + Math.cos(this._orbitAngle) * this._orbitRadius,
-      this._targetPos.y + this._verticalOffset,
-      this._targetPos.z + Math.sin(this._orbitAngle) * this._orbitRadius,
+      this._targetPos.x + lx * Math.cos(azim) - lz * Math.sin(azim),
+      this._targetPos.y + ly,
+      this._targetPos.z + lx * Math.sin(azim) + lz * Math.cos(azim),
     );
   }
 
@@ -383,11 +392,8 @@ export class EnemyShip3D {
 
       if (rawT >= 1) {
         this._inApproach = false;
-        // Snap orbit angle to match the landing position
-        this._orbitAngle = Math.atan2(
-          this._approachTo.z - this._targetPos.z,
-          this._approachTo.x - this._targetPos.x
-        );
+        // Orbit angle was set in activate() and _approachTo was computed from it.
+        // Leave orbit angle unchanged; normal orbiting starts from there.
       }
       return;
     }
@@ -397,12 +403,18 @@ export class EnemyShip3D {
     const newPos = this._calcOrbitPos();
     this.group.position.copy(newPos);
 
-    // Face direction of travel
+    // Face direction of travel (look ahead along orbit)
     const lookAngle = this._orbitAngle + 0.2;
+    const R = this._orbitRadius;
+    const incl = this._orbitInclination;
+    const azim = this._orbitAzimuth;
+    const lx = Math.cos(lookAngle) * R;
+    const ly = Math.sin(lookAngle) * R * Math.sin(incl);
+    const lz = Math.sin(lookAngle) * R * Math.cos(incl);
     const lookPos = new THREE.Vector3(
-      this._targetPos.x + Math.cos(lookAngle) * this._orbitRadius,
-      this._targetPos.y + this._verticalOffset,
-      this._targetPos.z + Math.sin(lookAngle) * this._orbitRadius,
+      this._targetPos.x + lx * Math.cos(azim) - lz * Math.sin(azim),
+      this._targetPos.y + ly,
+      this._targetPos.z + lx * Math.sin(azim) + lz * Math.cos(azim),
     );
     this._meshGroup.lookAt(lookPos);
 

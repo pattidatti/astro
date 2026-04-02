@@ -213,7 +213,7 @@ export class RoamingFleet3D {
    */
   _computeBezierPoint(fromPos, toPos, t) {
     const AVOID_RADIUS = 15;
-    const ENDPOINT_OFFSET = 12;  // Distance to offset start/end from planet centers
+    const ENDPOINT_OFFSET = 25;  // Distance to offset start/end from planet centers (clears rings)
 
     // Compute direction and offset the endpoints to stay outside planet surfaces
     _dir.subVectors(toPos, fromPos);
