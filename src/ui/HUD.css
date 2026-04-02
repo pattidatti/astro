@@ -695,6 +695,24 @@
 }
 
 /* ══════════════════════════════════════════════════════
+   MINIMAP
+   ══════════════════════════════════════════════════════ */
+#minimap-canvas {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--dune-border);
+  z-index: 50;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+#minimap-canvas.minimap-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════════════
    TOAST NOTIFICATIONS (queue)
    ══════════════════════════════════════════════════════ */
 #toast-container {

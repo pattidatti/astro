@@ -14,6 +14,7 @@ import { ShipManager3D } from './world/ShipManager3D.js';
 import { EnemyManager3D } from './world/EnemyManager3D.js';
 import { SpawnFlight } from './effects/SpawnFlight.js';
 import { CombatEffects } from './effects/CombatEffects.js';
+import { Minimap } from './ui/Minimap.js';
 
 export function createGame() {
   const container = document.getElementById('game-container');
@@ -251,6 +252,20 @@ export function createGame() {
     }
   });
 
+  // --- Minimap ---
+  const minimap = new Minimap({
+    onPlanetClick: (planetId) => {
+      const sys = galaxy.getSystem(planetId);
+      if (!sys) return;
+      if (gameState.ownedPlanets.includes(planetId)) {
+        gameState.switchPlanet(planetId);
+        cameraController.trackObject(() => sys.planetWorldPosition, 55);
+      } else {
+        cameraController.focusOnPosition(sys.planetWorldPosition, 55);
+      }
+    },
+  });
+
   // Reusable vector to avoid per-frame allocation for god rays
   const _godRayUV = new THREE.Vector2();
   const _godRayNDC = new THREE.Vector3();
@@ -261,6 +276,7 @@ export function createGame() {
     skybox.update(time, camera);
     combatEffects.update(dt);
     spawnFlight.update(dt);
+    minimap.update(time, cameraController);
     renderPipeline.tick(time);
 
     // God rays: activate when a star-type planet is near and on-screen
