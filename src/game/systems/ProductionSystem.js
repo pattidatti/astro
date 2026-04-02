@@ -34,6 +34,9 @@ export class ProductionSystem {
       delta[planetId] = this._tickPlanet(dt, planetId, ps, def);
     }
 
+    gameState.tickColonyShipBuilds(dt);
+    gameState.tickColonyShipFlights(dt);
+
     gameState.emit('productionTick', delta);
   }
 

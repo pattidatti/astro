@@ -700,3 +700,170 @@
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ══════════════════════════════════════════════════════
+   COLONY SHIP
+   ══════════════════════════════════════════════════════ */
+
+/* Build button */
+.colony-ship-btn {
+  width: 100%;
+  padding: 10px;
+  background: rgba(198,123,48,0.08);
+  border: 1px solid var(--dune-border-bright);
+  border-radius: 5px;
+  color: var(--dune-amber);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.colony-ship-btn:hover:not(:disabled) {
+  background: rgba(198,123,48,0.15);
+  box-shadow: 0 0 16px rgba(198,123,48,0.12);
+}
+.colony-ship-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.colony-ship-btn .cs-cost {
+  display: block;
+  font-size: 11px;
+  color: var(--dune-text-secondary);
+  margin-top: 3px;
+  letter-spacing: 1px;
+}
+.colony-ship-btn .cs-cost.cant { color: var(--dune-red); }
+
+/* Progress bar */
+.colony-ship-progress {
+  width: 100%;
+  height: 18px;
+  background: rgba(10,14,20,0.6);
+  border: 1px solid var(--dune-border);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+.colony-ship-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--dune-amber), var(--dune-gold));
+  transition: width 0.1s linear;
+  border-radius: 2px;
+}
+.colony-ship-progress-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  color: var(--dune-sand);
+  letter-spacing: 1px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+/* Ready status */
+.colony-ship-status {
+  text-align: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  color: var(--dune-green-bright);
+  padding: 8px 0;
+  animation: cs-pulse 2s ease-in-out infinite;
+}
+@keyframes cs-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; text-shadow: 0 0 8px rgba(164,200,122,0.4); }
+}
+
+/* ── Colony ship target popup ── */
+.colony-ship-popup {
+  position: fixed;
+  z-index: 100;
+  min-width: 260px;
+  max-width: 320px;
+  background: rgba(10, 12, 16, 0.92);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--dune-border-bright);
+  border-radius: 6px;
+  padding: 12px;
+  display: none;
+  pointer-events: auto;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(212,168,67,0.08);
+}
+.colony-ship-popup.visible { display: block; }
+.colony-ship-popup .csp-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  color: var(--dune-gold);
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.colony-ship-popup .target-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(212,168,67,0.1);
+}
+.colony-ship-popup .target-row:last-child { border-bottom: none; }
+.colony-ship-popup .target-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.colony-ship-popup .target-info {
+  flex: 1;
+  min-width: 0;
+}
+.colony-ship-popup .target-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  color: var(--dune-sand);
+  letter-spacing: 1px;
+}
+.colony-ship-popup .target-meta {
+  font-size: 10px;
+  color: var(--dune-text-dim);
+  margin-top: 2px;
+}
+.colony-ship-popup .launch-btn {
+  padding: 4px 10px;
+  background: rgba(212,168,67,0.1);
+  border: 1px solid var(--dune-border-bright);
+  border-radius: 3px;
+  color: var(--dune-gold);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.colony-ship-popup .launch-btn:hover:not(:disabled) {
+  background: rgba(212,168,67,0.2);
+  box-shadow: 0 0 8px rgba(212,168,67,0.15);
+}
+.colony-ship-popup .launch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: var(--dune-text-dim);
+}
+.colony-ship-popup .csp-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--dune-text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.colony-ship-popup .csp-close:hover { color: var(--dune-sand); }
