@@ -16,7 +16,8 @@
       "Bash(wc -l /c/Users/patti/dev/astro/src/game/world/*.js)",
       "Bash(ls -1 /c/Users/patti/dev/astro/src/game/objects/*.js)",
       "Bash(xargs -I {} basename {})",
-      "Bash(xargs grep:*)"
+      "Bash(find C:/Users/patti/dev/astro -name HUD.css -o -name *.css -type f)",
+      "Bash(find C:/Users/patti/dev/astro -name *.css -type f)"
     ]
   }
 }

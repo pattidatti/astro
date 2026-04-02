@@ -448,6 +448,9 @@ export class PlanetPanel {
     const el = document.getElementById('panel-routes');
     if (!el) return;
 
+    // Don't wipe the DOM while a form is open — it would destroy user input mid-edit
+    if (el.querySelector('.route-add-form, .route-inline-form')) return;
+
     const ps = gameState.getPlanetState(this._planetId);
     const myRoutes = gameState.routes.filter(r => r.fromPlanet === this._planetId);
 
@@ -474,6 +477,20 @@ export class PlanetPanel {
         })()
         : null;
 
+      // Dispatch status
+      let dispatchStatus = 'ready';
+      if (!route.active) {
+        dispatchStatus = 'paused';
+      } else if (!inTransitShip) {
+        const destPs = gameState.getPlanetState(route.toPlanet);
+        if (!gameState.siloHasRoom(route.toPlanet, route.resource)) {
+          dispatchStatus = 'destination full';
+        } else if (!gameState.siloHas(route.fromPlanet, route.resource, route.amount)) {
+          const have = ps?.silos?.[route.resource]?.amount ?? 0;
+          dispatchStatus = `waiting — ${fmt(have)}/${fmt(route.amount)}`;
+        }
+      }
+
       const row = document.createElement('div');
       row.className = 'route-item';
       row.innerHTML = `
@@ -483,7 +500,7 @@ export class PlanetPanel {
             <span class="route-from-to">${toDef?.name || route.toPlanet}</span>
             <span class="route-resource">${RESOURCE_ICONS[route.resource]} ${pct}% <span class="route-amount-hint">(${fmt(route.amount)})</span></span>
           </div>
-          <div class="route-meta">${travelStr} travel · sends when ready</div>
+          <div class="route-meta">${travelStr} · ${dispatchStatus}</div>
           ${etaStr ? `<div class="route-transit-indicator">🚀 in transit — ETA ${etaStr}</div>` : ''}
         </div>
         <button class="route-edit" title="Edit route">✎</button>
@@ -600,6 +617,8 @@ export class PlanetPanel {
       const pct = parseInt(form.querySelector('#rf-pct').value, 10);
       const amount = Math.max(1, Math.round(pct / 100 * capacity));
       const route = createRoute(this._planetId, to, resource, amount);
+      form.remove();
+      addBtn.style.display = '';
       gameState.addRoute(route);
     });
     form.querySelector('#rf-cancel').addEventListener('pointerdown', (e) => {

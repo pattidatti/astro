@@ -14,6 +14,7 @@ export class Minimap {
     this._visible = true;
     this._time = 0;
     this._cameraController = null;
+    this._mapZoom = 1.0; // 1 = full galaxy view
 
     // Create canvas wrapper (for absolute-positioned zoom buttons)
     const wrapper = document.createElement('div');
@@ -43,18 +44,14 @@ export class Minimap {
     btnIn.textContent = '+';
     btnIn.title = 'Zoom inn';
     btnIn.addEventListener('click', () => {
-      if (!this._cameraController) return;
-      const r = this._cameraController.targetSpherical.radius;
-      this._cameraController.targetSpherical.radius = Math.max(3, r * 0.75);
+      this._mapZoom = Math.min(4, this._mapZoom * 1.5);
     });
     const btnOut = document.createElement('button');
     btnOut.className = 'minimap-zoom-btn';
     btnOut.textContent = '−';
     btnOut.title = 'Zoom ut';
     btnOut.addEventListener('click', () => {
-      if (!this._cameraController) return;
-      const r = this._cameraController.targetSpherical.radius;
-      this._cameraController.targetSpherical.radius = Math.min(600, r * 1.25);
+      this._mapZoom = Math.max(0.5, this._mapZoom / 1.5);
     });
     controls.appendChild(btnIn);
     controls.appendChild(btnOut);
@@ -70,8 +67,9 @@ export class Minimap {
   _getPlanetPos(planet, time) {
     const { radius, speed, phase } = planet.orbit;
     const angle = phase + speed * time;
-    const x = CENTER + Math.cos(angle) * radius * SCALE;
-    const y = CENTER + Math.sin(angle) * radius * SCALE;
+    const s = SCALE * this._mapZoom;
+    const x = CENTER + Math.cos(angle) * radius * s;
+    const y = CENTER + Math.sin(angle) * radius * s;
     return { x, y };
   }
 
@@ -124,10 +122,11 @@ export class Minimap {
     ctx.fill();
 
     // Draw orbit rings (subtle)
+    const s = SCALE * this._mapZoom;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
     ctx.lineWidth = 0.5;
     for (const planet of PLANETS) {
-      const r = planet.orbit.radius * SCALE;
+      const r = planet.orbit.radius * s;
       ctx.beginPath();
       ctx.arc(CENTER, CENTER, r, 0, Math.PI * 2);
       ctx.stroke();
@@ -213,16 +212,16 @@ export class Minimap {
       // World coords: orbit radius 120 maps to 120 * 0.05 = 6 world units (from CoordinateMapper SCALE=0.05)
       // So world distance / 0.05 = orbit radius equivalent
       const orbitEquiv = camDist / 0.05;
-      const cx = CENTER + Math.cos(camAngle) * orbitEquiv * SCALE;
-      const cy = CENTER + Math.sin(camAngle) * orbitEquiv * SCALE;
+      const cx = CENTER + Math.cos(camAngle) * orbitEquiv * s;
+      const cy = CENTER + Math.sin(camAngle) * orbitEquiv * s;
 
       // Small crosshair
       ctx.strokeStyle = 'rgba(232, 196, 90, 0.5)';
       ctx.lineWidth = 1;
-      const s = 4;
+      const ch = 4;
       ctx.beginPath();
-      ctx.moveTo(cx - s, cy); ctx.lineTo(cx + s, cy);
-      ctx.moveTo(cx, cy - s); ctx.lineTo(cx, cy + s);
+      ctx.moveTo(cx - ch, cy); ctx.lineTo(cx + ch, cy);
+      ctx.moveTo(cx, cy - ch); ctx.lineTo(cx, cy + ch);
       ctx.stroke();
     }
   }

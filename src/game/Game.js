@@ -16,6 +16,8 @@ import { SpawnFlight } from './effects/SpawnFlight.js';
 import { CombatEffects } from './effects/CombatEffects.js';
 import { ClickFeedback } from './effects/ClickFeedback.js';
 import { Minimap } from './ui/Minimap.js';
+import { RoamingFleetManager3D } from './world/RoamingFleetManager3D.js';
+import { FleetPanel } from './ui/FleetPanel.js';
 
 export function createGame() {
   const container = document.getElementById('game-container');
@@ -139,6 +141,52 @@ export function createGame() {
   // --- Enemy ships + combat effects ---
   const enemyManager = new EnemyManager3D(sceneManager.scene, animationLoop, galaxy);
   const combatEffects = new CombatEffects(sceneManager.scene);
+
+  // --- Roaming fleet visuals ---
+  const fleetManager = new RoamingFleetManager3D(sceneManager.scene, galaxy);
+  galaxy.roamingFleetManager = fleetManager;
+
+  // --- Fleet info panel ---
+  const fleetPanel = new FleetPanel();
+  let _selectedFleetId = null;
+
+  const _deselectFleet = () => {
+    _selectedFleetId = null;
+    fleetPanel.hide();
+  };
+
+  // Register fleet click targets (re-registers when new fleets spawn since InputManager
+  // supports dynamic registration via addClickable)
+  const _registerFleetClicks = () => {
+    for (const target of galaxy.getFleetClickTargets()) {
+      // Avoid double-registering the same mesh
+      if (target.mesh.userData._fleetClickBound) continue;
+      target.mesh.userData._fleetClickBound = true;
+      inputManager.addClickable(target.mesh, () => {
+        const fleet = gameState.roamingFleets.find(f => f.id === target.fleetId);
+        if (!fleet) return;
+        _deselectShip();
+        _selectedFleetId = target.fleetId;
+        AudioManager.play('PLANET_CLICK_3D');
+        fleetPanel.show(fleet.id, () => {
+          _selectedFleetId = null;
+          cameraController.stopTracking();
+        });
+        const fleet3D = fleetManager.getFleet3D(fleet.id);
+        if (fleet3D) {
+          cameraController.trackObject(() => fleet3D.worldPosition, 50);
+        }
+      });
+    }
+  };
+
+  gameState.on('fleetSpawned', () => {
+    // Defer by one frame so RoamingFleetManager3D has time to activate the 3D object
+    requestAnimationFrame(_registerFleetClicks);
+  });
+
+  gameState.on('fleetArrived',   ({ fleetId }) => { if (fleetId === _selectedFleetId) _deselectFleet(); });
+  gameState.on('fleetDestroyed', ({ fleetId }) => { if (fleetId === _selectedFleetId) _deselectFleet(); });
 
   // Combat visual events
   gameState.on('defenseFired', ({ planetId, defenseType, targetId, damage }) => {
@@ -326,6 +374,7 @@ export function createGame() {
     clickFeedback.update(dt);
     spawnFlight.update(dt);
     minimap.update(time, cameraController);
+    fleetPanel.update();
     renderPipeline.tick(time);
 
     // Ship tooltip: update position and ETA each frame

@@ -2,7 +2,6 @@ import { gameState } from '../GameState.js';
 import { ENEMY_TYPES, scaleThreat, getRaidTemplates, getInvasionTemplates,
          raidSpawnChance, invasionSpawnChance,
          MIN_ATTACK_GAP, COLONIZATION_GRACE_PERIOD, MAX_CONCURRENT_ATTACKS } from '../data/enemies.js';
-
 let _nextAttackId = 0;
 
 /**
@@ -148,6 +147,66 @@ export class ThreatSystem {
       }
     }
     return enemies;
+  }
+
+  /**
+   * Convert a roaming fleet into a live attack when it reaches a player planet.
+   * Called by RoamingFleetSystem._convertToAttack().
+   */
+  spawnFleetAttack(fleet, planetId) {
+    if (gameState.isUnderAttack(planetId)) return;
+    if (gameState.activeAttacks.length >= MAX_CONCURRENT_ATTACKS) return;
+
+    const ps = gameState.getPlanetState(planetId);
+    if (!ps || !ps.hasBase || ps.combat.fallen) return;
+
+    // Re-stamp enemy IDs so CombatSystem treats them as fresh
+    const enemies = fleet.enemies
+      .filter(e => e.hp > 0)
+      .map((e, i) => ({
+        id: `enemy_fleet_${_nextAttackId}_${i}`,
+        type: e.type,
+        hp: e.hp,
+        maxHP: e.maxHP,
+        damage: e.damage,
+        speed: e.speed,
+        target: e.target,
+        stealRate: e.stealRate || 0,
+      }));
+
+    let mothership = null;
+    let attackType = 'raid';
+    let template   = null;
+
+    if (fleet.mothership && fleet.mothership.hp > 0) {
+      attackType = 'invasion';
+      const msDef = ENEMY_TYPES.mothership;
+      mothership = {
+        type: 'mothership',
+        hp:    fleet.mothership.hp,
+        maxHP: fleet.mothership.maxHP,
+        damage: msDef.damage,
+        target: msDef.target,
+      };
+      template = { waves: [], spawnInterval: 30 };
+    }
+
+    if (enemies.length === 0 && !mothership) return;
+
+    const attack = {
+      id: `fleet_attack_${_nextAttackId++}`,
+      type: attackType,
+      planetId,
+      enemies,
+      mothership,
+      wave: 0,
+      waveTimer: 0,
+      elapsed: 0,
+      template,
+    };
+
+    gameState.activeAttacks.push(attack);
+    gameState.emit('attackStarted', { attack, planetId, type: attackType });
   }
 
   /**

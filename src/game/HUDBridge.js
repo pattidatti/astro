@@ -218,6 +218,10 @@ export class HUDBridge {
     gameState.on('cargoIntercepted', ({ ship }) => {
       this.toast(`⚠ CARGO LOST: ${fmt(ship.amount)} ${ship.resource.toUpperCase()}`, 'warn');
     });
+    gameState.on('fleetTargetingPlayer', ({ planetId }) => {
+      const p = PLANETS.find(x => x.id === planetId);
+      this.toast(`🚨 ENEMY FLEET INCOMING: ${p?.name ?? planetId}`, 'warn');
+    });
     gameState.on('planetRecolonized', ({ planetId }) => {
       const p = PLANETS.find(x => x.id === planetId);
       this.toast(`🌍 RECOLONIZED: ${p?.name || planetId}`, 'success');

@@ -5,7 +5,6 @@ import { getAllWorldPositions } from '../utils/CoordinateMapper.js';
 import { SolarSystem } from './SolarSystem.js';
 import { Star3D } from '../objects/Star3D.js';
 import { NebulaVolume } from '../effects/NebulaVolume.js';
-import { PatrolDot3D } from '../objects/PatrolDot3D.js';
 import { RouteLane3D } from './RouteLane3D.js';
 import { gameState } from '../GameState.js';
 
@@ -28,9 +27,11 @@ export class Galaxy {
 
     this._createSystems();
     this._createCosmicNebulas();
-    this._createPatrolDots();
     this._createThreatIndicators();
     this._initRouteLanes();
+
+    /** Set by Game.js after scene is available. */
+    this.roamingFleetManager = null;
   }
 
   _createCosmicNebulas() {
@@ -100,6 +101,11 @@ export class Galaxy {
     return targets;
   }
 
+  /** Get all roaming fleet click targets for InputManager registration */
+  getFleetClickTargets() {
+    return this.roamingFleetManager ? this.roamingFleetManager.getClickTargets() : [];
+  }
+
   /** Get all station click targets for InputManager registration */
   getStationClickTargets() {
     return Object.entries(this.systems).map(([id, sys]) => ({
@@ -107,16 +113,6 @@ export class Galaxy {
       planetId: id,
       system: sys,
     }));
-  }
-
-  _createPatrolDots() {
-    this._patrolDots = [];
-    for (let i = 0; i < 8; i++) {
-      const dot = new PatrolDot3D();
-      this.group.add(dot.mesh);
-      this._patrolDots.push(dot);
-    }
-    this._activePatrolDots = new Map(); // patrolId → PatrolDot3D
   }
 
   _initRouteLanes() {
@@ -162,40 +158,6 @@ export class Galaxy {
     }
   }
 
-  _updatePatrolDots(time) {
-    const patrols = gameState.hyperlanePatrols;
-
-    // Deactivate dots for removed patrols
-    for (const [pid, dot] of this._activePatrolDots) {
-      if (!patrols.some(p => p.id === pid)) {
-        dot.deactivate();
-        this._activePatrolDots.delete(pid);
-      }
-    }
-
-    // Activate/update dots for active patrols
-    for (const patrol of patrols) {
-      let dot = this._activePatrolDots.get(patrol.id);
-      if (!dot) {
-        // Find a free dot
-        dot = this._patrolDots.find(d => !d.mesh.visible);
-        if (!dot) continue;
-        this._activePatrolDots.set(patrol.id, dot);
-      }
-
-      // Interpolate position along the hyperlane
-      const [a, b] = patrol.lane;
-      const posA = this.getPlanetWorldPosition(a);
-      const posB = this.getPlanetWorldPosition(b);
-      if (posA && posB) {
-        const pos = new THREE.Vector3().lerpVectors(posA, posB, patrol.position);
-        pos.y += 3; // Slightly above the lane
-        dot.update(time, pos);
-        if (!dot.mesh.visible) dot.activate(pos);
-      }
-    }
-  }
-
   _updateThreatIndicators(time) {
     for (const [planetId, indicator] of Object.entries(this._threatRings)) {
       const isUnderAttack = gameState.isUnderAttack(planetId);
@@ -233,8 +195,8 @@ export class Galaxy {
       neb.update(time, camera);
     }
 
-    // Update patrol dots and threat indicators
-    this._updatePatrolDots(time);
+    // Update fleet visuals and threat indicators
+    if (this.roamingFleetManager) this.roamingFleetManager.update(dt, time);
     this._updateThreatIndicators(time);
 
     // Update route lanes

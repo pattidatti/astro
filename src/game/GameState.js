@@ -117,7 +117,7 @@ class GameState extends EventEmitter {
 
     // Combat runtime state
     this.activeAttacks = [];      // [{ id, type, planetId, enemies, wave, elapsed, ... }]
-    this.hyperlanePatrols = [];   // [{ id, lane, position, enemies }]
+    this.roamingFleets = [];      // [{ id, type, fromPlanet, toPlanet, position, speed, enemies, mothership, notified, threatLevel }]
     this.lastAttackTime = {};     // planetId → timestamp of last attack end
     this.colonizationTime = {};   // planetId → timestamp of colonization (for grace period)
 
@@ -770,7 +770,7 @@ class GameState extends EventEmitter {
       colonyShipsInFlight: JSON.parse(JSON.stringify(this.colonyShipsInFlight)),
       colonyShipsArriving: JSON.parse(JSON.stringify(this.colonyShipsArriving)),
       activeAttacks: attacks,
-      hyperlanePatrols: JSON.parse(JSON.stringify(this.hyperlanePatrols)),
+      roamingFleets: JSON.parse(JSON.stringify(this.roamingFleets)),
       lastAttackTime: { ...this.lastAttackTime },
       colonizationTime: { ...this.colonizationTime },
       tutorialStep: this.tutorialStep,
@@ -797,7 +797,7 @@ class GameState extends EventEmitter {
     this.colonyShipsInFlight = data.colonyShipsInFlight ?? [];
     this.colonyShipsArriving = data.colonyShipsArriving ?? [];
     this.activeAttacks       = data.activeAttacks ?? [];
-    this.hyperlanePatrols    = data.hyperlanePatrols ?? [];
+    this.roamingFleets       = data.roamingFleets ?? [];
     this.lastAttackTime      = data.lastAttackTime ?? {};
     this.colonizationTime    = data.colonizationTime ?? {};
     this.tutorialStep   = data.tutorialStep ?? -1; // assume tutorial complete for existing saves

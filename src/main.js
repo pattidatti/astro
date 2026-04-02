@@ -12,7 +12,7 @@ import { ProductionSystem } from './game/systems/ProductionSystem.js';
 import { RouteSystem } from './game/systems/RouteSystem.js';
 import { ThreatSystem } from './game/systems/ThreatSystem.js';
 import { CombatSystem } from './game/systems/CombatSystem.js';
-import { HyperlanePatrolSystem } from './game/systems/HyperlanePatrolSystem.js';
+import { RoamingFleetSystem } from './game/systems/RoamingFleetSystem.js';
 import { Tutorial } from './game/tutorial/Tutorial.js';
 
 async function openPauseMenu() {
@@ -100,12 +100,14 @@ async function boot() {
   // ── Phase 3: Game systems ──────────────────────────────────────
   new ProductionSystem(game.animationLoop);
 
-  const hyperlanePatrolSystem = new HyperlanePatrolSystem(game.animationLoop);
   const threatSystem = new ThreatSystem(game.animationLoop);
   const combatSystem = new CombatSystem(game.animationLoop, threatSystem);
   combatSystem.reconstructAttacks();
 
-  const routeSystem = new RouteSystem(game.animationLoop, hyperlanePatrolSystem);
+  const roamingFleetSystem = new RoamingFleetSystem(game.animationLoop, threatSystem);
+  roamingFleetSystem.reconstructFleets();
+
+  const routeSystem = new RouteSystem(game.animationLoop, roamingFleetSystem);
   routeSystem.reconstructActiveShips();
 
   // Track play time

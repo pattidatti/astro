@@ -1468,3 +1468,132 @@
   text-shadow: 0 0 6px rgba(0,0,0,0.8);
   pointer-events: none;
 }
+
+/* ── Fleet panel ── */
+#fleet-panel {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 260px;
+  z-index: 45;
+  background: rgba(10, 12, 16, 0.92);
+  border: 1px solid rgba(255, 60, 60, 0.45);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 18px rgba(255, 30, 30, 0.15), inset 0 0 40px rgba(255, 0, 0, 0.03);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--dune-text);
+}
+.fleet-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px 8px;
+  border-bottom: 1px solid rgba(255, 60, 60, 0.25);
+  background: rgba(255, 30, 30, 0.06);
+  border-radius: 8px 8px 0 0;
+}
+.fleet-panel-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ff4444;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px rgba(255, 60, 60, 0.4);
+}
+.fleet-panel-close {
+  background: transparent;
+  border: none;
+  color: var(--dune-text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.fleet-panel-close:hover { color: #ff4444; }
+.fleet-section {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 60, 60, 0.1);
+}
+.fleet-section:last-child { border-bottom: none; }
+.fleet-section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--dune-text-secondary);
+  margin-bottom: 7px;
+}
+.fleet-ship-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+.fleet-ship-row:last-child { margin-bottom: 0; }
+.fleet-mothership-row .fleet-ship-icon { color: #ff0044; }
+.fleet-ship-icon {
+  font-size: 13px;
+  color: #ff4444;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.fleet-ship-name {
+  font-size: 11px;
+  color: var(--dune-text);
+  flex: 1;
+  letter-spacing: 0.5px;
+}
+.fleet-hp-bar {
+  display: inline-block;
+  width: 60px;
+  height: 5px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.fleet-hp-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.2s, background 0.2s;
+}
+.fleet-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.fleet-info-row:last-child { margin-bottom: 0; }
+.fleet-info-label {
+  font-size: 10px;
+  color: var(--dune-text-secondary);
+  letter-spacing: 1px;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+.fleet-info-val {
+  font-size: 12px;
+  color: var(--dune-text);
+}
+.fleet-threat-dots {
+  color: #ff4444;
+  letter-spacing: 2px;
+}
+.fleet-threat-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+}
+.fleet-threat-label[data-level="1"],
+.fleet-threat-label[data-level="2"] { color: #88ff88; }
+.fleet-threat-label[data-level="3"]  { color: #ffcc44; }
+.fleet-threat-label[data-level="4"]  { color: #ff8822; }
+.fleet-threat-label[data-level="5"]  { color: #ff3333; }
+.fleet-empty {
+  font-size: 11px;
+  color: var(--dune-text-secondary);
+  font-style: italic;
+}

@@ -2,9 +2,9 @@ import { gameState } from '../GameState.js';
 import { calcTravelDuration } from '../data/routes.js';
 
 export class RouteSystem {
-  constructor(animationLoop, hyperlanePatrolSystem) {
+  constructor(animationLoop, roamingFleetSystem) {
     this._nextShipId = 0;
-    this._hyperlanePatrolSystem = hyperlanePatrolSystem;
+    this._roamingFleetSystem = roamingFleetSystem;
     animationLoop.onUpdate((dt) => this._tick(dt));
   }
 
@@ -31,8 +31,8 @@ export class RouteSystem {
       const ps = gameState.getPlanetState(route.fromPlanet);
       if (!ps || !ps.hasBase) continue;
 
-      // Check if hyperlane is blocked by enemy patrol
-      if (this._hyperlanePatrolSystem && this._hyperlanePatrolSystem.isLaneBlocked(route.fromPlanet, route.toPlanet)) continue;
+      // Check if hyperlane is blocked by an enemy scout fleet
+      if (this._roamingFleetSystem && this._roamingFleetSystem.isLaneBlocked(route.fromPlanet, route.toPlanet)) continue;
 
       // Check ship slot availability
       const activeFromRoute = gameState.activeShips.filter(s => s.routeId === route.id).length;
@@ -46,7 +46,7 @@ export class RouteSystem {
 
       // Check if destination has room
       const destPs = gameState.getPlanetState(route.toPlanet);
-      if (!destPs || !destPs.hasBase) continue;
+      if (!destPs) continue;
       if (!gameState.siloHasRoom(route.toPlanet, route.resource)) continue;
 
       // Dispatch ship
