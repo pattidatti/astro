@@ -46,6 +46,17 @@ export class Galaxy {
       heightVariation: 20,
     });
     this.group.add(this._galacticBelt.group);
+
+    this._outerBelt = new GalacticAsteroidBelt({
+      particleCount: 3000,
+      innerRadius: 1500,
+      outerRadius: 1700,
+      heightVariation: 30,
+      color: 0x887766,
+      minScale: 0.10,
+      maxScale: 0.45,
+    });
+    this.group.add(this._outerBelt.group);
   }
 
   _createAmbientDustClouds() {
@@ -253,8 +264,9 @@ export class Galaxy {
       neb.update(time, camera);
     }
 
-    // Update galactic asteroid belt
+    // Update galactic asteroid belts
     this._galacticBelt.update(dt);
+    this._outerBelt.update(dt);
 
     // Update ambient dust clouds
     for (const cloud of this._ambientDustClouds) {
@@ -302,6 +314,7 @@ export class Galaxy {
       neb.dispose();
     }
     this._galacticBelt.dispose();
+    this._outerBelt.dispose();
     for (const cloud of this._ambientDustClouds) {
       cloud.dispose();
     }

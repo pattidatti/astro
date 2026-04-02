@@ -15,6 +15,8 @@ export class GalacticAsteroidBelt {
     outerRadius = 450,
     heightVariation = 20,
     color = 0x998877,
+    minScale = 0.05,
+    maxScale = 0.25,
   } = {}) {
     this.group = new THREE.Group();
 
@@ -62,7 +64,7 @@ export class GalacticAsteroidBelt {
       this._orbitRadii[i]   = innerRadius + Math.random() * (outerRadius - innerRadius);
       this._orbitSpeeds[i]  = (0.001 + Math.random() * 0.004) * (Math.random() < 0.5 ? 1 : -1);
       this._orbitHeights[i] = (Math.random() - 0.5) * (heightVariation * 2);
-      this._scales[i]       = 0.5 + Math.random() * 4.5;
+      this._scales[i]       = minScale + Math.random() * (maxScale - minScale);
 
       this._selfRotAxes.push(
         new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize()
