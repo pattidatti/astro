@@ -119,12 +119,23 @@ async function boot() {
   // Track play time
   game.animationLoop.onUpdate((dt) => { gameState.stats.playTimeSeconds += dt; });
 
+  // Stop/resume rendering when tab is hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      game.animationLoop.stop();
+    } else {
+      game.animationLoop.start();
+    }
+  });
+
   // ── Pause menu setup (defined before UI so onMenu callback is valid) ──
   let menuOpen = false;
   const openMenu = async () => {
     if (menuOpen) return;
     menuOpen = true;
+    game.animationLoop.stop();
     await openPauseMenu();
+    game.animationLoop.start();
     menuOpen = false;
   };
 

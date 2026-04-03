@@ -52,7 +52,7 @@ export class LandingScreen {
     document.body.appendChild(this._overlay);
     document.addEventListener('keydown', this._onKeyDown);
     const hud = document.getElementById('hud-overlay');
-    if (hud) hud.style.visibility = 'hidden';
+    if (hud) hud.style.display = 'none';
   }
 
   _buildDOM() {
@@ -165,7 +165,7 @@ export class LandingScreen {
     document.removeEventListener('keydown', this._onKeyDown);
     this._overlay.classList.add('landing-exit');
     const hud = document.getElementById('hud-overlay');
-    if (hud) hud.style.visibility = '';
+    if (hud) hud.style.display = '';
     this._overlay.addEventListener('transitionend', () => {
       this._overlay.remove();
     }, { once: true });
@@ -255,10 +255,16 @@ export class LandingScreen {
             b.classList.add('confirming');
             b.textContent = 'CONFIRM?';
             b.style.background = 'rgba(255,0,0,0.3)';
-            setTimeout(() => { if (b) { b.classList.remove('confirming'); b.textContent = 'DELETE'; b.style.background = 'rgba(255,50,50,0.1)'; } }, 3000);
+            setTimeout(() => { 
+                if (b && document.body.contains(b)) { 
+                    b.classList.remove('confirming'); 
+                    b.textContent = 'DELETE'; 
+                    b.style.background = 'rgba(255,50,50,0.1)'; 
+                } 
+            }, 3000);
         } else {
             AudioManager.play('UI_MENU_CLICK');
-            deleteLocalSave(e.target.dataset.slot);
+            deleteLocalSave(b.dataset.slot);
             this._showSaveSlotsPanel();
         }
     }));

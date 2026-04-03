@@ -232,10 +232,10 @@ export class PlanetPanel {
 
         el.innerHTML = `
           <div class="panel-section-title">⚠ STATION DESTROYED</div>
-          <div style="color:var(--dune-red);font-size:11px;margin:6px 0">
+          <div style="color:var(--dune-red);font-size: 12px;margin:6px 0">
             This station has fallen. Some infrastructure survived.
           </div>
-          <div style="font-size:10px;color:var(--dune-text-dim);margin-bottom:8px">
+          <div style="font-size: 12px;color:var(--dune-text-dim);margin-bottom:8px">
             Base levels and deposits preserved. Defenses lost. Robots reduced.
           </div>
         `;
@@ -254,7 +254,7 @@ export class PlanetPanel {
             btn.disabled = !canAfford;
             btn.innerHTML = `
               <span>🔄 RECOLONIZE from ${srcDef?.name || srcId}</span>
-              ${costStr ? `<span class="base-upg-cost ${canAfford ? '' : 'cant'}">${costStr}</span>` : '<span style="font-size:10px;color:var(--dune-text-dim)">FREE</span>'}
+              ${costStr ? `<span class="base-upg-cost ${canAfford ? '' : 'cant'}">${costStr}</span>` : '<span style="font-size: 12px;color:var(--dune-text-dim)">FREE</span>'}
             `;
             if (canAfford) {
               btn.addEventListener('pointerdown', (e) => {
@@ -266,7 +266,7 @@ export class PlanetPanel {
             el.appendChild(btn);
           }
         } else {
-          el.innerHTML += '<div style="color:var(--dune-text-dim);font-size:10px">No owned planets available for recolonization.</div>';
+          el.innerHTML += '<div style="color:var(--dune-text-dim);font-size: 12px">No owned planets available for recolonization.</div>';
         }
         return;
       }
@@ -287,7 +287,7 @@ export class PlanetPanel {
         btn.disabled = !canAfford;
         btn.innerHTML = `
           <span>🏗 BUILD BASE</span>
-          ${costStr ? `<span class="base-upg-cost ${canAfford ? '' : 'cant'}">${costStr}</span>` : '<span style="font-size:10px;color:var(--dune-text-dim)">FREE</span>'}
+          ${costStr ? `<span class="base-upg-cost ${canAfford ? '' : 'cant'}">${costStr}</span>` : '<span style="font-size: 12px;color:var(--dune-text-dim)">FREE</span>'}
         `;
         if (canAfford) {
           btn.addEventListener('pointerdown', (e) => {
@@ -305,7 +305,7 @@ export class PlanetPanel {
       } else {
         el.innerHTML = `
           <div class="panel-section-title">SPACE BASE</div>
-          <div style="font-size:11px;color:var(--dune-text-dim);text-align:center;padding:8px 0">
+          <div style="font-size: 12px;color:var(--dune-text-dim);text-align:center;padding:8px 0">
             Send colony ship to establish base
           </div>
         `;
@@ -601,7 +601,7 @@ export class PlanetPanel {
 
     const ownedExcludingSelf = gameState.ownedPlanets.filter(id => id !== this._planetId);
     if (ownedExcludingSelf.length === 0) {
-      form.innerHTML = '<div style="font-size:10px;color:var(--dune-text-dim)">No other planets owned</div>';
+      form.innerHTML = '<div style="font-size: 12px;color:var(--dune-text-dim)">No other planets owned</div>';
       container.appendChild(form);
       return;
     }
@@ -793,7 +793,7 @@ export class PlanetPanel {
     el.innerHTML = `<div class="panel-section-title">HIRE ROBOTS</div>`;
 
     if (!ps || !ps.hasBase) {
-      el.innerHTML += '<div style="font-size:10px;color:var(--dune-text-dim);text-align:center">Build base first</div>';
+      el.innerHTML += '<div style="font-size: 12px;color:var(--dune-text-dim);text-align:center">Build base first</div>';
       return;
     }
 
@@ -1062,7 +1062,7 @@ export class PlanetPanel {
     if (unowned.length === 0) {
       popup.innerHTML = `
         <div class="csp-title">NO TARGETS</div>
-        <div style="font-size:10px;color:var(--dune-text-dim);text-align:center;padding:8px">All planets colonized</div>
+        <div style="font-size: 12px;color:var(--dune-text-dim);text-align:center;padding:8px">All planets colonized</div>
       `;
       popup.classList.add('visible');
       this._colonyPopupVisible = true;

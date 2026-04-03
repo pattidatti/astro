@@ -49,7 +49,7 @@ export class Tutorial {
 
     if (!targetEl) {
       // No specific target — show centered at top
-      this._handEl.style.display = 'block';
+      this._handEl.style.display = 'flex';
       this._handEl.style.left = '50%';
       this._handEl.style.top  = '80px';
       return;
@@ -64,7 +64,7 @@ export class Tutorial {
 
     // Measure bubble dimensions before final placement
     this._handEl.style.visibility = 'hidden';
-    this._handEl.style.display = 'block';
+    this._handEl.style.display = 'flex';
     this._handEl.style.left = '0px';
     this._handEl.style.top  = '0px';
     const handW = this._handEl.offsetWidth;
@@ -80,7 +80,9 @@ export class Tutorial {
     let top  = rect.top - handH - 10;
 
     // If too close to top, flip below target instead
-    if (top < margin) top = rect.bottom + 10;
+    let flipped = false;
+    if (top < margin) { top = rect.bottom + 10; flipped = true; }
+    this._handEl.classList.toggle('tutorial-hand--flipped', flipped);
 
     // Clamp horizontal (element is centered via translateX(-50%))
     left = Math.max(handW / 2 + margin, Math.min(vw - handW / 2 - margin, left));

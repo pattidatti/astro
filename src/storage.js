@@ -15,10 +15,12 @@ function getSaveKey(slot) {
 }
 
 export function migrateOldSaves() {
+  if (localStorage.getItem('astro_migrated')) return;
   const oldSave = localStorage.getItem('astro_save');
   if (oldSave && !localStorage.getItem('astro_save_slot_1')) {
     localStorage.setItem('astro_save_slot_1', oldSave);
   }
+  localStorage.setItem('astro_migrated', '1');
 }
 
 export function saveToLocal(slot = currentSaveSlot) {

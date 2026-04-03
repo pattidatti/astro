@@ -180,7 +180,7 @@ export class TechTreeWindow {
       const reqNames = (node.requires || []).map(id => TECH_BY_ID[id]?.name || id).join(', ');
       let tipHtml = `<strong>${node.name}</strong><br>${node.desc}`;
       if (!node.free && node.requires.length > 0) {
-        tipHtml += `<br><span style="color:var(--dune-text-dim);font-size:10px">Requires: ${reqNames}</span>`;
+        tipHtml += `<br><span style="color:var(--dune-text-dim);font-size: 12px">Requires: ${reqNames}</span>`;
       }
       if (!node.free) {
         tipHtml += `<br><span style="color:#4af0ff">⚡ ${fmt(node.cost)} energy</span>`;

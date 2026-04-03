@@ -12,7 +12,6 @@
   align-items: center;
   justify-content: center;
   background: rgba(10, 12, 16, 0.65);
-  backdrop-filter: blur(2px);
   opacity: 0;
   transition: opacity 0.6s ease;
 }
@@ -90,13 +89,14 @@
   color: var(--dune-gold);
   line-height: 1;
   text-shadow:
-    0 0 20px rgba(212, 168, 67, 0.7),
-    0 0 40px rgba(212, 168, 67, 0.3);
+    0 0 28px rgba(212, 168, 67, 0.9),
+    0 0 55px rgba(212, 168, 67, 0.45);
   animation: landing-pulse 3s ease-in-out infinite;
+  will-change: opacity;
 }
 @keyframes landing-pulse {
-  0%, 100% { text-shadow: 0 0 20px rgba(212,168,67,0.7), 0 0 40px rgba(212,168,67,0.3); }
-  50%       { text-shadow: 0 0 30px rgba(212,168,67,1.0), 0 0 60px rgba(212,168,67,0.5); }
+  0%, 100% { opacity: 0.8; }
+  50%       { opacity: 1.0; }
 }
 .landing-title {
   font-family: 'Orbitron', sans-serif;
@@ -116,7 +116,7 @@
 }
 .landing-version {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text-dim);
   letter-spacing: 2px;
 }
@@ -201,7 +201,7 @@
 .landing-btn-sub {
   display: block;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   letter-spacing: 1px;
   color: var(--dune-text-dim);
@@ -234,7 +234,7 @@
 }
 .landing-panel-title {
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-gold-dim);
   letter-spacing: 3px;
   text-transform: uppercase;
@@ -258,14 +258,14 @@
 }
 .landing-save-meta {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text-dim);
   letter-spacing: 1px;
 }
 /* Settings Control Rows */
 .landing-section-title {
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-gold-dim);
   letter-spacing: 2px;
   margin-top: 6px;
@@ -357,12 +357,12 @@
 
 .landing-setting-ctrl {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text-dim);
 }
 .landing-coming-soon {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-gold-dim);
   letter-spacing: 2px;
   text-align: center;
@@ -382,7 +382,7 @@
   align-self: flex-start;
   padding: 7px 16px;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 2px;
   color: var(--dune-text-dim);
   background: transparent;
@@ -399,7 +399,7 @@
 .landing-btn-load {
   padding: 10px 18px;
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 2px;
   color: var(--dune-gold);
@@ -438,7 +438,7 @@
   padding-top: 14px;
   border-top: 1px solid var(--dune-border);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text-dim);
   letter-spacing: 1px;
   gap: 8px;

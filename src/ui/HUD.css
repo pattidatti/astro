@@ -43,7 +43,8 @@
   z-index: 50;
   display: flex;
   flex-direction: column;
-  width: 160px;
+  width: auto;
+  min-width: 160px;
   border: 1px solid var(--dune-border);
   border-radius: 8px;
   overflow: hidden;
@@ -54,8 +55,12 @@
   opacity: 0;
   pointer-events: none;
 }
-#menu-btn {
+.top-btn-row {
+  display: flex;
   width: 100%;
+}
+#menu-btn {
+  flex: 1;
   font-size: 12px;
   letter-spacing: 0.1em;
   font-family: 'Orbitron', sans-serif;
@@ -73,6 +78,14 @@
 #menu-btn:hover {
   color: var(--dune-gold);
   background: rgba(212, 168, 67, 0.08);
+}
+.btn-key {
+  display: inline-block;
+  font-size: 9px;
+  opacity: 0.55;
+  margin-left: 3px;
+  vertical-align: middle;
+  letter-spacing: 0;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -496,7 +509,7 @@
   border-radius: 5px;
 }
 .rf-label {
-  font-size: 11px;
+  font-size: 12px;
   font-family: 'Orbitron', sans-serif;
   color: var(--dune-gold-dim);
   letter-spacing: 1.5px;
@@ -581,7 +594,7 @@
   min-width: 150px;
 }
 .ship-tt-title {
-  font-size: 11px;
+  font-size: 12px;
   color: #4af0ff;
   letter-spacing: 1.5px;
   margin-bottom: 5px;
@@ -592,12 +605,12 @@
   margin-bottom: 3px;
 }
 .ship-tt-route {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text-secondary);
   margin-bottom: 3px;
 }
 .ship-tt-eta {
-  font-size: 11px;
+  font-size: 12px;
   color: #4af0ff;
 }
 
@@ -629,7 +642,7 @@
   margin-bottom: 2px;
 }
 .lockon-level {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text-secondary);
 }
 
@@ -778,8 +791,13 @@
   z-index: 200;
   pointer-events: none;
   display: none;
+  align-items: center;
+  flex-direction: column;
   transform: translateX(-50%);
   text-align: center;
+}
+#tutorial-hand.tutorial-hand--flipped {
+  flex-direction: column-reverse;
 }
 .tutorial-bubble {
   background: rgba(10,12,16,0.96);
@@ -802,6 +820,8 @@
   animation: tut-bounce 0.9s ease-in-out infinite;
   text-shadow: 0 0 8px rgba(212,168,67,0.4);
 }
+.tutorial-pointer::before { content: '▼'; }
+#tutorial-hand.tutorial-hand--flipped .tutorial-pointer::before { content: '▲'; }
 @keyframes tut-bounce {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(4px); }
@@ -857,7 +877,7 @@
 }
 
 .upg-effect-tag {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text-secondary);
   margin-left: 4px;
   letter-spacing: 0.5px;
@@ -962,7 +982,7 @@
    ══════════════════════════════════════════════════════ */
 .stats-section-title {
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 2px;
   color: var(--dune-gold-dim);
   margin: 14px 0 6px;
@@ -1118,7 +1138,7 @@
 }
 .colony-ship-btn .cs-cost {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text-secondary);
   margin-top: 3px;
   letter-spacing: 1px;
@@ -1148,7 +1168,7 @@
   align-items: center;
   justify-content: center;
   font-family: 'Orbitron', sans-serif;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dune-sand);
   letter-spacing: 1px;
   text-shadow: 0 1px 3px rgba(0,0,0,0.8);
@@ -1158,7 +1178,7 @@
 .colony-ship-status {
   text-align: center;
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-green-bright);
   padding: 8px 0;
   animation: cs-pulse 2s ease-in-out infinite;
@@ -1186,7 +1206,7 @@
 .colony-ship-popup.visible { display: block; }
 .colony-ship-popup .csp-title {
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-gold);
   letter-spacing: 2px;
   margin-bottom: 10px;
@@ -1212,12 +1232,12 @@
 }
 .colony-ship-popup .target-name {
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-sand);
   letter-spacing: 1px;
 }
 .colony-ship-popup .target-meta {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dune-text-dim);
   margin-top: 2px;
 }
@@ -1228,7 +1248,7 @@
   border-radius: 3px;
   color: var(--dune-gold);
   font-family: 'Orbitron', sans-serif;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
   flex-shrink: 0;
@@ -1320,7 +1340,7 @@
   border-radius: 6px;
   padding: 8px 12px;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text);
   z-index: 50;
   pointer-events: none;
@@ -1488,7 +1508,7 @@
 }
 .ability-name {
   font-family: 'Orbitron', monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--dune-text);
   text-align: center;
@@ -1496,7 +1516,7 @@
 }
 .ability-cost {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-gold-dim);
   margin-top: 2px;
 }
@@ -1569,7 +1589,7 @@
 .fleet-section:last-child { border-bottom: none; }
 .fleet-section-title {
   font-family: 'Orbitron', sans-serif;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 1.5px;
   color: var(--dune-text-secondary);
   margin-bottom: 7px;
@@ -1590,7 +1610,7 @@
   flex-shrink: 0;
 }
 .fleet-ship-name {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text);
   flex: 1;
   letter-spacing: 0.5px;
@@ -1618,7 +1638,7 @@
 }
 .fleet-info-row:last-child { margin-bottom: 0; }
 .fleet-info-label {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dune-text-secondary);
   letter-spacing: 1px;
   min-width: 80px;
@@ -1634,7 +1654,7 @@
 }
 .fleet-threat-label {
   font-family: 'Orbitron', sans-serif;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 .fleet-threat-label[data-level="1"],
@@ -1643,7 +1663,7 @@
 .fleet-threat-label[data-level="4"]  { color: #ff8822; }
 .fleet-threat-label[data-level="5"]  { color: #ff3333; }
 .fleet-empty {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dune-text-secondary);
   font-style: italic;
 }
@@ -1653,29 +1673,30 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 #research-btn {
-  display: block;
-  width: 100%;
-  background: rgba(212,168,67,0.08);
-  border: 1px solid var(--dune-border);
-  color: var(--dune-text-secondary);
+  flex: 1;
+  font-size: 12px;
+  letter-spacing: 0.1em;
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  padding: 8px 14px;
+  text-align: center;
+  padding: 7px 0;
+  background: rgba(10, 12, 16, 0.9);
+  border: none;
+  border-left: 1px solid var(--dune-border);
+  border-bottom: 1px solid var(--dune-border);
+  border-radius: 0;
+  color: var(--dune-text-secondary);
   cursor: pointer;
-  text-align: left;
-  transition: border-color 0.2s, color 0.2s, background 0.2s;
-  margin-top: 4px;
+  transition: color 0.2s, background 0.2s;
+  line-height: 1;
+  white-space: nowrap;
 }
 #research-btn:hover {
-  border-color: var(--dune-gold);
   color: var(--dune-gold);
-  background: rgba(212,168,67,0.14);
+  background: rgba(212, 168, 67, 0.08);
 }
 @keyframes research-pulse {
-  0%, 100% { color: var(--dune-text-secondary); box-shadow: none; border-color: var(--dune-border); }
-  50%       { color: var(--dune-gold-bright); box-shadow: 0 0 10px rgba(212,168,67,0.35) inset; border-color: var(--dune-gold); }
+  0%, 100% { color: var(--dune-text-secondary); box-shadow: none; }
+  50%       { color: var(--dune-gold-bright); box-shadow: 0 0 10px rgba(212,168,67,0.35) inset; }
 }
 .research-btn--pulse {
   animation: research-pulse 1.4s ease-in-out infinite;
@@ -1784,7 +1805,7 @@
   border-bottom: 2px solid transparent;
   padding: 12px 8px;
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 2px;
   color: var(--dune-text-dim);
@@ -1893,7 +1914,7 @@
   margin-top: auto;
 }
 .tech-node-cost--cant { color: var(--dune-red) !important; }
-.tech-node-free { color: rgba(138,170,90,0.9) !important; font-size: 10px; }
+.tech-node-free { color: rgba(138,170,90,0.9) !important; font-size: 12px; }
 .tech-node-badge {
   position: absolute;
   top: 6px;
@@ -1917,7 +1938,7 @@
   position: absolute;
   bottom: 6px;
   right: 8px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 .tech-node--locked .tech-node-lock { display: block; }
