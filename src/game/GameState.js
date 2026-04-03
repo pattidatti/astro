@@ -916,20 +916,11 @@ class GameState extends EventEmitter {
       for (const pid of this.ownedPlanets) {
         const ps = this.planetState[pid];
         if (!ps) continue;
-        if (ps.robots.miner.count > 0)           this.unlockedTech.add('miner_bot');
-        if (ps.robots.builder.count > 0)          this.unlockedTech.add('builder_bot');
-        if (ps.robots.scout.count > 0) {          this.unlockedTech.add('miner_bot'); this.unlockedTech.add('scout_bot'); }
-        if ((ps.robots.miner.speedLevel || 0) > 0 || (ps.robots.miner.loadLevel || 0) > 0)
-          this.unlockedTech.add('miner_upgrades');
         if ((ps.robots.energyBot.speedLevel || 0) > 0 || (ps.robots.energyBot.loadLevel || 0) > 0)
           this.unlockedTech.add('energy_upgrades');
-        if ((ps.robots.builder.speedLevel || 0) > 0 || (ps.robots.builder.loadLevel || 0) > 0)
-          this.unlockedTech.add('builder_upgrades');
-        if ((ps.robots.scout.speedLevel || 0) > 0 || (ps.robots.scout.loadLevel || 0) > 0)
-          this.unlockedTech.add('scout_upgrades');
         if ((ps.baseLevels.shipSpeed || 0) > 0)    this.unlockedTech.add('base_shipspeed');
         if ((ps.baseLevels.shipSlots || 0) > 0)    { this.unlockedTech.add('base_shipspeed'); this.unlockedTech.add('base_shipslots'); }
-        if ((ps.baseLevels.passiveEnergy || 0) > 0) { this.unlockedTech.add('builder_bot'); this.unlockedTech.add('base_passive'); }
+        if ((ps.baseLevels.passiveEnergy || 0) > 0) this.unlockedTech.add('base_passive');
         if ((ps.combat?.defenses?.satellite || 0) > 0)   { this.unlockedTech.add('satellite'); }
         if ((ps.combat?.defenses?.defenseShip || 0) > 0) this.unlockedTech.add('patrol_craft');
         if ((ps.combat?.defenses?.shield || 0) > 0)      { this.unlockedTech.add('satellite'); this.unlockedTech.add('shield'); }
@@ -946,7 +937,6 @@ class GameState extends EventEmitter {
       }
       if (this.colonyShipsInOrbit.length > 0 || this.colonyShipsInFlight.length > 0 ||
           this.colonyShipsArriving.length > 0 || this.ownedPlanets.length > 1) {
-        this.unlockedTech.add('builder_bot');
         this.unlockedTech.add('colony_ship');
       }
     }

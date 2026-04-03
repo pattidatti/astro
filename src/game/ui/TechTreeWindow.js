@@ -35,12 +35,20 @@ export class TechTreeWindow {
       if (e.target === this._overlay) this.hide();
     });
 
-    // Keyboard shortcut T
+    // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-      if ((e.key === 'T' || e.key === 't') && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const tag = document.activeElement?.tagName;
-        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+      if (e.key === 'T' || e.key === 't') {
         this.toggle();
+        return;
+      }
+      // 1-4: switch tabs when open
+      if (this._visible && e.key >= '1' && e.key <= '4') {
+        const branch = BRANCH_ORDER[parseInt(e.key) - 1];
+        if (branch) this._switchTab(branch);
       }
     });
 
@@ -89,17 +97,17 @@ export class TechTreeWindow {
     // Create tab bar and insert before viewport in parent
     const tabBar = document.createElement('div');
     tabBar.className = 'tech-tabs';
-    for (const branch of BRANCH_ORDER) {
+    BRANCH_ORDER.forEach((branch, i) => {
       const tab = document.createElement('button');
       tab.className = 'tech-tab' + (branch === this._activeTab ? ' tech-tab--active' : '');
       tab.dataset.branch = branch;
-      tab.textContent = BRANCH_LABELS[branch];
+      tab.innerHTML = `<span class="tech-tab-key">${i + 1}</span>${BRANCH_LABELS[branch]}`;
       tab.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         this._switchTab(branch);
       });
       tabBar.appendChild(tab);
-    }
+    });
     this._viewport.parentNode.insertBefore(tabBar, this._viewport);
     this._tabBar = tabBar;
 
@@ -127,9 +135,10 @@ export class TechTreeWindow {
     content.className = 'tech-branch-content';
 
     for (let t = 0; t <= maxTier; t++) {
+      const nodes = byTier[t];
+      if (!nodes) continue; // skip tiers with no nodes in this branch
       const row = document.createElement('div');
       row.className = 'tech-tier-row';
-      const nodes = byTier[t] || [];
       for (const node of nodes) {
         row.appendChild(this._createNodeCard(node));
       }

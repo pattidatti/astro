@@ -30,10 +30,6 @@ async function openPauseMenu() {
     sessionStorage.setItem('astro_force_newgame', '1');
     sessionStorage.setItem('astro_active_slot', choice.slot);
     location.reload();
-  } else if (choice.action === 'cloud' && choice.saveData) {
-    sessionStorage.setItem('astro_active_slot', choice.slot);
-    localStorage.setItem(`astro_save_${choice.slot}`, JSON.stringify(choice.saveData));
-    location.reload();
   }
 }
 
@@ -79,9 +75,6 @@ async function boot() {
 
   if (choice.action === 'continue' || choice.action === 'load') {
     bestSave = loadFromLocal();
-  } else if (choice.action === 'cloud') {
-    bestSave = choice.saveData;
-    localStorage.setItem(`astro_save_${choice.slot}`, JSON.stringify(choice.saveData));
   } else if (choice.action === 'newgame') {
     localStorage.removeItem(`astro_save_${choice.slot || activeSlot}`);
     gameState.reset();

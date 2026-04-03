@@ -1701,7 +1701,7 @@
 /* Modal box */
 .tech-modal {
   width: min(96vw, 1120px);
-  max-height: 88vh;
+  height: 88vh;
   display: flex;
   flex-direction: column;
   background: rgba(8,10,14,0.98);
@@ -1731,8 +1731,8 @@
   white-space: nowrap;
 }
 .tech-modal-subtitle {
-  font-size: 10px;
-  letter-spacing: 1.5px;
+  font-size: 13px;
+  letter-spacing: 1px;
   color: var(--dune-text-dim);
   flex: 1;
 }
@@ -1782,9 +1782,9 @@
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  padding: 10px 8px;
+  padding: 12px 8px;
   font-family: 'Orbitron', sans-serif;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 2px;
   color: var(--dune-text-dim);
@@ -1801,12 +1801,32 @@
   border-bottom-color: var(--dune-gold);
   background: rgba(212,168,67,0.07);
 }
+.tech-tab-key {
+  display: inline-block;
+  margin-right: 7px;
+  padding: 1px 5px;
+  background: rgba(212,168,67,0.12);
+  border: 1px solid rgba(212,168,67,0.25);
+  border-radius: 3px;
+  font-size: 9px;
+  color: rgba(212,168,67,0.6);
+  vertical-align: middle;
+  line-height: 1.4;
+}
+.tech-tab--active .tech-tab-key {
+  background: rgba(212,168,67,0.2);
+  border-color: rgba(212,168,67,0.5);
+  color: var(--dune-gold);
+}
 
 /* Viewport — relative so SVG overlay sits on top */
 #tech-tree-viewport {
   position: relative;
-  padding: 24px 20px;
+  padding: 32px 24px;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* SVG overlay for connection lines */
@@ -1823,22 +1843,25 @@
 .tech-branch-content {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  align-items: center;
+  gap: 28px;
+  width: 100%;
 }
 
-/* Tier row — nodes side by side horizontally */
+/* Tier row — nodes side by side horizontally, centered */
 .tech-tier-row {
   display: flex;
   flex-direction: row;
+  justify-content: center;
   gap: 20px;
   flex-wrap: wrap;
 }
 
 /* Node card */
 .tech-node {
-  width: 128px;
-  min-height: 82px;
-  padding: 10px 11px;
+  width: 175px;
+  min-height: 110px;
+  padding: 14px 14px;
   background: rgba(10,12,18,0.7);
   border: 1px solid rgba(212,168,67,0.12);
   border-radius: 6px;
@@ -1848,23 +1871,23 @@
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s, opacity 0.2s;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 5px;
 }
 .tech-node-icon {
-  font-size: 20px;
+  font-size: 30px;
   line-height: 1;
 }
 .tech-node-name {
   font-family: 'Orbitron', sans-serif;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.6px;
   color: var(--dune-text-secondary);
   line-height: 1.35;
 }
 .tech-node-cost {
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--dune-gold);
   margin-top: auto;
@@ -1881,8 +1904,8 @@
 
 /* State: locked */
 .tech-node--locked {
-  opacity: 0.22;
-  filter: grayscale(60%);
+  opacity: 0.45;
+  filter: grayscale(25%);
   cursor: not-allowed;
   border-color: rgba(212,168,67,0.07);
 }
@@ -1953,13 +1976,13 @@
 .tech-node-tooltip {
   position: fixed;
   z-index: 300;
-  max-width: 200px;
-  padding: 8px 12px;
+  max-width: 240px;
+  padding: 10px 14px;
   background: rgba(6,8,12,0.97);
   border: 1px solid var(--dune-border-bright);
   border-radius: 5px;
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--dune-text-secondary);
   pointer-events: none;
   box-shadow: 0 4px 20px rgba(0,0,0,0.7);

@@ -81,10 +81,6 @@ export class LandingScreen {
             SAVE SLOTS
             <span class="landing-btn-sub">Load, start new, or delete</span>
           </button>
-          <button class="landing-btn" id="btn-cloud">
-            CLOUD SAVES
-            <span class="landing-btn-sub">Sync with Google account</span>
-          </button>
           <button class="landing-btn" id="btn-settings">
             SETTINGS
             <span class="landing-btn-sub">Audio, graphics &amp; more</span>
@@ -126,13 +122,6 @@ export class LandingScreen {
       }
     }
 
-    // Cloud saves button
-    const btnCloud = document.getElementById('btn-cloud');
-    if (!isFirebaseConfigured()) {
-      btnCloud.disabled = true;
-      document.querySelector('#btn-cloud .landing-btn-sub').textContent = 'Firebase not configured';
-    }
-
     // Login button — hide if already Google user
     if (isGoogleUser()) {
       document.getElementById('btn-login').style.display = 'none';
@@ -154,7 +143,6 @@ export class LandingScreen {
     const menuClick = () => { AudioManager.unlock(); AudioManager.play('UI_MENU_CLICK'); };
     document.getElementById('btn-play').addEventListener('click', () => { menuClick(); this._handleResume(); });
     document.getElementById('btn-slots').addEventListener('click', () => { menuClick(); this._showSaveSlotsPanel(); });
-    document.getElementById('btn-cloud').addEventListener('click', () => { menuClick(); this._showCloudSavesPanel(); });
     document.getElementById('btn-settings').addEventListener('click', () => { menuClick(); this._showSettingsPanel(); });
     document.getElementById('btn-stats').addEventListener('click', () => { menuClick(); this._showStatisticsPanel(); });
     document.getElementById('btn-login').addEventListener('click', () => { menuClick(); this._handleLogin(); });
@@ -288,8 +276,6 @@ export class LandingScreen {
     if (user) {
       btn.style.display = 'none';
       this._updateFooter();
-      const btnCloud = document.getElementById('btn-cloud');
-      if (isFirebaseConfigured()) btnCloud.disabled = false;
     } else {
       btn.disabled = false;
       btn.querySelector('.landing-btn-sub').textContent = 'Link account for cloud saves';
@@ -302,91 +288,7 @@ export class LandingScreen {
     }
   }
 
-  async _showCloudSavesPanel() {
-    const panel = this._prepareSubPanel();
-    panel.innerHTML = `
-      <div class="landing-panel-box" style="width: 450px;">
-        <div class="landing-panel-title">CLOUD SAVES</div>
-        <div class="landing-spinner"></div>
-      </div>
-    `;
-    panel.classList.add('open');
-
-    const user = getCurrentUser();
-
-    if (!user || !isGoogleUser()) {
-      panel.innerHTML = `
-        <div class="landing-panel-box">
-          <div class="landing-panel-title">CLOUD SAVES</div>
-          <div class="landing-msg">Sign in with Google to access cloud saves.</div>
-          <button class="landing-btn-back" id="panel-back">BACK</button>
-        </div>
-      `;
-      document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
-      return;
-    }
-
-    try {
-      const cloudSaves = await getAllCloudSaves(user.uid);
-      
-      let slotsHTML = '';
-      let hasAnySave = false;
-
-      for (let i = 1; i <= 3; i++) {
-        const slot = 'slot_' + i;
-        const save = cloudSaves[slot];
-        if (save) {
-            hasAnySave = true;
-            const ore = getTotalOre(save);
-            const playTime = save.stats ? save.stats.playTimeSeconds : 0;
-            const planets = save.ownedPlanets ? save.ownedPlanets.length : 1;
-            const ts = save.lastSaved || save.timestamp;
-
-            slotsHTML += `
-              <div class="landing-save-card" style="margin-bottom: 12px;">
-                <div class="landing-save-meta">CLOUD SLOT ${i}</div>
-                <div class="landing-save-ore">${fmtOre(ore)} ORE</div>
-                <div class="landing-save-meta">Planets: ${planets}/8 &nbsp;|&nbsp; Playtime: ${fmtTime(playTime)}</div>
-                <div class="landing-save-meta">Last saved: ${fmtDate(ts)}</div>
-                <button class="landing-btn-load" data-slot="${slot}" style="margin-top: 10px; width: 100%;">LOAD THIS CLOUD SAVE</button>
-              </div>
-            `;
-        }
-      }
-
-      if (!hasAnySave) {
-        slotsHTML = `<div class="landing-msg">No cloud saves found for this account.</div>`;
-      }
-
-      panel.innerHTML = `
-        <div class="landing-panel-box" style="width: 450px;">
-          <div class="landing-panel-title">CLOUD SAVES</div>
-          <div style="max-height: 50vh; overflow-y: auto; overflow-x: hidden; padding-right: 8px;" class="slots-container">
-            ${slotsHTML}
-          </div>
-          <div class="landing-msg" style="font-size: 0.8em; margin-top: 10px;">Loading a cloud save will place it into the corresponding local slot.</div>
-          <button class="landing-btn-back" id="panel-back">BACK</button>
-        </div>
-      `;
-
-      panel.querySelectorAll('.landing-btn-load').forEach(b => b.addEventListener('click', (e) => {
-        const slot = e.target.dataset.slot;
-        this._resolve({ action: 'cloud', slot, saveData: cloudSaves[slot] });
-        this._dismiss();
-      }));
-
-      document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
-    } catch {
-      panel.innerHTML = `
-        <div class="landing-panel-box">
-          <div class="landing-panel-title">CLOUD SAVES</div>
-          <div class="landing-msg">Failed to load cloud saves.</div>
-          <button class="landing-btn-back" id="panel-back">BACK</button>
-        </div>
-      `;
-      document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
-    }
-  }
+;
 
   _showSettingsPanel() {
     const panel = this._prepareSubPanel();
@@ -394,52 +296,79 @@ export class LandingScreen {
     const vol        = AudioManager.getVolume();
     const musicVol   = AudioManager.getMusicVolume();
     const sfxVol     = AudioManager.getSfxVolume();
-    const sliderStyle = 'width:90px;accent-color:var(--dune-gold);vertical-align:middle';
-    const muteStyle   = 'cursor:pointer;background:transparent;border:1px solid var(--dune-border);color:var(--dune-gold);padding:2px 10px;font-family:inherit;font-size:inherit';
+
+    const renderVol = (v) => Math.round(v * 100) + '%';
+
     panel.innerHTML = `
       <div class="landing-panel-box">
         <div class="landing-panel-title">SETTINGS</div>
+
+        <div class="landing-section-title">AUDIO</div>
         <div class="landing-setting-row">
           <span class="landing-setting-label">MASTER</span>
-          <input type="range" id="audio-master-slider" min="0" max="1" step="0.05" value="${vol}" style="${sliderStyle}">
+          <div class="landing-setting-controls">
+            <input type="range" id="audio-master-slider" class="landing-slider" min="0" max="1" step="0.05" value="${vol}">
+            <span id="audio-master-val" class="landing-setting-val">${renderVol(vol)}</span>
+          </div>
         </div>
         <div class="landing-setting-row">
-          <span class="landing-setting-label">MUSIKK</span>
-          <input type="range" id="audio-music-slider" min="0" max="1" step="0.05" value="${musicVol}" style="${sliderStyle}">
+          <span class="landing-setting-label">MUSIC</span>
+          <div class="landing-setting-controls">
+            <input type="range" id="audio-music-slider" class="landing-slider" min="0" max="1" step="0.05" value="${musicVol}">
+            <span id="audio-music-val" class="landing-setting-val">${renderVol(musicVol)}</span>
+          </div>
         </div>
         <div class="landing-setting-row">
-          <span class="landing-setting-label">EFFEKTER</span>
-          <input type="range" id="audio-sfx-slider" min="0" max="1" step="0.05" value="${sfxVol}" style="${sliderStyle}">
+          <span class="landing-setting-label">EFFECTS</span>
+          <div class="landing-setting-controls">
+            <input type="range" id="audio-sfx-slider" class="landing-slider" min="0" max="1" step="0.05" value="${sfxVol}">
+            <span id="audio-sfx-val" class="landing-setting-val">${renderVol(sfxVol)}</span>
+          </div>
         </div>
         <div class="landing-setting-row">
           <span class="landing-setting-label">MUTE</span>
-          <button id="audio-mute-btn" class="landing-setting-ctrl" style="${muteStyle}">${muted ? 'ON' : 'OFF'}</button>
+          <button id="audio-mute-btn" class="landing-setting-toggle">${muted ? 'ON' : 'OFF'}</button>
         </div>
+
+        <div class="landing-section-title">GRAPHICS</div>
         <div class="landing-setting-row">
           <span class="landing-setting-label">RENDER QUALITY</span>
-          <span class="landing-setting-ctrl">HIGH</span>
+          <span class="landing-setting-selector">&lt; HIGH &gt;</span>
         </div>
         <div class="landing-setting-row">
           <span class="landing-setting-label">BLOOM EFFECT</span>
-          <span class="landing-setting-ctrl">ON</span>
+          <button id="graphics-bloom-btn" class="landing-setting-toggle">ON</button>
         </div>
-        <button class="landing-btn-back" id="panel-back">BACK</button>
+
+        <button class="landing-btn-back" id="panel-back" style="margin-top:8px;">BACK</button>
       </div>
     `;
     panel.classList.add('open');
+    
     document.getElementById('audio-master-slider').addEventListener('input', (e) => {
-      AudioManager.setVolume(parseFloat(e.target.value));
+      const v = parseFloat(e.target.value);
+      AudioManager.setVolume(v);
+      document.getElementById('audio-master-val').textContent = renderVol(v);
     });
     document.getElementById('audio-music-slider').addEventListener('input', (e) => {
-      AudioManager.setMusicVolume(parseFloat(e.target.value));
+      const v = parseFloat(e.target.value);
+      AudioManager.setMusicVolume(v);
+      document.getElementById('audio-music-val').textContent = renderVol(v);
     });
     document.getElementById('audio-sfx-slider').addEventListener('input', (e) => {
-      AudioManager.setSfxVolume(parseFloat(e.target.value));
+      const v = parseFloat(e.target.value);
+      AudioManager.setSfxVolume(v);
+      document.getElementById('audio-sfx-val').textContent = renderVol(v);
     });
     document.getElementById('audio-mute-btn').addEventListener('click', (e) => {
       const nowMuted = AudioManager.toggleMute();
       if (!nowMuted) AudioManager.play('UI_MUTE');
       e.currentTarget.textContent = nowMuted ? 'ON' : 'OFF';
+    });
+    document.getElementById('graphics-bloom-btn').addEventListener('click', (e) => {
+      /* Placeholder for future bloom toggle */
+      e.currentTarget.textContent = e.currentTarget.textContent === 'ON' ? 'OFF' : 'ON';
+      AudioManager.play('UI_MENU_CLICK');
     });
     document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
   }
@@ -502,13 +431,17 @@ export class LandingScreen {
   _prepareSubPanel() {
     clearTimeout(this._subpanelTimer);
     const panel = document.getElementById('landing-subpanel');
+    const nav = document.getElementById('landing-nav');
+    if (nav) nav.classList.add('hidden');
     return panel;
   }
 
   _closeSubPanel() {
     clearTimeout(this._subpanelTimer);
     const panel = document.getElementById('landing-subpanel');
+    const nav = document.getElementById('landing-nav');
     panel.classList.remove('open');
+    if (nav) nav.classList.remove('hidden');
     this._subpanelTimer = setTimeout(() => {
       if (!panel.classList.contains('open')) {
         panel.innerHTML = '';
