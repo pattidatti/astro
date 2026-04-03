@@ -481,6 +481,78 @@ export const TECH_NODES = [
     desc: 'Up to 5 colony ships can be in transit simultaneously.',
     cost: 12000, free: false, requires: ['advanced_beacons'], tier: 4, branch: 'colonization',
   },
+
+  // ─── MILITARY branch ──────────────────────────────────────────────────────
+  {
+    id: 'military_base',
+    name: 'ORBITAL SHIPYARDS',
+    icon: '🎖️',
+    desc: 'Unlocks construction of a Military Base in outer orbit to produce and manage fleets.',
+    cost: 2000, free: false, requires: [], tier: 0, branch: 'military',
+  },
+  {
+    id: 'fighter_chassis',
+    name: 'FIGHTER CHASSIS',
+    icon: '🚀',
+    desc: 'Unlocks light, fast Fighter craft. High DPS, low durability.',
+    cost: 2500, free: false, requires: ['military_base'], tier: 1, branch: 'military',
+  },
+  {
+    id: 'supply_lines',
+    name: 'SUPPLY LINES',
+    icon: '📡',
+    desc: 'Allows fleets to construct logistics relays to resupply at allied planets.',
+    cost: 3000, free: false, requires: ['military_base'], tier: 1, branch: 'military',
+  },
+  {
+    id: 'bomber_chassis',
+    name: 'BOMBER CHASSIS',
+    icon: '🛸',
+    desc: 'Unlocks long-range Bomber craft. Massive burst damage, fragile.',
+    cost: 4000, free: false, requires: ['fighter_chassis'], tier: 2, branch: 'military',
+  },
+  {
+    id: 'fleet_formations',
+    name: 'FLEET FORMATIONS',
+    icon: '📐',
+    desc: 'Increases Fleet Capacity per hangar built, allowing larger swarms.',
+    cost: 3500, free: false, requires: ['military_base'], tier: 2, branch: 'military',
+  },
+  {
+    id: 'carrier_vessels',
+    name: 'CARRIER VESSELS',
+    icon: '🚢',
+    desc: 'Unlocks massive Carrier support ships that resupply and repair the fleet in combat.',
+    cost: 5000, free: false, requires: ['supply_lines'], tier: 2, branch: 'military',
+  },
+  {
+    id: 'battleship_chassis',
+    name: 'BATTLESHIP CHASSIS',
+    icon: '🛳️',
+    desc: 'Unlocks heavy Battleships. High durability, steady multi-target artillery.',
+    cost: 8000, free: false, requires: ['bomber_chassis'], tier: 3, branch: 'military',
+  },
+  {
+    id: 'crystal_cores',
+    name: 'CRYSTAL CORES',
+    icon: '💎',
+    desc: 'Unlocks Crystal usage for ultimate titan-class warships and global upgrades.',
+    cost: 10000, free: false, requires: ['carrier_vessels'], tier: 3, branch: 'military',
+  },
+  {
+    id: 'pure_crystal_lasers',
+    name: 'PURE CRYSTAL LASERS',
+    icon: '✨',
+    desc: 'Permanent +20% Ammo capacity and +15% DPS for all ships across the galaxy.',
+    cost: 50000, free: false, requires: ['crystal_cores'], tier: 4, branch: 'military',
+  },
+  {
+    id: 'quantum_fuel',
+    name: 'QUANTUM FUEL',
+    icon: '🌌',
+    desc: 'Permanent +50% Fuel capacity, reducing the need for fleet resupply stops.',
+    cost: 50000, free: false, requires: ['crystal_cores'], tier: 4, branch: 'military',
+  },
 ];
 
 /** Fast lookup by node ID */

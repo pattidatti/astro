@@ -5,7 +5,7 @@ import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP,
 import { ENEMY_TYPES } from './data/enemies.js';
 import { TECH_NODES, TECH_BY_ID, FREE_TECH_IDS, getMaxColonyShipsInFlight } from './data/techTree.js';
 
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 
 const COLONY_SHIP_BASE_BUILD_COST = 5000;  // ore
 const COLONY_SHIP_COST_SCALE = 1.5;        // exponential multiplier per planet colonized
@@ -56,6 +56,7 @@ function makePlanetState(planetDef) {
     upgradeLevels: {},
     buildQueue: [],
     colonyShipBuildQueue: [], // [{ progress: 0 }] — builds one at a time
+    militaryBase: { built: false, hangars: 0, fleetCap: 0, silo: { ore: { amount: 0, capacity: 5000 }, energy: { amount: 0, capacity: 5000 } }, queue: [] },
     // Scout deposit unlock progress (seconds needed to unlock one zone)
     depositProgress: { ore: 0, crystal: 0, energy: 0 },
     // Combat & defense state
@@ -127,6 +128,7 @@ class GameState extends EventEmitter {
     this.colonyShipsInOrbit = []; // [{ id, fromPlanetId }]
     this.colonyShipsInFlight = []; // [{ id, fromPlanetId, toPlanetId, duration, elapsed }]
     this.colonyShipsArriving = []; // [{ id, fromPlanetId, toPlanetId }] — in orbit at destination, waiting for base
+    this.playerFleets = []; // [{ id, fleetType, position, target, state, ... }]
     this.tutorialStep = 0;
     this.lastSaved = Date.now();
 
@@ -883,6 +885,15 @@ class GameState extends EventEmitter {
     ps.combat.shieldMaxHP = 0;
     ps.combat.activeEffects = [];
 
+    // Reset military base if present
+    if (ps.militaryBase) {
+      ps.militaryBase.built = false;
+      ps.militaryBase.silo.ore.amount = 0;
+      ps.militaryBase.silo.energy.amount = 0;
+      ps.militaryBase.queue = [];
+      // We preserve .hangars just like we preserve regular baseLevels
+    }
+
     // baseLevels: PRESERVED (key decision — not punitive)
     // deposits/depositProgress: PRESERVED
     // upgradeLevels (robot upgrades): PRESERVED
@@ -1015,6 +1026,7 @@ class GameState extends EventEmitter {
       colonyShipsInOrbit: JSON.parse(JSON.stringify(this.colonyShipsInOrbit)),
       colonyShipsInFlight: JSON.parse(JSON.stringify(this.colonyShipsInFlight)),
       colonyShipsArriving: JSON.parse(JSON.stringify(this.colonyShipsArriving)),
+      playerFleets: JSON.parse(JSON.stringify(this.playerFleets)),
       activeAttacks: attacks,
       roamingFleets: JSON.parse(JSON.stringify(this.roamingFleets)),
       lastAttackTime: { ...this.lastAttackTime },
@@ -1043,6 +1055,7 @@ class GameState extends EventEmitter {
     this.colonyShipsInOrbit  = data.colonyShipsInOrbit ?? [];
     this.colonyShipsInFlight = data.colonyShipsInFlight ?? [];
     this.colonyShipsArriving = data.colonyShipsArriving ?? [];
+    this.playerFleets        = data.playerFleets ?? [];
     this.activeAttacks       = data.activeAttacks ?? [];
     this.roamingFleets       = data.roamingFleets ?? [];
     this.lastAttackTime      = data.lastAttackTime ?? {};
@@ -1064,8 +1077,12 @@ class GameState extends EventEmitter {
 
     // Backwards compat: ensure colonyShipBuildQueue exists on all planet states
     // v2→v3 migration: ensure combat fields exist on all planet states
+    // v3→v4 migration: ensure militaryBase exists on all planet states
     for (const ps of Object.values(this.planetState)) {
       if (!ps.colonyShipBuildQueue) ps.colonyShipBuildQueue = [];
+      if (!ps.militaryBase) {
+        ps.militaryBase = { built: false, hangars: 0, fleetCap: 0, silo: { ore: { amount: 0, capacity: 5000 }, energy: { amount: 0, capacity: 5000 } }, queue: [] };
+      }
       if (!ps.combat) {
         ps.combat = {
           stationHP: BASE_STATION_HP,

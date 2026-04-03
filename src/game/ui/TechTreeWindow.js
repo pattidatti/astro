@@ -8,12 +8,13 @@ const fmt = (n) => {
   return Math.floor(n) + '';
 };
 
-const BRANCH_ORDER = ['robots', 'defense', 'base', 'colonization'];
+const BRANCH_ORDER = ['robots', 'defense', 'base', 'colonization', 'military'];
 const BRANCH_LABELS = {
   robots:       'ROBOTS',
   defense:      'DEFENSE',
   base:         'INFRASTRUCTURE',
   colonization: 'COLONIZATION',
+  military:     'MILITARY',
 };
 
 export class TechTreeWindow {
@@ -45,8 +46,8 @@ export class TechTreeWindow {
         this.toggle();
         return;
       }
-      // 1-4: switch tabs when open
-      if (this._visible && e.key >= '1' && e.key <= '4') {
+      // 1-5: switch tabs when open
+      if (this._visible && e.key >= '1' && e.key <= '5') {
         const branch = BRANCH_ORDER[parseInt(e.key) - 1];
         if (branch) this._switchTab(branch);
       }
