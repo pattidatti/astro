@@ -32,6 +32,7 @@ export class RouteSystem {
 
     // Dispatch new ships from active routes
     for (const route of gameState.routes) {
+      if (!gameState.isTechUnlocked('cargo_ships')) continue;
       if (!route.active) continue;
       if (!gameState.ownedPlanets.includes(route.fromPlanet)) continue;
       if (!gameState.ownedPlanets.includes(route.toPlanet)) continue;
@@ -56,7 +57,7 @@ export class RouteSystem {
 
       // Dispatch ship
       const shipSpeedLevel = ps.baseLevels.shipSpeed;
-      const duration = Math.max(1, calcTravelDuration(route.fromPlanet, route.toPlanet, shipSpeedLevel));
+      const duration = Math.max(1, calcTravelDuration(route.fromPlanet, route.toPlanet, shipSpeedLevel) * gameState.getTechShipSpeedMult());
 
       const deducted = gameState.deductFromSilo(route.fromPlanet, route.resource, route.amount);
       if (deducted <= 0) continue;
@@ -101,7 +102,7 @@ export class RouteSystem {
       if (!ps || !ps.hasBase) continue;
 
       const shipSpeedLevel = ps.baseLevels.shipSpeed;
-      const duration = Math.max(1, calcTravelDuration(route.fromPlanet, route.toPlanet, shipSpeedLevel));
+      const duration = Math.max(1, calcTravelDuration(route.fromPlanet, route.toPlanet, shipSpeedLevel) * gameState.getTechShipSpeedMult());
       const elapsed = Math.max(0, (now - route.lastDispatchTime) / 1000);
 
       if (elapsed < duration) {

@@ -3,6 +3,11 @@
    Warm gold/amber/sand palette, floating panel overlay
    ══════════════════════════════════════════════════════ */
 
+/* Freeze all CSS animations while game is paused (reduces GPU compositor work) */
+.game-paused * {
+  animation-play-state: paused !important;
+}
+
 :root {
   --dune-gold: #d4a843;
   --dune-gold-bright: #e8c45a;

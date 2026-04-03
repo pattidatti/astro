@@ -19,6 +19,7 @@ export class AnimationLoop {
   }
 
   start() {
+    if (this._running) return;
     this._running = true;
     this._lastTime = performance.now();
     requestAnimationFrame(this._frame);
@@ -31,6 +32,11 @@ export class AnimationLoop {
   _frame(now) {
     if (!this._running) return;
     requestAnimationFrame(this._frame);
+
+    if (document.hidden || !document.hasFocus()) {
+      this._lastTime = now; // hold oppdatert → ingen dt-spike ved retur
+      return;
+    }
 
     const dt = Math.min((now - this._lastTime) / 1000, 0.1); // cap at 100ms
     this._lastTime = now;

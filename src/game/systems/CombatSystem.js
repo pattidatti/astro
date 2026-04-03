@@ -184,15 +184,18 @@ export class CombatSystem {
     if (gameState.hasActiveEffect(planetId, 'orbitalStrike')) {
       // Orbital strike is instant, remove the effect and deal damage
       const strikeAbility = ACTIVE_ABILITIES.orbitalStrike;
+      const orbitalMult = gameState.isTechUnlocked('orbital_damage') ? 1.5 : 1.0;
+      const strikeHits = gameState.isTechUnlocked('counter_measures') ? 2 : 1;
+      const strikeDmg = strikeAbility.damage * orbitalMult * strikeHits;
       for (const enemy of aliveEnemies) {
-        enemy.hp -= strikeAbility.damage;
+        enemy.hp -= strikeDmg;
         if (enemy.hp <= 0) {
           enemy.hp = 0;
           gameState.emit('enemyDestroyed', { attackId: attack.id, planetId, enemy, defenseType: 'orbitalStrike' });
         }
       }
       if (attack.mothership && attack.mothership.hp > 0) {
-        attack.mothership.hp -= strikeAbility.damage;
+        attack.mothership.hp -= strikeDmg;
         if (attack.mothership.hp <= 0) {
           attack.mothership.hp = 0;
           gameState.emit('mothershipDestroyed', { attackId: attack.id, planetId });
@@ -272,7 +275,8 @@ export class CombatSystem {
     if (gameState.isUnderAttack(planetId)) return;
 
     const { count, speedLevel, loadLevel } = ps.robots.builder;
-    const repairRate = count * BUILDER_REPAIR_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel);
+    const builderTechMult = gameState.isTechUnlocked('builder_efficiency') ? 1.6 : 1.0;
+    const repairRate = count * BUILDER_REPAIR_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel) * builderTechMult;
     gameState.repairStation(planetId, repairRate * dt);
   }
 
@@ -304,7 +308,7 @@ export class CombatSystem {
     const capMult = this._getDefenseUpgradeMult(ps.combat, 'shield', 'capacityMult');
     maxHP = Math.floor(maxHP * capMult);
     if (gameState.hasActiveEffect(planetId, 'shieldBoost')) {
-      maxHP *= 2;
+      maxHP *= gameState.isTechUnlocked('shield_boost_power') ? 3 : 2;
     }
 
     ps.combat.shieldHP = Math.min(maxHP, ps.combat.shieldHP + regen);

@@ -119,14 +119,25 @@ async function boot() {
   // Track play time
   game.animationLoop.onUpdate((dt) => { gameState.stats.playTimeSeconds += dt; });
 
-  // Stop/resume rendering when tab is hidden
+  // Tab-bytte: stopp/start loop (visibilitychange er pålitelig)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       game.animationLoop.stop();
-    } else {
+    } else if (!menuOpen) {
       game.animationLoop.start();
     }
   });
+
+  // CSS-animasjoner: poll fokus-tilstand hvert 200ms
+  // (blur/focus-events er upålitelige ved app-bytte — in-frame hasFocus()-sjekk håndterer GPU)
+  setInterval(() => {
+    const inactive = document.hidden || !document.hasFocus();
+    if (inactive) {
+      document.body.classList.add('game-paused');
+    } else if (!menuOpen) {
+      document.body.classList.remove('game-paused');
+    }
+  }, 200);
 
   // ── Pause menu setup (defined before UI so onMenu callback is valid) ──
   let menuOpen = false;
@@ -134,7 +145,9 @@ async function boot() {
     if (menuOpen) return;
     menuOpen = true;
     game.animationLoop.stop();
+    document.body.classList.add('game-paused');
     await openPauseMenu();
+    document.body.classList.remove('game-paused');
     game.animationLoop.start();
     menuOpen = false;
   };

@@ -3,7 +3,7 @@ import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult
 import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP,
          BUILDER_REPAIR_RATE, RECOLONIZE_COST_MULT, FALL_ROBOT_SURVIVAL } from './data/defenses.js';
 import { ENEMY_TYPES } from './data/enemies.js';
-import { TECH_NODES, TECH_BY_ID, FREE_TECH_IDS } from './data/techTree.js';
+import { TECH_NODES, TECH_BY_ID, FREE_TECH_IDS, getMaxColonyShipsInFlight } from './data/techTree.js';
 
 const SAVE_VERSION = 3;
 
@@ -182,11 +182,11 @@ class GameState extends EventEmitter {
     return PLANETS.find(p => p.id === planetId) || null;
   }
 
-  /** Get the available ship slots for a planet (base level drives this) */
+  /** Get the available ship slots for a planet (base level + tech bonus). */
   getShipSlots(planetId) {
     const ps = this.getPlanetState(planetId);
     if (!ps) return 0;
-    return 1 + ps.baseLevels.shipSlots; // starts at 1, +1 per level
+    return 1 + ps.baseLevels.shipSlots + this.getTechShipSlotBonus();
   }
 
   /** Count of active ship routes from a planet */
@@ -277,10 +277,174 @@ class GameState extends EventEmitter {
     const node = TECH_BY_ID[nodeId];
     this.deductFromSilo(this.focusedPlanet, 'energy', node.cost);
     this.unlockedTech.add(nodeId);
+    this._applyTechEffects(nodeId);
     this._newTechAvailable = false;
     this._checkNewTechAvailable();
     this.emit('techUnlocked', nodeId);
     return true;
+  }
+
+  // ─── Tech bonus helpers ───────────────────────────────────────────────────
+
+  /** Apply immediate side-effects when a node is unlocked (HP, silo capacity). */
+  _applyTechEffects(nodeId) {
+    const HP_DELTAS = {
+      station_armor:    30,
+      station_armor_2:  70,  // cumulative: +30+70 = +100
+      station_armor_3:  150, // cumulative: +250
+      fortress_protocol: 300, // cumulative: +550
+    };
+    const SILO_DELTAS = {
+      ore_storage_1:    { ore: 1000 },
+      ore_storage_2:    { ore: 2000 },
+      ore_storage_3:    { ore: 5000 },
+      energy_storage_1: { energy: 1000 },
+      energy_storage_2: { energy: 2000 },
+      energy_storage_3: { energy: 5000 },
+      crystal_storage_1:{ crystal: 500 },
+      crystal_storage_2:{ crystal: 1500 },
+      mega_storage:     { ore: 5000, energy: 5000, crystal: 5000 },
+    };
+
+    if (HP_DELTAS[nodeId] !== undefined) {
+      const delta = HP_DELTAS[nodeId];
+      for (const pid of this.ownedPlanets) {
+        const ps = this.getPlanetState(pid);
+        if (!ps) continue;
+        ps.combat.stationMaxHP += delta;
+        // Also raise current HP proportionally if not at max
+        ps.combat.stationHP = Math.min(ps.combat.stationMaxHP, ps.combat.stationHP + delta);
+      }
+    }
+
+    if (SILO_DELTAS[nodeId]) {
+      const deltas = SILO_DELTAS[nodeId];
+      for (const pid of this.ownedPlanets) {
+        const ps = this.getPlanetState(pid);
+        if (!ps) continue;
+        for (const [res, bonus] of Object.entries(deltas)) {
+          if (ps.silos[res] && (res !== 'crystal' || ps.silos.crystal.capacity > 0)) {
+            ps.silos[res].capacity += bonus;
+          }
+        }
+      }
+    }
+  }
+
+  /** Apply all currently-unlocked silo tech bonuses to a single (newly colonized) planet. */
+  _applySiloBonusesToPlanet(planetId) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps) return;
+    const SILO_NODES = [
+      ['ore_storage_1',    { ore: 1000 }],
+      ['ore_storage_2',    { ore: 2000 }],
+      ['ore_storage_3',    { ore: 5000 }],
+      ['energy_storage_1', { energy: 1000 }],
+      ['energy_storage_2', { energy: 2000 }],
+      ['energy_storage_3', { energy: 5000 }],
+      ['crystal_storage_1',{ crystal: 500 }],
+      ['crystal_storage_2',{ crystal: 1500 }],
+      ['mega_storage',     { ore: 5000, energy: 5000, crystal: 5000 }],
+    ];
+    for (const [id, deltas] of SILO_NODES) {
+      if (!this.isTechUnlocked(id)) continue;
+      for (const [res, bonus] of Object.entries(deltas)) {
+        if (ps.silos[res] && (res !== 'crystal' || ps.silos.crystal.capacity > 0)) {
+          ps.silos[res].capacity += bonus;
+        }
+      }
+    }
+    // Also apply HP bonuses
+    const hpBonus = this.getTechHPBonus();
+    if (hpBonus > 0) {
+      ps.combat.stationMaxHP += hpBonus;
+      ps.combat.stationHP = Math.min(ps.combat.stationMaxHP, ps.combat.stationHP + hpBonus);
+    }
+  }
+
+  /** Total station HP bonus from unlocked armor tech. */
+  getTechHPBonus() {
+    let bonus = 0;
+    if (this.isTechUnlocked('station_armor'))    bonus += 30;
+    if (this.isTechUnlocked('station_armor_2'))  bonus += 70;
+    if (this.isTechUnlocked('station_armor_3'))  bonus += 150;
+    if (this.isTechUnlocked('fortress_protocol'))bonus += 300;
+    return bonus;
+  }
+
+  /** Cooldown multiplier for an ability (< 1 = shorter cooldown). */
+  getTechCooldownMult(abilityId) {
+    let mult = 1.0;
+    if (abilityId === 'emp' && this.isTechUnlocked('emp_cooldown')) mult *= 0.75;
+    if (this.isTechUnlocked('rapid_response')) mult *= 0.80;
+    return mult;
+  }
+
+  /** Colony ship build time multiplier (< 1 = faster). */
+  getTechColonyBuildMult() {
+    let mult = 1.0;
+    if (this.isTechUnlocked('colony_engineering'))  return 0.30; // -70%
+    if (this.isTechUnlocked('colony_build_speed_2')) return 0.50; // -50%
+    if (this.isTechUnlocked('colony_build_speed'))   return 0.70; // -30%
+    return mult;
+  }
+
+  /** Colony base construction cost multiplier (< 1 = cheaper). */
+  getTechColonyCostMult() {
+    if (this.isTechUnlocked('colony_cost_reduction_2')) return 0.60;
+    if (this.isTechUnlocked('colony_cost_reduction'))   return 0.80;
+    return 1.0;
+  }
+
+  /** Recolonization cost multiplier (< 1 = cheaper). */
+  getTechRecolonizeCostMult() {
+    if (this.isTechUnlocked('recolonization_discount_2')) return 0.50;
+    if (this.isTechUnlocked('recolonization_discount'))   return 0.70;
+    return 1.0;
+  }
+
+  /** Bonus passive energy/s added globally by tech (all planets). */
+  getTechPassiveBonus() {
+    let bonus = 0;
+    if (this.isTechUnlocked('passive_energy_2')) bonus += 2;
+    if (this.isTechUnlocked('passive_energy_3')) bonus += 4; // +4 more = +6 total
+    return bonus;
+  }
+
+  /** Bonus ship slots from tech (logistics_ai). */
+  getTechShipSlotBonus() {
+    return this.isTechUnlocked('logistics_ai') ? 1 : 0;
+  }
+
+  /** Cargo ship speed multiplier from warp_drive tech. */
+  getTechShipSpeedMult() {
+    return this.isTechUnlocked('warp_drive') ? 0.70 : 1.0; // 30% faster
+  }
+
+  /** Ore production multiplier from mining tech. */
+  getTechOreMult() {
+    if (this.isTechUnlocked('deep_mining'))         return 1.60;
+    if (this.isTechUnlocked('mining_efficiency_2')) return 1.40;
+    if (this.isTechUnlocked('mining_efficiency'))   return 1.20;
+    return 1.0;
+  }
+
+  /** Energy production multiplier from energy tech. */
+  getTechEnergyMult() {
+    if (this.isTechUnlocked('neural_sync'))          return 1.60;
+    if (this.isTechUnlocked('energy_efficiency_2')) return 1.40;
+    if (this.isTechUnlocked('energy_efficiency'))   return 1.20;
+    return 1.0;
+  }
+
+  /** Crystal production multiplier from crystal tech. */
+  getTechCrystalMult() {
+    return this.isTechUnlocked('crystal_focus') ? 1.30 : 1.0;
+  }
+
+  /** Scout deposit-unlock speed multiplier from deep_scan tech. */
+  getTechScoutMult() {
+    return this.isTechUnlocked('scout_speed') ? 1.40 : 1.0;
   }
 
   /**
@@ -327,7 +491,7 @@ class GameState extends EventEmitter {
       const ps = this.getPlanetState(planetId);
       if (!ps?.colonyShipBuildQueue?.length) continue;
       const item = ps.colonyShipBuildQueue[0];
-      item.progress += dt;
+      item.progress += dt / this.getTechColonyBuildMult();
       if (item.progress >= COLONY_SHIP_BUILD_TIME) {
         ps.colonyShipBuildQueue.shift();
         const id = `cs-${planetId}-${Date.now()}`;
@@ -345,6 +509,11 @@ class GameState extends EventEmitter {
 
     const toDef = PLANETS.find(p => p.id === targetPlanetId);
     if (!toDef) return false;
+
+    // Check max in-flight limit
+    const inFlight = this.colonyShipsInFlight.length + this.colonyShipsArriving.length;
+    const maxInFlight = getMaxColonyShipsInFlight(this.unlockedTech);
+    if (inFlight >= maxInFlight) return false;
 
     const { fromPlanetId } = this.colonyShipsInOrbit[shipIdx];
     const energyCost = colonyLaunchEnergyCost(distance);
@@ -394,6 +563,8 @@ class GameState extends EventEmitter {
     ps.hasBase = false;
     this.planetState[toPlanetId] = ps;
     this.ownedPlanets.push(toPlanetId);
+    // Apply all currently-unlocked silo and HP tech bonuses to new planet
+    this._applySiloBonusesToPlanet(toPlanetId);
     this.focusedPlanet = toPlanetId;
     this.emit('planetColonized', toPlanetId);
     this.emit('focusedPlanet', toPlanetId);
@@ -415,7 +586,9 @@ class GameState extends EventEmitter {
     if (!ps || ps.hasBase) return false;
     const def = PLANETS.find(p => p.id === planetId);
     if (!def) return false;
-    const { ore: oreCost = 0, energy: energyCost = 0 } = def.baseCost;
+    const costMult = this.getTechColonyCostMult();
+    const oreCost    = Math.floor((def.baseCost.ore    || 0) * costMult);
+    const energyCost = Math.floor((def.baseCost.energy || 0) * costMult);
     if (oreCost > 0 && !this.siloHas(planetId, 'ore', oreCost)) return false;
     if (energyCost > 0 && !this.siloHas(planetId, 'energy', energyCost)) return false;
     if (oreCost > 0) this.deductFromSilo(planetId, 'ore', oreCost);
@@ -621,7 +794,7 @@ class GameState extends EventEmitter {
     if (!this.siloHas(planetId, 'energy', ability.energyCost)) return false;
 
     this.deductFromSilo(planetId, 'energy', ability.energyCost);
-    ps.combat.abilityCooldowns[abilityId] = ability.cooldown;
+    ps.combat.abilityCooldowns[abilityId] = ability.cooldown * this.getTechCooldownMult(abilityId);
 
     // Add active effect
     ps.combat.activeEffects.push({
@@ -735,9 +908,10 @@ class GameState extends EventEmitter {
     const def = PLANETS.find(p => p.id === targetPlanetId);
     if (!def) return false;
 
-    // Reduced cost
-    const oreCost = Math.floor((def.baseCost.ore || 0) * RECOLONIZE_COST_MULT);
-    const energyCost = Math.floor((def.baseCost.energy || 0) * RECOLONIZE_COST_MULT);
+    // Reduced cost (recolonize base mult × tech discount)
+    const recolMult = RECOLONIZE_COST_MULT * this.getTechRecolonizeCostMult();
+    const oreCost    = Math.floor((def.baseCost.ore    || 0) * recolMult);
+    const energyCost = Math.floor((def.baseCost.energy || 0) * recolMult);
 
     if (oreCost > 0 && !this.siloHas(sourcePlanetId, 'ore', oreCost)) return false;
     if (energyCost > 0 && !this.siloHas(sourcePlanetId, 'energy', energyCost)) return false;
@@ -938,6 +1112,10 @@ class GameState extends EventEmitter {
       if (this.colonyShipsInOrbit.length > 0 || this.colonyShipsInFlight.length > 0 ||
           this.colonyShipsArriving.length > 0 || this.ownedPlanets.length > 1) {
         this.unlockedTech.add('colony_ship');
+      }
+      // Grant cargo_ships if any routes exist or multiple planets owned
+      if (this.routes.length > 0 || this.ownedPlanets.length > 1) {
+        this.unlockedTech.add('cargo_ships');
       }
     }
 

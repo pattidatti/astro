@@ -50,8 +50,9 @@ export class ProductionSystem {
     // ── Ore production (miners) ───────────────────────────────────────────
     if (ps.robots.miner.count > 0 && gameState.siloHasRoom(planetId, 'ore')) {
       const { count, speedLevel, loadLevel } = ps.robots.miner;
+      const techMult = gameState.getTechOreMult();
       const rate = count * BASE_ORE_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
-                   * def.planetMult.ore * Math.max(1, oreZones);
+                   * def.planetMult.ore * Math.max(1, oreZones) * techMult;
       const added = gameState.addToSilo(planetId, 'ore', rate * dt);
       result.ore = added;
     }
@@ -62,14 +63,15 @@ export class ProductionSystem {
 
       if (ps.robots.energyBot.count > 0 && gameState.siloHasRoom(planetId, 'energy')) {
         const { count, speedLevel, loadLevel } = ps.robots.energyBot;
+        const techMult = gameState.getTechEnergyMult();
         energyRate += count * BASE_ENERGY_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
-                      * def.planetMult.energy * Math.max(1, energyZones);
+                      * def.planetMult.energy * Math.max(1, energyZones) * techMult;
       }
 
-      // Passive energy from base upgrade
+      // Passive energy from base upgrade + tech bonus
       const passiveLv = ps.baseLevels.passiveEnergy;
       if (passiveLv > 0) {
-        energyRate += passiveEnergyRates[passiveLv - 1];
+        energyRate += passiveEnergyRates[passiveLv - 1] + gameState.getTechPassiveBonus();
       }
 
       if (energyRate > 0 && gameState.siloHasRoom(planetId, 'energy')) {
@@ -81,8 +83,9 @@ export class ProductionSystem {
     // ── Crystal production (miners on crystal-capable planets) ────────────
     if (crystalZones > 0 && ps.robots.miner.count > 0 && gameState.siloHasRoom(planetId, 'crystal')) {
       const { count, speedLevel, loadLevel } = ps.robots.miner;
+      const techMult = gameState.getTechCrystalMult();
       const rate = count * BASE_CRYSTAL_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
-                   * def.planetMult.crystal * crystalZones;
+                   * def.planetMult.crystal * crystalZones * techMult;
       const added = gameState.addToSilo(planetId, 'crystal', rate * dt);
       result.crystal = added;
     }
@@ -97,7 +100,7 @@ export class ProductionSystem {
 
   _tickScouts(dt, planetId, ps, def) {
     const { count, speedLevel } = ps.robots.scout;
-    const progressRate = count * getSpeedMult(speedLevel);
+    const progressRate = count * getSpeedMult(speedLevel) * gameState.getTechScoutMult();
 
     for (const resource of ['ore', 'crystal', 'energy']) {
       const dep = ps.deposits[resource];
