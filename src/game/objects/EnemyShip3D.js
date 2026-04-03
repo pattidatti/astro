@@ -1,22 +1,162 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-const TRAIL_LENGTH = 16;
+let sharedGeometries = null;
+let sharedMaterials = null;
 
 /**
- * A 3D enemy fighter ship. Used for interceptors, bombers, and raiders.
- * Pooled by EnemyManager3D — activate/deactivate as needed.
+ * A lightweight logical representation of a 3D enemy ship.
+ * Does not contain a THREE.Group. Calculates matrix and color for EnemyManager3D.
  */
 export class EnemyShip3D {
+  static initSharedResources() {
+    if (sharedGeometries) return;
+
+    // Materials
+    const obsidianMat = new THREE.MeshStandardMaterial({ color: 0x15151b, metalness: 0.8, roughness: 0.3 });
+    const armorMat = new THREE.MeshStandardMaterial({ color: 0x25252d, metalness: 0.6, roughness: 0.5 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x050505, metalness: 1.0, roughness: 0.1, emissive: 0x330000 });
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); // Glow color overridden by instance color
+
+    sharedMaterials = { body: [obsidianMat, armorMat, glassMat], glow: glowMat };
+
+    // Helpers to build and merge
+    const applyMat = (geo, matIndex) => {
+      // Clear existing groups and assign material index to everything
+      geo.clearGroups();
+      geo.addGroup(0, geo.attributes.position.count, matIndex);
+      return geo;
+    };
+
+    // --- INTERCEPTOR ---
+    const intBody = [];
+    const intGlow = [];
+
+    const intCore = new THREE.CylinderGeometry(0.015, 0.05, 0.35, 6);
+    intCore.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    intBody.push(applyMat(intCore, 0)); // obsidian
+
+    const intWingL = new THREE.BoxGeometry(0.25, 0.02, 0.08);
+    intWingL.translate(-0.11, 0, -0.05);
+    intWingL.rotateY(-Math.PI / 6);
+    intBody.push(applyMat(intWingL, 1)); // armor
+
+    const intWingR = new THREE.BoxGeometry(0.25, 0.02, 0.08);
+    intWingR.translate(0.11, 0, -0.05);
+    intWingR.rotateY(Math.PI / 6);
+    intBody.push(applyMat(intWingR, 1));
+
+    const intEngGeo = new THREE.CylinderGeometry(0.015, 0.025, 0.1, 8);
+    intEngGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    
+    const intEngL = intEngGeo.clone();
+    intEngL.translate(-0.04, 0, -0.15);
+    intBody.push(applyMat(intEngL, 0));
+    
+    const intEngR = intEngGeo.clone();
+    intEngR.translate(0.04, 0, -0.15);
+    intBody.push(applyMat(intEngR, 0));
+
+    const intGlowGeo = new THREE.CircleGeometry(0.02, 8);
+    intGlowGeo.rotateY(Math.PI);
+    const intGlowL = intGlowGeo.clone();
+    intGlowL.translate(-0.04, 0, -0.201);
+    intGlow.push(intGlowL);
+    
+    const intGlowR = intGlowGeo.clone();
+    intGlowR.translate(0.04, 0, -0.201);
+    intGlow.push(intGlowR);
+
+    // --- BOMBER ---
+    const bomBody = [];
+    const bomGlow = [];
+
+    const bomCore = new THREE.BoxGeometry(0.15, 0.08, 0.25);
+    bomBody.push(applyMat(bomCore, 1)); // armor
+
+    const bomWings = new THREE.BoxGeometry(0.35, 0.04, 0.15);
+    bomWings.translate(0, 0, -0.02);
+    bomBody.push(applyMat(bomWings, 0));
+
+    const bomPod = new THREE.CylinderGeometry(0.03, 0.03, 0.2, 8);
+    bomPod.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    const bomPodL = bomPod.clone();
+    bomPodL.translate(-0.12, -0.04, 0);
+    bomBody.push(applyMat(bomPodL, 0));
+    const bomPodR = bomPod.clone();
+    bomPodR.translate(0.12, -0.04, 0);
+    bomBody.push(applyMat(bomPodR, 0));
+
+    const bomEng = new THREE.BoxGeometry(0.12, 0.06, 0.08);
+    bomEng.translate(0, 0, -0.15);
+    bomBody.push(applyMat(bomEng, 0));
+
+    const bomGlowGeo = new THREE.PlaneGeometry(0.1, 0.05);
+    bomGlowGeo.rotateY(Math.PI);
+    bomGlowGeo.translate(0, 0, -0.191);
+    bomGlow.push(bomGlowGeo);
+
+    const bomGlass = new THREE.BoxGeometry(0.08, 0.04, 0.08);
+    bomGlass.translate(0, 0.05, 0.08);
+    bomBody.push(applyMat(bomGlass, 2));
+
+    // --- RAIDER ---
+    const raiBody = [];
+    const raiGlow = [];
+
+    const raiCore = new THREE.CylinderGeometry(0.03, 0.03, 0.15, 6);
+    raiCore.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    raiCore.translate(0, 0, -0.05);
+    raiBody.push(applyMat(raiCore, 0));
+
+    const raiProngGeo = new THREE.BoxGeometry(0.03, 0.15, 0.25);
+    const raiProngL = raiProngGeo.clone();
+    raiProngL.translate(-0.12, 0, 0.02);
+    raiBody.push(applyMat(raiProngL, 1));
+    const raiProngR = raiProngGeo.clone();
+    raiProngR.translate(0.12, 0, 0.02);
+    raiBody.push(applyMat(raiProngR, 1));
+
+    const raiWings = new THREE.BoxGeometry(0.24, 0.02, 0.06);
+    raiWings.translate(0, 0, -0.05);
+    raiBody.push(applyMat(raiWings, 0));
+
+    const raiGlowGeo = new THREE.CircleGeometry(0.02, 6);
+    raiGlowGeo.rotateY(Math.PI);
+    raiGlowGeo.translate(0, 0, -0.126);
+    raiGlow.push(raiGlowGeo);
+
+    const raiGlass = new THREE.SphereGeometry(0.035, 8, 8);
+    raiGlass.translate(0, 0, 0.08);
+    raiBody.push(applyMat(raiGlass, 2));
+
+    // Merge everything
+    sharedGeometries = {
+      interceptor: { body: mergeGeometries(intBody, true), glow: mergeGeometries(intGlow, false) },
+      bomber:      { body: mergeGeometries(bomBody, true), glow: mergeGeometries(bomGlow, false) },
+      raider:      { body: mergeGeometries(raiBody, true), glow: mergeGeometries(raiGlow, false) }
+    };
+  }
+
+  static getSharedResources() {
+    return { geometries: sharedGeometries, materials: sharedMaterials };
+  }
+
   constructor() {
-    this.group = new THREE.Group();
-    this.group.visible = false;
+    this.visible = false;
+    this.matrix = new THREE.Matrix4();
+    this.worldPosition = new THREE.Vector3(); // Cache for logic
 
     this._type = null;
+    this._color = new THREE.Color();
+    this._glowColor = new THREE.Color();
+    this._bodyColor = new THREE.Color(0xffffff);
+
     this._targetPos = new THREE.Vector3();
     this._orbitAngle = Math.random() * Math.PI * 2;
     this._orbitRadius = 15 + Math.random() * 15;
-    this._orbitInclination = 0.5 + Math.random() * 0.8;  // 29–74 degrees from horizontal
-    this._orbitAzimuth = Math.random() * Math.PI * 2;     // random orbit plane orientation
+    this._orbitInclination = 0.5 + Math.random() * 0.8;
+    this._orbitAzimuth = Math.random() * Math.PI * 2;
     this._speed = 1.0;
 
     // Approach animation state
@@ -26,295 +166,54 @@ export class EnemyShip3D {
     this._approachTime = 0;
     this._approachDuration = 1.5;
 
-    // Orbit sync — smooth entry into orbit after approach
+    // Orbit sync
     this._inOrbitSync = false;
     this._orbitSyncFrom = new THREE.Vector3();
     this._orbitSyncTime = 0;
     this._orbitSyncDuration = 0.5;
 
-    // Transit animation state (used when in fleet, not orbiting)
-    this._acroTime = Math.random() * 100;  // start at random phase
-    this._barrelRoll = null;               // { time, duration, dir }
+    // Transit animation state
+    this._acroTime = Math.random() * 100;
+    this._barrelRoll = null;
     this._bankAngle = 0;
 
-    // Scale and visual feedback
+    // Scale and visuals
     this._baseScale = 1.0;
     this._targetScale = 1.0;
+    this._currentScale = 1.0;
     this._isAttacking = false;
     this._flashTime = 0;
     this._flashDuration = 0.15;
     this._isFlashing = false;
-    this._flashMaterials = [];
-    this._originalColors = [];
-    this._originalEmissives = [];
 
-    this._buildMesh();
-    this._createTrail();
-    this._createHPBar();
-    this._createEngineGlow();
+    // Transformation variables
+    this.position = new THREE.Vector3();
+    this.quaternion = new THREE.Quaternion();
+    this.scale = new THREE.Vector3(1, 1, 1);
 
-    // Store materials for flashing after _buildMesh
-    this._flashMaterials = [this._obsidianMat, this._armorMat, this._glassMat];
+    // Trail info
+    this.trailPositions = Array.from({ length: 16 }, () => new THREE.Vector3());
   }
 
-  _buildMesh() {
-    this._meshGroup = new THREE.Group();
-    this.group.add(this._meshGroup);
-
-    // Shared materials
-    this._obsidianMat = new THREE.MeshStandardMaterial({
-      color: 0x15151b, // Dark obsidian
-      metalness: 0.8,
-      roughness: 0.3,
-    });
-    this._armorMat = new THREE.MeshStandardMaterial({
-      color: 0x25252d, // Dark metal armor
-      metalness: 0.6,
-      roughness: 0.5,
-    });
-    this._glowMat = new THREE.MeshBasicMaterial({
-      color: 0xff3333,
-    });
-    this._glassMat = new THREE.MeshStandardMaterial({
-      color: 0x050505,
-      metalness: 1.0,
-      roughness: 0.1,
-      emissive: new THREE.Color(0x330000),
-    });
-
-    this._interceptorGroup = this._buildInterceptor();
-    this._bomberGroup = this._buildBomber();
-    this._raiderGroup = this._buildRaider();
-
-    this._meshGroup.add(this._interceptorGroup);
-    this._meshGroup.add(this._bomberGroup);
-    this._meshGroup.add(this._raiderGroup);
-  }
-
-  _buildInterceptor() {
-    const group = new THREE.Group();
-    // Needle core
-    const coreGeo = new THREE.CylinderGeometry(0.015, 0.05, 0.35, 6);
-    coreGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-    const core = new THREE.Mesh(coreGeo, this._obsidianMat);
-    group.add(core);
-
-    // Forward swept wings
-    const wingGeo = new THREE.BoxGeometry(0.25, 0.02, 0.08);
-    const wingL = new THREE.Mesh(wingGeo, this._armorMat);
-    wingL.position.set(-0.11, 0, -0.05);
-    wingL.rotation.y = -Math.PI / 6;
-    group.add(wingL);
-
-    const wingR = new THREE.Mesh(wingGeo, this._armorMat);
-    wingR.position.set(0.11, 0, -0.05);
-    wingR.rotation.y = Math.PI / 6;
-    group.add(wingR);
-
-    // Engines
-    const engineGeo = new THREE.CylinderGeometry(0.015, 0.025, 0.1, 8);
-    engineGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-    const engL = new THREE.Mesh(engineGeo, this._obsidianMat);
-    engL.position.set(-0.04, 0, -0.15);
-    group.add(engL);
-    
-    const engR = engL.clone();
-    engR.position.set(0.04, 0, -0.15);
-    group.add(engR);
-
-    // Glow
-    const glowGeo = new THREE.CircleGeometry(0.02, 8);
-    const glL = new THREE.Mesh(glowGeo, this._glowMat);
-    glL.position.set(-0.04, 0, -0.201);
-    glL.rotation.y = Math.PI;
-    group.add(glL);
-    
-    const glR = new THREE.Mesh(glowGeo, this._glowMat);
-    glR.position.set(0.04, 0, -0.201);
-    glR.rotation.y = Math.PI;
-    group.add(glR);
-
-    return group;
-  }
-
-  _buildBomber() {
-    const group = new THREE.Group();
-    // Bulky core
-    const coreGeo = new THREE.BoxGeometry(0.15, 0.08, 0.25);
-    const core = new THREE.Mesh(coreGeo, this._armorMat);
-    group.add(core);
-
-    // Thick wings
-    const wingGeo = new THREE.BoxGeometry(0.35, 0.04, 0.15);
-    const wings = new THREE.Mesh(wingGeo, this._obsidianMat);
-    wings.position.set(0, 0, -0.02);
-    group.add(wings);
-
-    // Bomb pods
-    const podGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.2, 8);
-    podGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-    const podL = new THREE.Mesh(podGeo, this._obsidianMat);
-    podL.position.set(-0.12, -0.04, 0);
-    group.add(podL);
-    
-    const podR = podL.clone();
-    podR.position.set(0.12, -0.04, 0);
-    group.add(podR);
-
-    // Engine
-    const engineGeo = new THREE.BoxGeometry(0.12, 0.06, 0.08);
-    const engine = new THREE.Mesh(engineGeo, this._obsidianMat);
-    engine.position.set(0, 0, -0.15);
-    group.add(engine);
-
-    // Glow
-    const glowGeo = new THREE.PlaneGeometry(0.1, 0.05);
-    const glow = new THREE.Mesh(glowGeo, this._glowMat);
-    glow.position.set(0, 0, -0.191);
-    glow.rotation.y = Math.PI;
-    group.add(glow);
-
-    // Cockpit
-    const glassGeo = new THREE.BoxGeometry(0.08, 0.04, 0.08);
-    const glass = new THREE.Mesh(glassGeo, this._glassMat);
-    glass.position.set(0, 0.05, 0.08);
-    group.add(glass);
-
-    return group;
-  }
-
-  _buildRaider() {
-    const group = new THREE.Group();
-    // Fork shape (TIE style prongs)
-    const coreGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.15, 6);
-    coreGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-    const core = new THREE.Mesh(coreGeo, this._obsidianMat);
-    core.position.set(0, 0, -0.05);
-    group.add(core);
-
-    const prongGeo = new THREE.BoxGeometry(0.03, 0.15, 0.25);
-    const prongL = new THREE.Mesh(prongGeo, this._armorMat);
-    prongL.position.set(-0.12, 0, 0.02);
-    group.add(prongL);
-
-    const prongR = prongL.clone();
-    prongR.position.set(0.12, 0, 0.02);
-    group.add(prongR);
-
-    const wingGeo = new THREE.BoxGeometry(0.24, 0.02, 0.06);
-    const wings = new THREE.Mesh(wingGeo, this._obsidianMat);
-    wings.position.set(0, 0, -0.05);
-    group.add(wings);
-
-    // Engine
-    const glowGeo = new THREE.CircleGeometry(0.02, 6);
-    const glow = new THREE.Mesh(glowGeo, this._glowMat);
-    glow.position.set(0, 0, -0.126);
-    glow.rotation.y = Math.PI;
-    group.add(glow);
-
-    // Cockpit glass sphere
-    const glassGeo = new THREE.SphereGeometry(0.035, 8, 8);
-    const glass = new THREE.Mesh(glassGeo, this._glassMat);
-    glass.position.set(0, 0, 0.08);
-    group.add(glass);
-
-    return group;
-  }
-
-  _createTrail() {
-    const positions = new Float32Array(TRAIL_LENGTH * 3);
-    this._trailGeo = new THREE.BufferGeometry();
-    this._trailGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    this._trailMat = new THREE.LineBasicMaterial({
-      color: 0xff4444,
-      transparent: true,
-      opacity: 0.4,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    this._trail = new THREE.Line(this._trailGeo, this._trailMat);
-    this._trailPositions = Array.from({ length: TRAIL_LENGTH }, () => new THREE.Vector3());
-    this.group.add(this._trail);
-  }
-
-  _createHPBar() {
-    // HP bar background
-    const bgGeo = new THREE.PlaneGeometry(0.4, 0.04);
-    const bgMat = new THREE.MeshBasicMaterial({
-      color: 0x222222,
-      transparent: true,
-      opacity: 0.6,
-      depthTest: false,
-      side: THREE.DoubleSide,
-    });
-    this._hpBg = new THREE.Mesh(bgGeo, bgMat);
-    // Lowered HP bar due to scale reduction
-    this._hpBg.position.set(0, 0.25, 0);
-    this.group.add(this._hpBg);
-
-    // HP bar foreground
-    const fgGeo = new THREE.PlaneGeometry(0.38, 0.03);
-    this._hpFgMat = new THREE.MeshBasicMaterial({
-      color: 0x44ff44,
-      transparent: true,
-      opacity: 0.8,
-      depthTest: false,
-      side: THREE.DoubleSide,
-    });
-    this._hpFg = new THREE.Mesh(fgGeo, this._hpFgMat);
-    this._hpFg.position.set(0, 0.25, 0.001);
-    this.group.add(this._hpFg);
-  }
-
-  _createEngineGlow() {
-    this._engineLight = new THREE.PointLight(0xff4444, 0.3, 2);
-    // Positioned slightly behind the group
-    this._engineLight.position.set(0, 0, -0.2);
-    this.group.add(this._engineLight);
-  }
-
-  /**
-   * Set enemy type and color.
-   */
-  setType(type, color) {
+  setType(type, colorHex) {
     this._type = type;
-    
-    // Set glowing colors
-    this._glowMat.color.set(color);
-    this._glassMat.emissive.set(new THREE.Color(color).multiplyScalar(0.3));
-    this._trailMat.color.set(color);
-    this._engineLight.color.set(color);
-
-    // Toggle visuals based on type
-    this._interceptorGroup.visible = false;
-    this._bomberGroup.visible = false;
-    this._raiderGroup.visible = false;
+    this._color.set(colorHex);
+    this._glowColor.set(colorHex);
+    this._bodyColor.set(0xffffff); // Default tint
 
     if (type === 'bomber') {
-      this._bomberGroup.visible = true;
       this._baseScale = 1.2;
     } else if (type === 'raider') {
-      this._raiderGroup.visible = true;
       this._baseScale = 1.0;
     } else {
-      this._interceptorGroup.visible = true;
       this._baseScale = 1.0;
     }
 
     this._targetScale = this._baseScale;
-    this._meshGroup.scale.setScalar(this._baseScale);
-
-    // Capture original colors for flashing
-    this._originalColors = this._flashMaterials.map(m => m.color.clone());
-    this._originalEmissives = this._flashMaterials.map(m =>
-      m.emissive ? m.emissive.clone() : new THREE.Color(0)
-    );
+    this._currentScale = this._baseScale;
+    this.scale.setScalar(this._baseScale);
   }
 
-  /**
-   * Activate this enemy ship at a position orbiting a target.
-   */
   activate(targetPos, speed) {
     this._targetPos.copy(targetPos);
     this._speed = speed || 1.0;
@@ -322,73 +221,41 @@ export class EnemyShip3D {
     this._orbitRadius = 15 + Math.random() * 15;
     this._orbitInclination = 0.5 + Math.random() * 0.8;
     this._orbitAzimuth = Math.random() * Math.PI * 2;
-    this.group.visible = true;
+    this.visible = true;
+    
+    this._isFlashing = false;
+    this._bodyColor.set(0xffffff);
 
-    // Set up approach animation
     const orbitPos = this._calcOrbitPos();
     this._approachTo.copy(orbitPos);
 
-    // Start position: 60 units away along the direction to the orbit position
     const approachDir = new THREE.Vector3().subVectors(this._approachTo, targetPos).normalize();
     this._approachFrom.copy(targetPos).addScaledVector(approachDir, 60);
 
     this._inApproach = true;
     this._approachTime = 0;
-    this.group.position.copy(this._approachFrom);
+    this.position.copy(this._approachFrom);
 
-    // Initialize trail at start position
-    for (const v of this._trailPositions) v.copy(this._approachFrom);
+    for (const v of this.trailPositions) v.copy(this._approachFrom);
   }
 
   deactivate() {
-    this.group.visible = false;
+    this.visible = false;
   }
 
-  /**
-   * Toggle attacking state — scales ship up 2x when attacking, back to base scale when not.
-   */
   setAttacking(isAttacking) {
     this._targetScale = isAttacking ? this._baseScale * 2.0 : this._baseScale;
   }
 
-  /**
-   * Flash ship white briefly when hit by a defense.
-   */
   flashHit() {
     this._isFlashing = true;
     this._flashTime = 0;
-    for (const mat of this._flashMaterials) {
-      mat.color.set(0xffffff);
-      if (mat.emissive) mat.emissive.set(0xffffff);
-    }
+    this._bodyColor.set(0xffffff); // Multiplier set to max white
+    this._glowColor.set(0xffffff);
   }
 
-  /**
-   * Update HP bar display.
-   */
-  setHP(current, max) {
-    const frac = Math.max(0, current / max);
-    this._hpFg.scale.x = frac;
-    // Scale goes from -0.19 to 0 (for a width of 0.38)
-    this._hpFg.position.x = -(1 - frac) * 0.19;
-
-    // Color: green → yellow → red
-    if (frac > 0.6) {
-      this._hpFgMat.color.setHex(0x44ff44);
-    } else if (frac > 0.3) {
-      this._hpFgMat.color.setHex(0xffcc00);
-    } else {
-      this._hpFgMat.color.setHex(0xff3333);
-    }
-  }
-
-  /**
-   * Make HP bar always face camera.
-   */
-  faceCamera(camera) {
-    this._hpBg.quaternion.copy(camera.quaternion);
-    this._hpFg.quaternion.copy(camera.quaternion);
-  }
+  // Not used via 3D planes anymore, but keeping signature for HUD Bridge future link
+  setHP(current, max) {}
 
   _calcOrbitPos() {
     const R = this._orbitRadius;
@@ -396,12 +263,10 @@ export class EnemyShip3D {
     const incl = this._orbitInclination;
     const azim = this._orbitAzimuth;
 
-    // Position in tilted orbit plane
     const lx = Math.cos(t) * R;
     const ly = Math.sin(t) * R * Math.sin(incl);
     const lz = Math.sin(t) * R * Math.cos(incl);
 
-    // Rotate around Y axis by azimuth for varied orbit orientations
     return new THREE.Vector3(
       this._targetPos.x + lx * Math.cos(azim) - lz * Math.sin(azim),
       this._targetPos.y + ly,
@@ -409,61 +274,44 @@ export class EnemyShip3D {
     );
   }
 
-  /**
-   * Per-frame update — orbit around target, update trail.
-   */
+  _lookAt(targetPos) {
+      const m = new THREE.Matrix4();
+      m.lookAt(this.position, targetPos, new THREE.Vector3(0,1,0));
+      this.quaternion.setFromRotationMatrix(m);
+  }
+
   update(dt, targetPos) {
     if (targetPos) this._targetPos.copy(targetPos);
 
-    // Scale lerp toward target
-    const cs = this._meshGroup.scale.x;
-    if (Math.abs(cs - this._targetScale) > 0.001) {
-      this._meshGroup.scale.setScalar(
-        THREE.MathUtils.lerp(cs, this._targetScale, Math.min(1, dt * 5))
-      );
+    // Scale lerp
+    if (Math.abs(this._currentScale - this._targetScale) > 0.001) {
+      this._currentScale = THREE.MathUtils.lerp(this._currentScale, this._targetScale, Math.min(1, dt * 5));
+      this.scale.setScalar(this._currentScale);
     }
 
-    // Flash fade when hit
+    // Flash fade
     if (this._isFlashing) {
       this._flashTime += dt;
       const t = Math.min(1, this._flashTime / this._flashDuration);
-      for (let i = 0; i < this._flashMaterials.length; i++) {
-        const mat = this._flashMaterials[i];
-        mat.color.lerpColors(new THREE.Color(0xffffff), this._originalColors[i], t);
-        if (mat.emissive) {
-          mat.emissive.lerpColors(new THREE.Color(0xffffff), this._originalEmissives[i], t);
-        }
-      }
+      this._bodyColor.lerpColors(new THREE.Color(0xffffff), new THREE.Color(0xffffff), t); // Body restores to pure white tint
+      this._glowColor.lerpColors(new THREE.Color(0xffffff), this._color, t);
       if (t >= 1) this._isFlashing = false;
     }
 
-    // Handle approach animation
+    let newPos = this.position.clone();
+
     if (this._inApproach) {
       this._approachTime += dt;
       const rawT = Math.min(1, this._approachTime / this._approachDuration);
-      // Ease-out quadratic: decelerate into orbit
       const t = 1 - Math.pow(1 - rawT, 2);
 
-      const newPos = new THREE.Vector3().lerpVectors(this._approachFrom, this._approachTo, t);
-      this.group.position.copy(newPos);
+      newPos = new THREE.Vector3().lerpVectors(this._approachFrom, this._approachTo, t);
+      this.position.copy(newPos);
 
-      // Face direction of travel during approach
       if (rawT < 0.98) {
         const dir = new THREE.Vector3().subVectors(this._approachTo, this._approachFrom).normalize();
-        this._meshGroup.lookAt(newPos.clone().add(dir));
+        this._lookAt(newPos.clone().add(dir));
       }
-
-      // Update trail during approach
-      for (let i = TRAIL_LENGTH - 1; i > 0; i--) {
-        this._trailPositions[i].copy(this._trailPositions[i - 1]);
-      }
-      this._trailPositions[0].copy(newPos);
-      const arr = this._trailGeo.attributes.position.array;
-      for (let i = 0; i < TRAIL_LENGTH; i++) {
-        const local = this._trailPositions[i].clone().sub(newPos);
-        arr[i * 3] = local.x; arr[i * 3 + 1] = local.y; arr[i * 3 + 2] = local.z;
-      }
-      this._trailGeo.attributes.position.needsUpdate = true;
 
       if (rawT >= 1) {
         this._inApproach = false;
@@ -471,27 +319,14 @@ export class EnemyShip3D {
         this._orbitSyncFrom.copy(newPos);
         this._orbitSyncTime = 0;
       }
-      return;
-    }
-
-    // Orbit sync — smooth entry into orbit after approach
-    if (this._inOrbitSync) {
+    } else if (this._inOrbitSync) {
       this._orbitAngle += dt * 0.5 * this._speed;
       const orbitPos = this._calcOrbitPos();
       const syncT = Math.min(1, this._orbitSyncTime / this._orbitSyncDuration);
       const eased = syncT * syncT * (3 - 2 * syncT);
-      const syncPos = new THREE.Vector3().lerpVectors(this._orbitSyncFrom, orbitPos, eased);
-      this.group.position.copy(syncPos);
-      for (let i = TRAIL_LENGTH - 1; i > 0; i--) {
-        this._trailPositions[i].copy(this._trailPositions[i - 1]);
-      }
-      this._trailPositions[0].copy(syncPos);
-      const arr = this._trailGeo.attributes.position.array;
-      for (let i = 0; i < TRAIL_LENGTH; i++) {
-        const local = this._trailPositions[i].clone().sub(syncPos);
-        arr[i * 3] = local.x; arr[i * 3 + 1] = local.y; arr[i * 3 + 2] = local.z;
-      }
-      this._trailGeo.attributes.position.needsUpdate = true;
+      newPos = new THREE.Vector3().lerpVectors(this._orbitSyncFrom, orbitPos, eased);
+      this.position.copy(newPos);
+
       const R = this._orbitRadius;
       const t = this._orbitAngle;
       const incl = this._orbitInclination;
@@ -499,83 +334,60 @@ export class EnemyShip3D {
       const ldx = -Math.sin(t) * R;
       const ldy = Math.cos(t) * R * Math.sin(incl);
       const ldz = Math.cos(t) * R * Math.cos(incl);
-      const lookPos = syncPos.clone().add(new THREE.Vector3(
+      const lookPos = newPos.clone().add(new THREE.Vector3(
         ldx * Math.cos(azim) - ldz * Math.sin(azim),
         ldy,
         ldx * Math.sin(azim) + ldz * Math.cos(azim),
       ));
-      this._meshGroup.lookAt(lookPos);
+      this._lookAt(lookPos);
+
       this._orbitSyncTime += dt;
       if (this._orbitSyncTime >= this._orbitSyncDuration) {
         this._inOrbitSync = false;
       }
-      return;
+    } else {
+      // Normal orbit
+      this._orbitAngle += dt * 0.5 * this._speed;
+      newPos = this._calcOrbitPos();
+      this.position.copy(newPos);
+
+      const lookAngle = this._orbitAngle + 0.2;
+      const R = this._orbitRadius;
+      const incl = this._orbitInclination;
+      const azim = this._orbitAzimuth;
+      const lx = Math.cos(lookAngle) * R;
+      const ly = Math.sin(lookAngle) * R * Math.sin(incl);
+      const lz = Math.sin(lookAngle) * R * Math.cos(incl);
+      const lookPos = new THREE.Vector3(
+        this._targetPos.x + lx * Math.cos(azim) - lz * Math.sin(azim),
+        this._targetPos.y + ly,
+        this._targetPos.z + lx * Math.sin(azim) + lz * Math.cos(azim),
+      );
+      this._lookAt(lookPos);
+
+      const bankRoll = Math.sin(this._orbitAngle) * 0.4;
+      const bankQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), bankRoll);
+      this.quaternion.multiply(bankQuat);
     }
-
-    // Normal orbit behavior
-    this._orbitAngle += dt * 0.5 * this._speed;
-    const newPos = this._calcOrbitPos();
-    this.group.position.copy(newPos);
-
-    // Face direction of travel (look ahead along orbit)
-    const lookAngle = this._orbitAngle + 0.2;
-    const R = this._orbitRadius;
-    const incl = this._orbitInclination;
-    const azim = this._orbitAzimuth;
-    const lx = Math.cos(lookAngle) * R;
-    const ly = Math.sin(lookAngle) * R * Math.sin(incl);
-    const lz = Math.sin(lookAngle) * R * Math.cos(incl);
-    const lookPos = new THREE.Vector3(
-      this._targetPos.x + lx * Math.cos(azim) - lz * Math.sin(azim),
-      this._targetPos.y + ly,
-      this._targetPos.z + lx * Math.sin(azim) + lz * Math.cos(azim),
-    );
-    this._meshGroup.lookAt(lookPos);
-
-    // Add banking roll based on orbit (ships bank as they turn)
-    const bankRoll = Math.sin(this._orbitAngle) * 0.4;
-    const bankQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), bankRoll);
-    this._meshGroup.quaternion.multiply(bankQuat);
-
-    // The engine light follows the rotation approximately
-    this._engineLight.position.set(0, 0, -0.2).applyQuaternion(this._meshGroup.quaternion);
 
     // Update trail
-    for (let i = TRAIL_LENGTH - 1; i > 0; i--) {
-      this._trailPositions[i].copy(this._trailPositions[i - 1]);
+    for (let i = 15; i > 0; i--) {
+      this.trailPositions[i].copy(this.trailPositions[i - 1]);
     }
-    this._trailPositions[0].copy(newPos);
+    this.trailPositions[0].copy(newPos);
 
-    const arr = this._trailGeo.attributes.position.array;
-    for (let i = 0; i < TRAIL_LENGTH; i++) {
-      const local = this._trailPositions[i].clone().sub(newPos);
-      arr[i * 3]     = local.x;
-      arr[i * 3 + 1] = local.y;
-      arr[i * 3 + 2] = local.z;
-    }
-    this._trailGeo.attributes.position.needsUpdate = true;
+    this.worldPosition.copy(this.position);
+    this.matrix.compose(this.position, this.quaternion, this.scale);
   }
 
-  /**
-   * Animate this ship in fleet transit mode (acrobatics, banking, barrel rolls).
-   * Called from RoamingFleet3D for ships in formation.
-   */
   animateTransit(dt, time, turnRate = 0) {
     this._acroTime += dt;
-
-    // Phase offset unique to this ship (based on orbit params)
     const phase = this._orbitAzimuth;
 
-    // Barrel roll occasionally
     if (!this._barrelRoll && Math.random() < dt * 0.001) {
-      this._barrelRoll = {
-        time: 0,
-        duration: 1.2,
-        dir: Math.random() < 0.5 ? 1 : -1,
-      };
+      this._barrelRoll = { time: 0, duration: 1.2, dir: Math.random() < 0.5 ? 1 : -1 };
     }
 
-    // Base roll: bank into turns + gentle sinusoid variation
     let rollAngle = turnRate * 1.5;
     rollAngle += Math.sin(time * 0.8 + phase) * 0.15;
 
@@ -590,15 +402,15 @@ export class EnemyShip3D {
       }
     }
 
-    // Gentle pitch nod
     const pitchAngle = Math.sin(time * 0.4 + phase * 1.5) * 0.1;
 
-    this._meshGroup.rotation.z = rollAngle;
-    this._meshGroup.rotation.x = pitchAngle;
+    // Apply transit rotation on top of current look
+    const transitQuat = new THREE.Quaternion();
+    transitQuat.setFromEuler(new THREE.Euler(pitchAngle, 0, rollAngle, 'XYZ'));
+    this.quaternion.multiply(transitQuat);
+    
+    this.matrix.compose(this.position, this.quaternion, this.scale);
   }
 
-  dispose() {
-    this._trailGeo.dispose();
-    this._trailMat.dispose();
-  }
+  dispose() {}
 }

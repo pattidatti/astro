@@ -140,7 +140,10 @@ export class InputManager {
     let hoveredShipId = null;
     if (!stationId) {
       for (const hit of hits) {
-        if (hit.object.userData?.shipId) {
+        if (hit.object.userData?.isInstancedFleet) {
+          hoveredShipId = hit.object.userData.getShipId(hit.instanceId);
+          if (hoveredShipId) break;
+        } else if (hit.object.userData?.shipId) {
           hoveredShipId = hit.object.userData.shipId;
           break;
         }
