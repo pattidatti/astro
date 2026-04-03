@@ -12,6 +12,7 @@ import { AsteroidBelt } from '../effects/AsteroidBelt.js';
 import { LensFlare } from '../effects/LensFlare.js';
 import { MiningBurst } from '../effects/MiningBurst.js';
 import { DefenseManager3D } from './DefenseManager3D.js';
+import { MilitaryBase3D } from '../objects/MilitaryBase3D.js';
 import { gameState } from '../GameState.js';
 
 /**
@@ -227,6 +228,20 @@ export class SolarSystem {
 
     // Set initial orbit position
     this._updateOrbit(0);
+
+    // ── Military Base ──────────────────────────────────────────────
+    this.militaryBase = null;
+    this._onMilitaryBaseBuilt = (planetId) => {
+      if (planetId === this.id) this._spawnMilitaryBase();
+    };
+    this._onMilitaryBaseFell = (planetId) => {
+      if (planetId === this.id) this._removeMilitaryBase();
+    };
+    this._onMilStateLoaded = () => this._restoreMilitaryBase();
+    gameState.on('militaryBaseBuilt', this._onMilitaryBaseBuilt);
+    gameState.on('planetFell',        this._onMilitaryBaseFell);
+    gameState.on('stateLoaded',       this._onMilStateLoaded);
+    this._restoreMilitaryBase();
   }
 
   _createOrbitLine(planetDef) {
@@ -288,6 +303,32 @@ export class SolarSystem {
     this.robotManager.syncCount(count);
   }
 
+  // ── Military Base: spawn / remove / restore ─────────────────────────────
+  _spawnMilitaryBase() {
+    if (this.militaryBase) return;
+    this.militaryBase = new MilitaryBase3D();
+    this.militaryBase.init(this.id);
+    // Add to orbitGroup so it moves with the planet system
+    this.orbitGroup.add(this.militaryBase.group);
+  }
+
+  _removeMilitaryBase() {
+    if (!this.militaryBase) return;
+    this.orbitGroup.remove(this.militaryBase.group);
+    this.militaryBase.dispose();
+    this.militaryBase = null;
+  }
+
+  _restoreMilitaryBase() {
+    const ps = gameState.getPlanetState(this.id);
+    const built = ps?.militaryBase?.built;
+    if (built && !this.militaryBase) {
+      this._spawnMilitaryBase();
+    } else if (!built && this.militaryBase) {
+      this._removeMilitaryBase();
+    }
+  }
+
   _createLabel(name) {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
@@ -340,6 +381,17 @@ export class SolarSystem {
 
   get stationWorldPosition() {
     return this.station.stationWorldPosition;
+  }
+
+  /** Click target for military base hitbox (null if not built) */
+  get militaryBaseClickTarget() {
+    return this.militaryBase?.hitboxMesh ?? null;
+  }
+
+  /** World position of the military base (for camera tracking) */
+  get militaryBaseWorldPosition() {
+    if (!this.militaryBase) return null;
+    return this.militaryBase.worldPosition;
   }
 
   /** Lock-on targets for all defense objects on this planet */
@@ -502,6 +554,19 @@ export class SolarSystem {
     if (defenseVisible && dt !== undefined) {
       this.defenseManager.update(dt, time);
     }
+
+    // Military base — visible when built and close enough
+    if (this.militaryBase) {
+      const mbVisible = distance < 250;
+      this.militaryBase.setVisible(mbVisible);
+      if (mbVisible && dt !== undefined) {
+        this.militaryBase.update(time, dt);
+      }
+      // Tether only visible at mid-close range
+      if (this.militaryBase._tetherMesh) {
+        this.militaryBase._tetherMesh.visible = distance < 200 && distance > 15;
+      }
+    }
   }
 
   dispose() {
@@ -512,7 +577,11 @@ export class SolarSystem {
     gameState.off('colonyShipBuilt',    this._onColonyShipBuilt);
     gameState.off('colonyShipLaunched', this._onColonyShipLaunched);
     gameState.off('stateLoaded',        this._onColonyStateLoaded);
+    gameState.off('militaryBaseBuilt',  this._onMilitaryBaseBuilt);
+    gameState.off('planetFell',         this._onMilitaryBaseFell);
+    gameState.off('stateLoaded',        this._onMilStateLoaded);
     if (this.colonyShip) this.colonyShip.dispose();
+    if (this.militaryBase) this.militaryBase.dispose();
     this.planet.dispose();
     this.station.dispose();
     this.defenseManager.dispose();

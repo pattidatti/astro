@@ -18,6 +18,7 @@ import { ClickFeedback } from './effects/ClickFeedback.js';
 import { Minimap } from './ui/Minimap.js';
 import { RoamingFleetManager3D } from './world/RoamingFleetManager3D.js';
 import { FleetPanel } from './ui/FleetPanel.js';
+import { MilitaryPanel } from './ui/MilitaryPanel.js';
 
 export function createGame() {
   const container = document.getElementById('game-container');
@@ -223,6 +224,13 @@ export function createGame() {
   const fleetPanel = new FleetPanel();
   let _selectedFleetId = null;
 
+  // --- Military base panel ---
+  const militaryPanel = new MilitaryPanel();
+
+  // Helper to hide military panel when a planet is clicked / focused
+  const _hideMilitaryPanel = () => militaryPanel.hide();
+  gameState.on('planetChanged', _hideMilitaryPanel);
+
   const _deselectFleet = () => {
     _selectedFleetId = null;
     fleetPanel.hide();
@@ -260,6 +268,34 @@ export function createGame() {
 
   gameState.on('fleetArrived',   ({ fleetId }) => { if (fleetId === _selectedFleetId) _deselectFleet(); });
   gameState.on('fleetDestroyed', ({ fleetId }) => { if (fleetId === _selectedFleetId) _deselectFleet(); });
+
+  // Register military base click target for a planet system
+  const _registerMilitaryBaseClick = (planetId) => {
+    const sys = galaxy.getSystem(planetId);
+    const mesh = sys?.militaryBaseClickTarget;
+    if (!mesh || mesh.userData._milClickBound) return;
+    mesh.userData._milClickBound = true;
+    inputManager.addClickable(mesh, () => {
+      _deselectShip();
+      AudioManager.play('PLANET_CLICK_3D');
+      militaryPanel.show(planetId);
+      // Track camera to the base
+      cameraController.trackObject(() => sys.militaryBaseWorldPosition, 35);
+    });
+  };
+
+  // Register when a base is newly built
+  gameState.on('militaryBaseBuilt', (planetId) => {
+    requestAnimationFrame(() => _registerMilitaryBaseClick(planetId));
+  });
+
+  // Register on load (for saves that already have a base)
+  gameState.on('stateLoaded', () => {
+    for (const planetId of gameState.ownedPlanets) {
+      const ps = gameState.getPlanetState(planetId);
+      if (ps?.militaryBase?.built) _registerMilitaryBaseClick(planetId);
+    }
+  });
 
   // Combat visual events — projectile cooldowns per defense type
   const _projectileCooldowns = { cannon: 0, satellite: 0, defenseShip: 0, shield: 0 };

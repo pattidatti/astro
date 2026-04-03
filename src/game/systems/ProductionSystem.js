@@ -32,12 +32,45 @@ export class ProductionSystem {
       if (!def) continue;
 
       delta[planetId] = this._tickPlanet(dt, planetId, ps, def);
+      this._tickSpaceElevator(dt, planetId, ps);
     }
 
     gameState.tickColonyShipBuilds(dt);
     gameState.tickColonyShipFlights(dt);
 
     gameState.emit('productionTick', delta);
+  }
+
+  /**
+   * Space Elevator: passively pumps resources from planet silo into the
+   * military base's own silos at a flat rate. Completely decoupled from RouteSystem.
+   */
+  _tickSpaceElevator(dt, planetId, ps) {
+    const mb = ps.militaryBase;
+    if (!mb || !mb.built) return;
+
+    const PUMP_RATE = 2.0; // resources/second per type (ore + energy)
+
+    for (const res of ['ore', 'energy']) {
+      const planetSilo = ps.silos[res];
+      const baseSilo   = mb.silo[res];
+      if (!planetSilo || !baseSilo) continue;
+      if (planetSilo.amount <= 0) continue;
+      if (baseSilo.amount >= baseSilo.capacity) continue;
+
+      const pump = Math.min(
+        PUMP_RATE * dt,
+        planetSilo.amount,
+        baseSilo.capacity - baseSilo.amount,
+      );
+      if (pump <= 0) continue;
+
+      planetSilo.amount -= pump;
+      baseSilo.amount   += pump;
+      // Emit planet silo change so HUD stays accurate
+      gameState.emit('siloChanged', { planetId, resource: res, amount: planetSilo.amount });
+      gameState.emit('militaryBaseSiloChanged', { planetId, resource: res, amount: baseSilo.amount });
+    }
   }
 
   _tickPlanet(dt, planetId, ps, def) {

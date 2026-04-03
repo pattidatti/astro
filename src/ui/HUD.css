@@ -2000,3 +2000,242 @@
 /* Unlocked nodes: no pointer cursor */
 .tech-node--unlocked { cursor: default; }
 
+/* ══════════════════════════════════════════════════════
+   MILITARY BASE PANEL
+   Red/steel military accent on top of base glassmorphism
+   ══════════════════════════════════════════════════════ */
+
+/* ── Panel container ── */
+.military-panel {
+  position: fixed;
+  top: 50%;
+  right: 12px;
+  transform: translateX(120%) translateY(-50%);
+  width: var(--panel-width);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 10, 14, 0.97);
+  border: 1px solid rgba(180, 30, 30, 0.4);
+  border-radius: 6px;
+  backdrop-filter: blur(14px);
+  z-index: 40;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 0 40px rgba(0,0,0,0.5), 0 0 20px rgba(180,30,30,0.06);
+}
+.military-panel.visible {
+  opacity: 1;
+  transform: translateX(0) translateY(-50%);
+}
+
+/* ── Header ── */
+.mil-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(180, 30, 30, 0.35);
+  flex-shrink: 0;
+  background: rgba(180, 30, 30, 0.07);
+}
+.mil-panel-icon {
+  font-size: 17px;
+  color: #cc3333;
+}
+.mil-panel-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #e04444;
+  flex: 1;
+  text-shadow: 0 0 8px rgba(200,40,40,0.25);
+}
+.mil-panel-close {
+  background: transparent;
+  border: none;
+  color: var(--dune-text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: color 0.15s;
+  line-height: 1;
+}
+.mil-panel-close:hover { color: #cc3333; }
+
+/* ── Panel body (scrollable) ── */
+.mil-panel-body {
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(180,30,30,0.4) transparent;
+}
+.mil-panel-body::-webkit-scrollbar { width: 4px; }
+.mil-panel-body::-webkit-scrollbar-thumb { background: rgba(180,30,30,0.4); border-radius: 2px; }
+
+/* ── Sections ── */
+.mil-section {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(180,30,30,0.15);
+}
+.mil-section:last-child { border-bottom: none; }
+
+.mil-section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: rgba(180,60,60,0.85);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  border-left: 2px solid #cc3333;
+  padding-left: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mil-elevator-tag {
+  font-size: 10px;
+  color: #4af0ff;
+  letter-spacing: 1px;
+  font-weight: 400;
+  border-left: none;
+}
+.mil-info-text {
+  font-size: 13px;
+  color: var(--dune-text-secondary);
+  line-height: 1.5;
+}
+
+/* ── Status row ── */
+.mil-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mil-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #44ff88;
+  box-shadow: 0 0 6px #44ff88;
+  flex-shrink: 0;
+  animation: silo-pulse 2s ease-in-out infinite;
+}
+.mil-status-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  color: #44ff88;
+  letter-spacing: 1.5px;
+  flex: 1;
+}
+.mil-fleet-cap {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  color: var(--dune-text-secondary);
+}
+.mil-fleet-cap strong {
+  color: #e04444;
+}
+
+/* ── Build base button ── */
+.mil-build-btn {
+  width: 100%;
+  padding: 12px;
+  background: rgba(180,30,30,0.07);
+  border: 1px solid rgba(180,30,30,0.4);
+  border-radius: 5px;
+  color: #e04444;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  text-align: center;
+}
+.mil-build-btn:hover:not(:disabled) {
+  background: rgba(180,30,30,0.14);
+  box-shadow: 0 0 16px rgba(180,30,30,0.12);
+  border-color: rgba(180,30,30,0.7);
+}
+.mil-build-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.mil-build-btn.cant-afford { opacity: 0.65; }
+
+.mil-build-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+.mil-build-cost {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  color: var(--dune-text-secondary);
+}
+.mil-cost-cant { color: var(--dune-red) !important; }
+
+/* ── Hangar count badge ── */
+.mil-hangar-count {
+  font-size: 11px;
+  color: var(--dune-text-secondary);
+  font-weight: 400;
+  letter-spacing: 1px;
+  border: none;
+  padding: 0;
+  margin-left: auto;
+}
+
+/* ── Hangar progress bar ── */
+.mil-hangar-track {
+  width: 100%;
+  height: 7px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.mil-hangar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #882222, #cc3333);
+  transition: width 0.5s ease;
+}
+
+/* ── Build hangar button ── */
+.mil-hangar-btn {
+  width: 100%;
+  padding: 9px 12px;
+  background: rgba(20,20,28,0.6);
+  border: 1px solid rgba(180,30,30,0.35);
+  border-radius: 5px;
+  color: #cc4444;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+}
+.mil-hangar-btn:hover:not(:disabled) {
+  background: rgba(180,30,30,0.1);
+  border-color: rgba(180,30,30,0.6);
+}
+.mil-hangar-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.mil-hangar-btn.cant-afford { opacity: 0.65; }
+.mil-hangar-effect {
+  font-size: 11px;
+  color: var(--dune-text-secondary);
+  flex: 1;
+  text-align: center;
+}
+.mil-hangar-cost {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  color: #4af0ff;
+  white-space: nowrap;
+}

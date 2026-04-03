@@ -13,6 +13,13 @@ const COLONY_SHIP_BUILD_TIME = 20;          // seconds
 const COLONY_LAUNCH_BASE_COST = 50;         // base energy cost for launch
 const COLONY_LAUNCH_DIST_MULT = 0.3;        // energy per orbit-radius unit
 
+const MILITARY_BASE_ORE_COST    = 2000;
+const MILITARY_BASE_ENERGY_COST = 1500;
+const HANGAR_BASE_ENERGY_COST   = 1000; // + 500 per hangar already built
+const HANGAR_MAX                = 5;
+const HANGAR_FLEET_CAP          = 10;   // fleet cap per hangar (base)
+const HANGAR_FLEET_CAP_UPG      = 15;  // fleet cap per hangar with fleet_formations tech
+
 /** Ore cost to build a colony ship, scales exponentially with planetsColonized */
 export function getColonyShipBuildCost(planetsColonized = 0) {
   return { ore: Math.round(COLONY_SHIP_BASE_BUILD_COST * Math.pow(COLONY_SHIP_COST_SCALE, planetsColonized)) };
@@ -678,6 +685,55 @@ class GameState extends EventEmitter {
     this.deductFromSilo(planetId, 'energy', cost.energy);
     ps.robots[upg.robotType][upg.effect]++;
     this.emit('robotUpgraded', { planetId, upgradeId });
+    return true;
+  }
+
+  // ─── Military Base management ──────────────────────────────────────────────
+
+  /**
+   * Build the military base on a planet.
+   * Requires: tech 'military_base' unlocked, planet has a civilian base, no base already built.
+   */
+  buildMilitaryBase(planetId) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps || !ps.hasBase) return false;
+    if (!this.isTechUnlocked('military_base')) return false;
+    if (ps.militaryBase?.built) return false;
+    if (!this.siloHas(planetId, 'ore',    MILITARY_BASE_ORE_COST))    return false;
+    if (!this.siloHas(planetId, 'energy', MILITARY_BASE_ENERGY_COST)) return false;
+
+    this.deductFromSilo(planetId, 'ore',    MILITARY_BASE_ORE_COST);
+    this.deductFromSilo(planetId, 'energy', MILITARY_BASE_ENERGY_COST);
+    ps.militaryBase.built = true;
+    this.emit('militaryBaseBuilt', planetId);
+    return true;
+  }
+
+  /** Cost to build the next hangar level (scales with hangars already built). */
+  militaryHangarCost(planetId) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps?.militaryBase?.built) return null;
+    const hangars = ps.militaryBase.hangars || 0;
+    if (hangars >= HANGAR_MAX) return null;
+    return { energy: HANGAR_BASE_ENERGY_COST + 500 * hangars };
+  }
+
+  /**
+   * Build a new hangar on the military base.
+   * Requires: military base built, energy in planet silo.
+   */
+  buildHangar(planetId) {
+    const cost = this.militaryHangarCost(planetId);
+    if (!cost) return false;
+    if (!this.siloHas(planetId, 'energy', cost.energy)) return false;
+
+    const ps = this.getPlanetState(planetId);
+    this.deductFromSilo(planetId, 'energy', cost.energy);
+    ps.militaryBase.hangars++;
+    // Recalculate fleet cap
+    const capPerHangar = this.isTechUnlocked('fleet_formations') ? HANGAR_FLEET_CAP_UPG : HANGAR_FLEET_CAP;
+    ps.militaryBase.fleetCap = ps.militaryBase.hangars * capPerHangar;
+    this.emit('militaryBaseUpgraded', planetId);
     return true;
   }
 
