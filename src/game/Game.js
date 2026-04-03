@@ -278,6 +278,7 @@ export function createGame() {
     inputManager.addClickable(mesh, () => {
       _deselectShip();
       AudioManager.play('PLANET_CLICK_3D');
+      gameState.emit('militaryBaseClicked', planetId); // PlanetPanel listens → hides
       militaryPanel.show(planetId);
       // Track camera to the base
       cameraController.trackObject(() => sys.militaryBaseWorldPosition, 35);

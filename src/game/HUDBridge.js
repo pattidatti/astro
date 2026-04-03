@@ -26,6 +26,7 @@ export class HUDBridge {
     this._panelsVisible = false;
     this._currentPlanetId = gameState.focusedPlanet;
     this._suppressNextPlanetChanged = false;
+    this._militaryPanelActive = false; // true while military base panel is shown
     this._hoverBoxLastX = null;
     this._hoverBoxLastY = null;
 
@@ -168,9 +169,18 @@ export class HUDBridge {
         AudioManager.play('PLANET_CHANGED');
       }
       this._currentPlanetId = id;
+      this._militaryPanelActive = false; // planet focused, military panel dismissed
       // If panels are visible, update them for new planet
       if (this._panelsVisible) {
         this._planetPanel.show(id);
+      }
+    });
+    // Suppress planet panels while military base panel is active
+    gameState.on('militaryBaseClicked', () => {
+      this._militaryPanelActive = true;
+      if (this._panelsVisible) {
+        this._panelsVisible = false;
+        this._planetPanel.hide();
       }
     });
     gameState.on('baseUpgraded', ({ planetId }) => {
@@ -288,7 +298,7 @@ export class HUDBridge {
       const dist = camera.position.distanceTo(planetPos);
       const shouldShow = dist < PANEL_SHOW_DISTANCE;
 
-      if (shouldShow && !this._panelsVisible) {
+      if (shouldShow && !this._panelsVisible && !this._militaryPanelActive) {
         this._panelsVisible = true;
         this._planetPanel.show(gameState.focusedPlanet);
       } else if (!shouldShow && this._panelsVisible) {

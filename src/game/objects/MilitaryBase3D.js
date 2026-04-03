@@ -18,8 +18,8 @@ export class MilitaryBase3D {
   constructor() {
     this.group       = new THREE.Group();
     this.orbitAngle  = Math.random() * Math.PI * 2;
-    this.orbitRadius = 25;
-    this.orbitSpeed  = 0.07;
+    this.orbitRadius = 50;   // outside planet asteroid belt (25–40 units)
+    this.orbitSpeed  = 0.05; // slightly slower given larger radius
 
     this._reactorMat   = null;
     this._engineMats   = [];
@@ -201,7 +201,7 @@ export class MilitaryBase3D {
     for (const [tx, tz] of thrusterPositions) {
       const nozzleGeo = new THREE.CylinderGeometry(0.09, 0.14, 0.22, 8);
       const nozzle = this._mk(nozzleGeo, this._std(HULL_MID, 0, 0, 0.65, 0.4));
-      nozzle.position.set(tx, -0.52, tz + 1.2);
+      nozzle.position.set(tx, -0.52, tz);
       G.add(nozzle);
 
       const glowMat = new THREE.MeshStandardMaterial({
@@ -211,7 +211,7 @@ export class MilitaryBase3D {
       });
       const glow = this._mk(new THREE.CircleGeometry(0.12, 8), glowMat);
       glow.rotation.x = Math.PI / 2;
-      glow.position.set(tx, -0.63, tz + 1.2);
+      glow.position.set(tx, -0.63, tz);
       this._engineMats.push({ mat: glowMat, phase: (tx + tz) * 2.1 });
       G.add(glow);
     }
@@ -225,10 +225,11 @@ export class MilitaryBase3D {
   }
 
   // ── Space Elevator Tether ─────────────────────────────────────────────────
+  // The tether mesh is NOT added to this.group. SolarSystem adds it to orbitGroup
+  // and orients it each frame so it always points from the base toward the planet center.
   _buildTether() {
-    // Thin cylinder pointing from base hull down to planet center
-    // Scaled to orbitRadius so it spans the gap. Positioned below the base.
-    const tetherGeo = new THREE.CylinderGeometry(0.04, 0.04, this.orbitRadius, 6);
+    // 1-unit-tall cylinder. SolarSystem scales Y to actual orbit distance each frame.
+    const tetherGeo = new THREE.CylinderGeometry(0.04, 0.04, 1, 6);
     this._tetherMat = new THREE.MeshBasicMaterial({
       color: 0x00ddff,
       transparent: true,
@@ -236,11 +237,8 @@ export class MilitaryBase3D {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    this._tetherMesh = this._mk(tetherGeo, this._tetherMat);
-    // Position: center it so it goes from y=0 down to y=-orbitRadius
-    // In local space the base is at origin, planet is "below" toward y=-orbitRadius
-    this._tetherMesh.position.set(0, -this.orbitRadius / 2, 0);
-    this.group.add(this._tetherMesh);
+    this._tetherMesh = new THREE.Mesh(tetherGeo, this._tetherMat);
+    // Note: NOT added to this.group here — SolarSystem manages it in orbitGroup
   }
 
   // ── Init (called from SolarSystem to set planetId on hitbox) ─────────────

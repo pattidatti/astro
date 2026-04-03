@@ -102,6 +102,10 @@ export class PlanetPanel {
     gameState.on('planetRecolonized', rerender);
     gameState.on('colonyShipLaunched', rerender);
     gameState.on('techUnlocked', rerender);
+    gameState.on('militaryBaseBuilt', rerender);
+    gameState.on('militaryBaseUpgraded', rerender);
+    // Hide planet panels when military base is selected (mutually exclusive)
+    gameState.on('militaryBaseClicked', () => this.hide());
     const rerenderRoutes = () => { if (this._visible) this._renderRoutes(); };
     gameState.on('shipLaunched', rerenderRoutes);
     gameState.on('shipArrived', rerenderRoutes);
@@ -379,7 +383,43 @@ export class PlanetPanel {
     }
 
     el.appendChild(grid);
+
+    // ── Military Base build button (shown when tech unlocked but not yet built) ──
+    if (gameState.isTechUnlocked('military_base') && !ps.militaryBase?.built) {
+      const milSec = document.createElement('div');
+      milSec.style.marginTop = '10px';
+
+      const canOre    = gameState.siloHas(this._planetId, 'ore',    2000);
+      const canEnergy = gameState.siloHas(this._planetId, 'energy', 1500);
+      const canAffordMil = canOre && canEnergy;
+
+      const milBtn = document.createElement('button');
+      milBtn.className = 'mil-build-btn' + (canAffordMil ? '' : ' cant-afford');
+      milBtn.disabled  = !canAffordMil;
+      milBtn.innerHTML = `
+        <span class="mil-build-label">⚔ BUILD MILITARY BASE</span>
+        <span class="mil-build-cost">
+          <span class="${canOre ? '' : 'mil-cost-cant'}">⬡ 2,000 ORE</span>
+          &nbsp;
+          <span class="${canEnergy ? '' : 'mil-cost-cant'}">⚡ 1,500 ENERGY</span>
+        </span>
+      `;
+      milBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        AudioManager.play('UI_CLICK');
+        gameState.buildMilitaryBase(this._planetId);
+      });
+      milSec.appendChild(milBtn);
+      el.appendChild(milSec);
+    } else if (ps.militaryBase?.built) {
+      // Small active indicator — direct player to click the 3D object in orbit
+      const hint = document.createElement('div');
+      hint.style.cssText = 'margin-top:10px;font-size:11px;color:#cc3333;letter-spacing:1.5px;font-family:Orbitron,sans-serif;display:flex;align-items:center;gap:6px;';
+      hint.innerHTML = '<span style="color:#44ff88;font-size:9px;">●</span> MILITARY BASE ACTIVE \u2014 click it in orbit';
+      el.appendChild(hint);
+    }
   }
+
 
   _computeRate(planetId, resource) {
     const ps = gameState.getPlanetState(planetId);

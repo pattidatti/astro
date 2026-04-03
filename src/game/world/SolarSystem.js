@@ -308,13 +308,17 @@ export class SolarSystem {
     if (this.militaryBase) return;
     this.militaryBase = new MilitaryBase3D();
     this.militaryBase.init(this.id);
-    // Add to orbitGroup so it moves with the planet system
     this.orbitGroup.add(this.militaryBase.group);
+    // Tether is managed in orbitGroup so we can orient it correctly
+    this.orbitGroup.add(this.militaryBase._tetherMesh);
+    this._milTetherUp = new THREE.Vector3(0, 1, 0); // cylinder default Y axis
+    this._milTetherQuat = new THREE.Quaternion();
   }
 
   _removeMilitaryBase() {
     if (!this.militaryBase) return;
     this.orbitGroup.remove(this.militaryBase.group);
+    this.orbitGroup.remove(this.militaryBase._tetherMesh);
     this.militaryBase.dispose();
     this.militaryBase = null;
   }
@@ -557,14 +561,31 @@ export class SolarSystem {
 
     // Military base — visible when built and close enough
     if (this.militaryBase) {
-      const mbVisible = distance < 250;
+      const mbVisible = distance < 350;
       this.militaryBase.setVisible(mbVisible);
       if (mbVisible && dt !== undefined) {
         this.militaryBase.update(time, dt);
       }
-      // Tether only visible at mid-close range
-      if (this.militaryBase._tetherMesh) {
-        this.militaryBase._tetherMesh.visible = distance < 200 && distance > 15;
+
+      // Tether: orient per-frame toward planet center (orbitGroup origin = [0,0,0])
+      const tether = this.militaryBase._tetherMesh;
+      if (tether) {
+        const tetherVisible = distance < 300 && distance > 15;
+        tether.visible = tetherVisible;
+        if (tetherVisible) {
+          const basePos = this.militaryBase.group.position; // in orbitGroup space
+          const dist    = basePos.length();
+          if (dist > 0.01) {
+            // Direction from base toward planet center
+            const dir = basePos.clone().negate().normalize();
+            // Rotate cylinder Y-axis to align with 'dir'
+            this._milTetherQuat.setFromUnitVectors(this._milTetherUp, dir);
+            tether.position.copy(basePos).multiplyScalar(0.5); // midpoint
+            tether.quaternion.copy(this._milTetherQuat);
+            tether.scale.set(1, dist, 1); // stretch to exact distance
+          }
+          // Opacity pulse handled by MilitaryBase3D.update via _tetherMat
+        }
       }
     }
   }

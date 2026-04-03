@@ -2001,16 +2001,14 @@
 .tech-node--unlocked { cursor: default; }
 
 /* ══════════════════════════════════════════════════════
-   MILITARY BASE PANEL
+   MILITARY BASE PANEL — two-panel layout (mirrors planet panels)
    Red/steel military accent on top of base glassmorphism
    ══════════════════════════════════════════════════════ */
 
-/* ── Panel container ── */
+/* ── Shared panel base ── */
 .military-panel {
   position: fixed;
   top: 50%;
-  right: 12px;
-  transform: translateX(120%) translateY(-50%);
   width: var(--panel-width);
   max-height: 80vh;
   display: flex;
@@ -2025,7 +2023,23 @@
   transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   box-shadow: 0 0 40px rgba(0,0,0,0.5), 0 0 20px rgba(180,30,30,0.06);
 }
-.military-panel.visible {
+
+/* ── Left panel (base management) — mirrors #panel-left ── */
+.mil-panel-left {
+  left: 12px;
+  transform: translateX(-120%) translateY(-50%);
+}
+.mil-panel-left.visible {
+  opacity: 1;
+  transform: translateX(0) translateY(-50%);
+}
+
+/* ── Right panel (fleet command) — mirrors #panel-right ── */
+.mil-panel-right {
+  right: 12px;
+  transform: translateX(120%) translateY(-50%);
+}
+.mil-panel-right.visible {
   opacity: 1;
   transform: translateX(0) translateY(-50%);
 }
@@ -2237,5 +2251,103 @@
   font-family: 'Orbitron', sans-serif;
   font-size: 12px;
   color: #4af0ff;
+  white-space: nowrap;
+}
+
+/* ── Stock row (construction pre-check) ── */
+.mil-stock-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+}
+.mil-stock-ok  { color: #44ff88; }
+.mil-stock-low { color: var(--dune-red); }
+
+/* ── Fleet stat rows (right panel) ── */
+.mil-fleet-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(180,30,30,0.1);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+}
+.mil-fleet-stat-row:last-child { border-bottom: none; }
+.mil-fleet-stat-label {
+  color: var(--dune-text-secondary);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+}
+.mil-fleet-stat-val {
+  color: #e04444;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── Ship type cards ── */
+.mil-ship-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  margin-bottom: 6px;
+  border: 1px solid rgba(180,30,30,0.3);
+  border-radius: 4px;
+  background: rgba(20,20,28,0.5);
+  transition: background 0.15s;
+}
+.mil-ship-card:hover:not(.locked) {
+  background: rgba(180,30,30,0.08);
+}
+.mil-ship-card.locked {
+  opacity: 0.5;
+  border-color: rgba(255,255,255,0.06);
+}
+.mil-ship-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.mil-ship-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.mil-ship-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e04444;
+  letter-spacing: 1.5px;
+}
+.mil-ship-desc {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mil-ship-build-btn {
+  background: rgba(180,30,30,0.08);
+  border: 1px solid rgba(180,30,30,0.35);
+  border-radius: 3px;
+  color: #cc4444;
+  cursor: not-allowed;
+  padding: 4px 8px;
+  font-size: 11px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.mil-ship-cost {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--dune-text-dim);
   white-space: nowrap;
 }
