@@ -1,6 +1,6 @@
-import { hasLocalSave } from '../storage.js';
+import { hasLocalSave, getAllLocalSaves, deleteLocalSave } from '../storage.js';
 import { getCurrentUser, isGoogleUser, upgradeToGoogle } from '../auth.js';
-import { loadFromFirestore } from '../db.js';
+import { loadFromFirestore, getAllCloudSaves } from '../db.js';
 import { isFirebaseConfigured } from '../firebase.js';
 import { AudioManager } from '../game/audio/AudioManager.js';
 import { gameState } from '../game/GameState.js';
@@ -19,6 +19,24 @@ function fmtDate(ts) {
   if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
   if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
   return Math.floor(diff / 86400000) + 'd ago';
+}
+
+function fmtTime(secs) {
+  if (!secs) return '0s';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const sec = Math.floor(secs % 60);
+  if (h > 0) return `${h}h ${m}m ${sec}s`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
+function getTotalOre(save) {
+  if (!save) return 0;
+  if (save.planetState) {
+    return Object.values(save.planetState).reduce((acc, p) => acc + (p.silos?.ore?.amount || 0), 0);
+  }
+  return save.ore || 0;
 }
 
 export class LandingScreen {
@@ -55,17 +73,17 @@ export class LandingScreen {
           <div class="landing-version">v1.0</div>
         </div>
         <nav id="landing-nav">
-          <button class="landing-btn" id="btn-continue">
-            ${continueLabel}
-            <span class="landing-btn-sub" id="btn-continue-sub">${continueSub}</span>
+          <button class="landing-btn" id="btn-play">
+            ${this._inGame ? 'RESUME' : 'PLAY'}
+            <span class="landing-btn-sub" id="btn-play-sub">${this._inGame ? 'Return to game' : 'Start your journey'}</span>
+          </button>
+          <button class="landing-btn" id="btn-slots">
+            SAVE SLOTS
+            <span class="landing-btn-sub">Load, start new, or delete</span>
           </button>
           <button class="landing-btn" id="btn-cloud">
             CLOUD SAVES
             <span class="landing-btn-sub">Sync with Google account</span>
-          </button>
-          <button class="landing-btn" id="btn-new">
-            NEW GAME
-            <span class="landing-btn-sub">Start from scratch</span>
           </button>
           <button class="landing-btn" id="btn-settings">
             SETTINGS
@@ -92,28 +110,19 @@ export class LandingScreen {
   }
 
   async init() {
-    const btnContinue = document.getElementById('btn-continue');
-    const btnContinueSub = document.getElementById('btn-continue-sub');
+    const btnPlay = document.getElementById('btn-play');
+    const btnPlaySub = document.getElementById('btn-play-sub');
 
     if (this._inGame) {
-      // Pause mode: Resume is always primary and always enabled
-      btnContinue.classList.add('landing-btn-primary');
-      btnContinueSub.textContent = 'Return to game  [ESC]';
+      btnPlay.classList.add('landing-btn-primary');
+      btnPlaySub.textContent = 'Return to game  [ESC]';
     } else {
-      // Boot mode: enable only if local save exists
-      if (hasLocalSave()) {
-        btnContinue.classList.add('landing-btn-primary');
-        try {
-          const raw = localStorage.getItem('astro_save');
-          const data = raw ? JSON.parse(raw) : null;
-          const ore = data?.ore || 0;
-          btnContinueSub.textContent = ore > 0 ? fmtOre(ore) + ' ore' : 'No progress yet';
-        } catch {
-          btnContinueSub.textContent = 'Local save found';
-        }
+      btnPlay.classList.add('landing-btn-primary');
+      const saves = getAllLocalSaves();
+      if (saves.slot_1 || saves.slot_2 || saves.slot_3) {
+         btnPlaySub.textContent = 'Select a save slot';
       } else {
-        btnContinue.disabled = true;
-        btnContinueSub.textContent = 'No save found';
+         btnPlaySub.textContent = 'No saves — start a new game';
       }
     }
 
@@ -129,9 +138,12 @@ export class LandingScreen {
       document.getElementById('btn-login').style.display = 'none';
     }
 
-    // If boot mode, no local save, no Firebase — make New Game primary
-    if (!this._inGame && !hasLocalSave() && !isFirebaseConfigured()) {
-      document.getElementById('btn-new').classList.add('landing-btn-primary');
+    // If boot mode, no local save, no Firebase
+    if (!this._inGame && !isFirebaseConfigured()) {
+      const saves = getAllLocalSaves();
+      if (!saves.slot_1 && !saves.slot_2 && !saves.slot_3) {
+        document.getElementById('btn-slots').classList.add('landing-btn-primary');
+      }
     }
 
     this._updateFooter();
@@ -140,9 +152,9 @@ export class LandingScreen {
 
   _attachListeners() {
     const menuClick = () => { AudioManager.unlock(); AudioManager.play('UI_MENU_CLICK'); };
-    document.getElementById('btn-continue').addEventListener('click', () => { menuClick(); this._handleResume(); });
+    document.getElementById('btn-play').addEventListener('click', () => { menuClick(); this._handleResume(); });
+    document.getElementById('btn-slots').addEventListener('click', () => { menuClick(); this._showSaveSlotsPanel(); });
     document.getElementById('btn-cloud').addEventListener('click', () => { menuClick(); this._showCloudSavesPanel(); });
-    document.getElementById('btn-new').addEventListener('click', () => { menuClick(); this._handleNewGame(); });
     document.getElementById('btn-settings').addEventListener('click', () => { menuClick(); this._showSettingsPanel(); });
     document.getElementById('btn-stats').addEventListener('click', () => { menuClick(); this._showStatisticsPanel(); });
     document.getElementById('btn-login').addEventListener('click', () => { menuClick(); this._handleLogin(); });
@@ -171,33 +183,99 @@ export class LandingScreen {
     }, { once: true });
   }
 
-  // Continue (boot) or Resume (pause) — both just close the overlay
+  // Resume / Play
   _handleResume() {
-    const action = this._inGame ? 'resume' : 'continue';
-    this._resolve({ action });
-    this._dismiss();
-  }
-
-  _handleNewGame() {
-    const btn = document.getElementById('btn-new');
-    if (this._newGamePending) {
-      AudioManager.play('UI_CONFIRM');
-      clearTimeout(this._newGameTimer);
-      this._resolve({ action: 'newgame' });
+    if (this._inGame) {
+      this._resolve({ action: 'resume' });
       this._dismiss();
     } else {
-      this._newGamePending = true;
-      btn.classList.add('landing-btn-confirm');
-      const sub = btn.querySelector('.landing-btn-sub');
-      btn.childNodes[0].textContent = ' CONFIRM NEW GAME? ';
-      sub.textContent = 'Click again to confirm — resets local save';
-      this._newGameTimer = setTimeout(() => {
-        this._newGamePending = false;
-        btn.classList.remove('landing-btn-confirm');
-        btn.childNodes[0].textContent = ' NEW GAME ';
-        sub.textContent = 'Start from scratch';
-      }, 3000);
+      this._showSaveSlotsPanel();
     }
+  }
+
+  _showSaveSlotsPanel(cloudMode = false) {
+    const panel = this._prepareSubPanel();
+    panel.innerHTML = `
+      <div class="landing-panel-box" style="width: 450px;">
+        <div class="landing-panel-title">SAVE SLOTS</div>
+        <div class="landing-spinner"></div>
+      </div>
+    `;
+    panel.classList.add('open');
+
+    const saves = getAllLocalSaves();
+    let slotsHTML = '';
+
+    for (let i = 1; i <= 3; i++) {
+        const slot = 'slot_' + i;
+        const save = saves[slot];
+        if (save) {
+            const ore = getTotalOre(save);
+            const playTime = save.stats ? save.stats.playTimeSeconds : 0;
+            const planets = save.ownedPlanets ? save.ownedPlanets.length : 1;
+            const ts = save.lastSaved || save.timestamp;
+
+            slotsHTML += `
+              <div class="landing-save-card" style="margin-bottom: 12px; position: relative;">
+                <div class="landing-save-meta">SLOT ${i}</div>
+                <div class="landing-save-ore">${fmtOre(ore)} ORE</div>
+                <div class="landing-save-meta">Planets: ${planets}/8 &nbsp;|&nbsp; Playtime: ${fmtTime(playTime)}</div>
+                <div class="landing-save-meta">Last saved: ${fmtDate(ts)}</div>
+                <div style="margin-top: 10px; display: flex; gap: 8px;">
+                  <button class="landing-btn-load" data-slot="${slot}" style="flex:1;">LOAD</button>
+                  <button class="landing-btn-delete" data-slot="${slot}" style="padding: 10px; background: rgba(255,50,50,0.1); border: 1px solid #ff3333; color: #ff3333; cursor: pointer; text-transform: uppercase;">DELETE</button>
+                </div>
+              </div>
+            `;
+        } else {
+            slotsHTML += `
+              <div class="landing-save-card" style="margin-bottom: 12px; opacity: 0.6; text-align: center; padding: 20px;">
+                <div class="landing-save-meta">SLOT ${i}</div>
+                <div style="margin: 10px 0;">-- EMPTY --</div>
+                <div style="margin-top: 10px;">
+                  <button class="landing-btn-new" data-slot="${slot}" style="padding: 10px 20px; background: rgba(50,255,50,0.1); border: 1px solid #33ff33; color: #33ff33; cursor: pointer; text-transform: uppercase; width: 100%;">NEW GAME</button>
+                </div>
+              </div>
+            `;
+        }
+    }
+
+    panel.innerHTML = `
+      <div class="landing-panel-box" style="width: 450px;">
+        <div class="landing-panel-title">SAVE SLOTS</div>
+        <div style="max-height: 50vh; overflow-y: auto; overflow-x: hidden; padding-right: 8px;" class="slots-container">
+          ${slotsHTML}
+        </div>
+        <button class="landing-btn-back" id="panel-back">BACK</button>
+      </div>
+    `;
+
+    panel.querySelectorAll('.landing-btn-load').forEach(b => b.addEventListener('click', (e) => {
+        AudioManager.play('UI_CONFIRM');
+        this._resolve({ action: 'load', slot: e.target.dataset.slot });
+        this._dismiss();
+    }));
+
+    panel.querySelectorAll('.landing-btn-new').forEach(b => b.addEventListener('click', (e) => {
+        AudioManager.play('UI_CONFIRM');
+        this._resolve({ action: 'newgame', slot: e.target.dataset.slot });
+        this._dismiss();
+    }));
+
+    panel.querySelectorAll('.landing-btn-delete').forEach(b => b.addEventListener('click', (e) => {
+        if (!b.classList.contains('confirming')) {
+            b.classList.add('confirming');
+            b.textContent = 'CONFIRM?';
+            b.style.background = 'rgba(255,0,0,0.3)';
+            setTimeout(() => { if (b) { b.classList.remove('confirming'); b.textContent = 'DELETE'; b.style.background = 'rgba(255,50,50,0.1)'; } }, 3000);
+        } else {
+            AudioManager.play('UI_MENU_CLICK');
+            deleteLocalSave(e.target.dataset.slot);
+            this._showSaveSlotsPanel();
+        }
+    }));
+
+    document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
   }
 
   async _handleLogin() {
@@ -225,11 +303,9 @@ export class LandingScreen {
   }
 
   async _showCloudSavesPanel() {
-    this._closeSubPanel();
-    clearTimeout(this._subpanelTimer);
-    const panel = document.getElementById('landing-subpanel');
+    const panel = this._prepareSubPanel();
     panel.innerHTML = `
-      <div class="landing-panel-box">
+      <div class="landing-panel-box" style="width: 450px;">
         <div class="landing-panel-title">CLOUD SAVES</div>
         <div class="landing-spinner"></div>
       </div>
@@ -251,40 +327,60 @@ export class LandingScreen {
     }
 
     try {
-      const cloudSave = await loadFromFirestore(user.uid);
-      if (!cloudSave) {
-        panel.innerHTML = `
-          <div class="landing-panel-box">
-            <div class="landing-panel-title">CLOUD SAVES</div>
-            <div class="landing-msg">No cloud save found for this account.</div>
-            <button class="landing-btn-back" id="panel-back">BACK</button>
-          </div>
-        `;
-      } else {
-        const ore = cloudSave.ore || 0;
-        const ts = cloudSave.lastSaved || cloudSave.timestamp;
-        panel.innerHTML = `
-          <div class="landing-panel-box">
-            <div class="landing-panel-title">CLOUD SAVES</div>
-            <div class="landing-save-card">
-              <div class="landing-save-ore">${fmtOre(ore)} ORE</div>
-              <div class="landing-save-meta">Last saved: ${fmtDate(ts)}</div>
-            </div>
-            <button class="landing-btn-load" id="panel-load">LOAD THIS SAVE</button>
-            <button class="landing-btn-back" id="panel-back">BACK</button>
-          </div>
-        `;
-        document.getElementById('panel-load').addEventListener('click', () => {
-          this._resolve({ action: 'cloud', saveData: cloudSave });
-          this._dismiss();
-        });
+      const cloudSaves = await getAllCloudSaves(user.uid);
+      
+      let slotsHTML = '';
+      let hasAnySave = false;
+
+      for (let i = 1; i <= 3; i++) {
+        const slot = 'slot_' + i;
+        const save = cloudSaves[slot];
+        if (save) {
+            hasAnySave = true;
+            const ore = getTotalOre(save);
+            const playTime = save.stats ? save.stats.playTimeSeconds : 0;
+            const planets = save.ownedPlanets ? save.ownedPlanets.length : 1;
+            const ts = save.lastSaved || save.timestamp;
+
+            slotsHTML += `
+              <div class="landing-save-card" style="margin-bottom: 12px;">
+                <div class="landing-save-meta">CLOUD SLOT ${i}</div>
+                <div class="landing-save-ore">${fmtOre(ore)} ORE</div>
+                <div class="landing-save-meta">Planets: ${planets}/8 &nbsp;|&nbsp; Playtime: ${fmtTime(playTime)}</div>
+                <div class="landing-save-meta">Last saved: ${fmtDate(ts)}</div>
+                <button class="landing-btn-load" data-slot="${slot}" style="margin-top: 10px; width: 100%;">LOAD THIS CLOUD SAVE</button>
+              </div>
+            `;
+        }
       }
+
+      if (!hasAnySave) {
+        slotsHTML = `<div class="landing-msg">No cloud saves found for this account.</div>`;
+      }
+
+      panel.innerHTML = `
+        <div class="landing-panel-box" style="width: 450px;">
+          <div class="landing-panel-title">CLOUD SAVES</div>
+          <div style="max-height: 50vh; overflow-y: auto; overflow-x: hidden; padding-right: 8px;" class="slots-container">
+            ${slotsHTML}
+          </div>
+          <div class="landing-msg" style="font-size: 0.8em; margin-top: 10px;">Loading a cloud save will place it into the corresponding local slot.</div>
+          <button class="landing-btn-back" id="panel-back">BACK</button>
+        </div>
+      `;
+
+      panel.querySelectorAll('.landing-btn-load').forEach(b => b.addEventListener('click', (e) => {
+        const slot = e.target.dataset.slot;
+        this._resolve({ action: 'cloud', slot, saveData: cloudSaves[slot] });
+        this._dismiss();
+      }));
+
       document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
     } catch {
       panel.innerHTML = `
         <div class="landing-panel-box">
           <div class="landing-panel-title">CLOUD SAVES</div>
-          <div class="landing-msg">Failed to load cloud save.</div>
+          <div class="landing-msg">Failed to load cloud saves.</div>
           <button class="landing-btn-back" id="panel-back">BACK</button>
         </div>
       `;
@@ -293,9 +389,7 @@ export class LandingScreen {
   }
 
   _showSettingsPanel() {
-    this._closeSubPanel();
-    clearTimeout(this._subpanelTimer);
-    const panel = document.getElementById('landing-subpanel');
+    const panel = this._prepareSubPanel();
     const muted      = AudioManager.isMuted();
     const vol        = AudioManager.getVolume();
     const musicVol   = AudioManager.getMusicVolume();
@@ -351,18 +445,10 @@ export class LandingScreen {
   }
 
   _showStatisticsPanel() {
-    this._closeSubPanel();
-    const panel = document.getElementById('landing-subpanel');
+    const panel = this._prepareSubPanel();
     const s = gameState.stats;
 
-    const fmtTime = (secs) => {
-      const h = Math.floor(secs / 3600);
-      const m = Math.floor((secs % 3600) / 60);
-      const sec = Math.floor(secs % 60);
-      if (h > 0) return `${h}h ${m}m ${sec}s`;
-      if (m > 0) return `${m}m ${sec}s`;
-      return `${sec}s`;
-    };
+    const fmtT = fmtTime;
 
     panel.innerHTML = `
       <div class="landing-panel-box">
@@ -403,7 +489,7 @@ export class LandingScreen {
         </div>
         <div class="landing-setting-row">
           <span class="landing-setting-label">PLAY TIME</span>
-          <span class="landing-setting-ctrl stats-val">${fmtTime(s.playTimeSeconds)}</span>
+          <span class="landing-setting-ctrl stats-val">${fmtT(s.playTimeSeconds)}</span>
         </div>
 
         <button class="landing-btn-back" id="panel-back">BACK</button>
@@ -413,11 +499,21 @@ export class LandingScreen {
     document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
   }
 
+  _prepareSubPanel() {
+    clearTimeout(this._subpanelTimer);
+    const panel = document.getElementById('landing-subpanel');
+    return panel;
+  }
+
   _closeSubPanel() {
     clearTimeout(this._subpanelTimer);
     const panel = document.getElementById('landing-subpanel');
     panel.classList.remove('open');
-    this._subpanelTimer = setTimeout(() => { panel.innerHTML = ''; }, 300);
+    this._subpanelTimer = setTimeout(() => {
+      if (!panel.classList.contains('open')) {
+        panel.innerHTML = '';
+      }
+    }, 300);
   }
 
   _updateFooter() {

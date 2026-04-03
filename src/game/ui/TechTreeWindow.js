@@ -25,6 +25,8 @@ export class TechTreeWindow {
     this._energyEl = document.getElementById('tech-modal-energy');
     this._visible  = false;
     this._built    = false;
+    this._activeTab = 'robots';
+    this._tabBar    = null;
 
     document.getElementById('tech-close-btn')
       ?.addEventListener('pointerdown', () => this.hide());
@@ -36,7 +38,6 @@ export class TechTreeWindow {
     // Keyboard shortcut T
     document.addEventListener('keydown', (e) => {
       if ((e.key === 'T' || e.key === 't') && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        // Don't trigger if focus is in an input/select
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
         this.toggle();
@@ -85,57 +86,69 @@ export class TechTreeWindow {
   _build() {
     this._built = true;
 
-    // Group nodes: branch → tier → [nodes]
-    const layout = {};
+    // Create tab bar and insert before viewport in parent
+    const tabBar = document.createElement('div');
+    tabBar.className = 'tech-tabs';
     for (const branch of BRANCH_ORDER) {
-      layout[branch] = {};
+      const tab = document.createElement('button');
+      tab.className = 'tech-tab' + (branch === this._activeTab ? ' tech-tab--active' : '');
+      tab.dataset.branch = branch;
+      tab.textContent = BRANCH_LABELS[branch];
+      tab.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        this._switchTab(branch);
+      });
+      tabBar.appendChild(tab);
     }
+    this._viewport.parentNode.insertBefore(tabBar, this._viewport);
+    this._tabBar = tabBar;
+
+    // Build initial branch content
+    this._buildBranch(this._activeTab);
+  }
+
+  _buildBranch(branch) {
+    // Remove existing branch content
+    const existing = this._viewport.querySelector('.tech-branch-content');
+    if (existing) existing.remove();
+
+    // Group nodes by tier for this branch
+    const byTier = {};
     for (const node of TECH_NODES) {
-      const b = layout[node.branch];
-      if (!b[node.tier]) b[node.tier] = [];
-      b[node.tier].push(node);
+      if (node.branch !== branch) continue;
+      if (!byTier[node.tier]) byTier[node.tier] = [];
+      byTier[node.tier].push(node);
     }
 
-    // Determine max tier across all branches
-    const maxTier = Math.max(...TECH_NODES.map(n => n.tier));
+    if (Object.keys(byTier).length === 0) return;
+    const maxTier = Math.max(...Object.keys(byTier).map(Number));
 
-    // Clear viewport (keep SVG)
-    Array.from(this._viewport.children).forEach(c => {
-      if (c !== this._svg) c.remove();
-    });
+    const content = document.createElement('div');
+    content.className = 'tech-branch-content';
 
-    for (const branch of BRANCH_ORDER) {
+    for (let t = 0; t <= maxTier; t++) {
       const row = document.createElement('div');
-      row.className = 'tech-branch-row';
-
-      // Branch label
-      const label = document.createElement('div');
-      label.className = 'tech-branch-label';
-      label.textContent = BRANCH_LABELS[branch];
-      row.appendChild(label);
-
-      // Tier columns
-      for (let t = 0; t <= maxTier; t++) {
-        const col = document.createElement('div');
-        col.className = 'tech-tier-col';
-
-        const nodes = layout[branch][t] || [];
-        for (const node of nodes) {
-          col.appendChild(this._createNodeCard(node));
-        }
-
-        // Empty placeholder to keep column widths consistent
-        if (nodes.length === 0) {
-          const placeholder = document.createElement('div');
-          placeholder.className = 'tech-tier-placeholder';
-          col.appendChild(placeholder);
-        }
-
-        row.appendChild(col);
+      row.className = 'tech-tier-row';
+      const nodes = byTier[t] || [];
+      for (const node of nodes) {
+        row.appendChild(this._createNodeCard(node));
       }
-
-      this._viewport.insertBefore(row, this._svg);
+      content.appendChild(row);
     }
+
+    this._viewport.insertBefore(content, this._svg);
+  }
+
+  _switchTab(branch) {
+    if (branch === this._activeTab) return;
+    this._activeTab = branch;
+    // Update active tab styling
+    this._tabBar.querySelectorAll('.tech-tab').forEach(tab => {
+      tab.classList.toggle('tech-tab--active', tab.dataset.branch === branch);
+    });
+    this._buildBranch(branch);
+    this._renderNodes();
+    this._drawLines();
   }
 
   _createNodeCard(node) {
@@ -143,18 +156,10 @@ export class TechTreeWindow {
     card.className = 'tech-node tech-node--locked';
     card.dataset.techId = node.id;
 
-    // Cross-branch requirements can't be shown with SVG lines, so show them inline
-    const crossReqs = (node.requires || []).filter(
-      reqId => TECH_BY_ID[reqId]?.branch !== node.branch
-    );
-    const crossReqTag = crossReqs.length > 0
-      ? `<div class="tech-node-crossreq">${crossReqs.map(id => TECH_BY_ID[id]?.name || id).join(', ')}</div>`
-      : '';
-
     card.innerHTML = `
       <div class="tech-node-icon">${node.icon}</div>
+      <span class="tech-node-lock">🔒</span>
       <div class="tech-node-name">${node.name}</div>
-      ${crossReqTag}
       ${node.free
         ? '<div class="tech-node-cost tech-node-free">FREE</div>'
         : `<div class="tech-node-cost">⚡ ${fmt(node.cost)}</div>`}
@@ -222,7 +227,9 @@ export class TechTreeWindow {
     const svgRect = this._svg.getBoundingClientRect();
     if (!svgRect.width) return;
 
-    for (const node of TECH_NODES) {
+    const branchNodes = TECH_NODES.filter(n => n.branch === this._activeTab);
+
+    for (const node of branchNodes) {
       if (!node.requires?.length) continue;
 
       const childEl = this._modal.querySelector(`[data-tech-id="${node.id}"]`);
@@ -230,22 +237,33 @@ export class TechTreeWindow {
       const childRect = childEl.getBoundingClientRect();
 
       for (const reqId of node.requires) {
-        // Skip cross-branch connections — shown as inline text tag on the node instead
-        if (TECH_BY_ID[reqId]?.branch !== node.branch) continue;
-
         const parentEl = this._modal.querySelector(`[data-tech-id="${reqId}"]`);
         if (!parentEl) continue;
         const parentRect = parentEl.getBoundingClientRect();
 
-        // Coordinates relative to SVG element
-        const px = parentRect.right  - svgRect.left;
-        const py = parentRect.top    - svgRect.top  + parentRect.height / 2;
-        const cx = childRect.left    - svgRect.left;
-        const cy = childRect.top     - svgRect.top  + childRect.height / 2;
-        const midX = (px + cx) / 2;
-
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', `M${px},${py} C${midX},${py} ${midX},${cy} ${cx},${cy}`);
+        let d;
+
+        const isBelow = childRect.top > parentRect.bottom - 5;
+        if (isBelow) {
+          // Vertical: parent bottom-center → child top-center
+          const px = parentRect.left - svgRect.left + parentRect.width / 2;
+          const py = parentRect.bottom - svgRect.top;
+          const cx = childRect.left - svgRect.left + childRect.width / 2;
+          const cy = childRect.top - svgRect.top;
+          const midY = (py + cy) / 2;
+          d = `M${px},${py} C${px},${midY} ${cx},${midY} ${cx},${cy}`;
+        } else {
+          // Horizontal: parent right-center → child left-center
+          const px = parentRect.right  - svgRect.left;
+          const py = parentRect.top    - svgRect.top  + parentRect.height / 2;
+          const cx = childRect.left    - svgRect.left;
+          const cy = childRect.top     - svgRect.top  + childRect.height / 2;
+          const midX = (px + cx) / 2;
+          d = `M${px},${py} C${midX},${py} ${midX},${cy} ${cx},${cy}`;
+        }
+
+        path.setAttribute('d', d);
         path.setAttribute('fill', 'none');
         path.setAttribute('stroke', this._lineColor(reqId, node.id));
         path.setAttribute('stroke-width', '2');
@@ -271,7 +289,7 @@ export class TechTreeWindow {
     const node = TECH_BY_ID[nodeId];
     if (!node) return;
 
-    // Check prerequisites shown — shake if not met
+    // Check prerequisites — shake if not met
     if (!node.requires.every(r => gameState.isTechUnlocked(r))) {
       this._shakeNode(nodeId);
       AudioManager.play('UI_CLICK_DENIED');

@@ -1,30 +1,46 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase.js';
 import { gameState } from './game/GameState.js';
+import { getCurrentSaveSlot } from './storage.js';
 
-function saveDocRef(uid) {
-  return doc(db, 'saves', uid, 'state', 'current');
+function saveDocRef(uid, slot) {
+  return doc(db, 'saves', uid, 'state', slot);
 }
 
-export async function saveToFirestore(uid) {
+export async function saveToFirestore(uid, slot = getCurrentSaveSlot()) {
   if (!isFirebaseConfigured() || !db || !uid) return;
   try {
     const data = gameState.serialize();
-    await setDoc(saveDocRef(uid), data);
+    await setDoc(saveDocRef(uid, slot), data);
   } catch (e) {
     console.warn('Firestore save failed:', e);
   }
 }
 
-export async function loadFromFirestore(uid) {
+export async function loadFromFirestore(uid, slot = getCurrentSaveSlot()) {
   if (!isFirebaseConfigured() || !db || !uid) return null;
   try {
-    const snap = await getDoc(saveDocRef(uid));
+    const snap = await getDoc(saveDocRef(uid, slot));
     if (snap.exists()) return snap.data();
+    
+    // Migration: If loading slot_1 and it doesn't exist, try loading 'current'
+    if (slot === 'slot_1') {
+      const oldSnap = await getDoc(saveDocRef(uid, 'current'));
+      if (oldSnap.exists()) return oldSnap.data();
+    }
   } catch (e) {
     console.warn('Firestore load failed:', e);
   }
   return null;
+}
+
+export async function getAllCloudSaves(uid) {
+  if (!isFirebaseConfigured() || !db || !uid) return { slot_1: null, slot_2: null, slot_3: null };
+  const saves = {};
+  for (const slot of ['slot_1', 'slot_2', 'slot_3']) {
+    saves[slot] = await loadFromFirestore(uid, slot);
+  }
+  return saves;
 }
 
 let cloudSaveInterval = null;

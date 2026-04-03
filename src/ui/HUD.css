@@ -1764,13 +1764,49 @@
 .tech-modal-body {
   overflow: auto;
   flex: 1;
-  padding: 24px 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tab bar */
+.tech-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--dune-border);
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.3);
+}
+.tech-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 8px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--dune-text-dim);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.tech-tab:hover {
+  color: var(--dune-gold);
+  background: rgba(212,168,67,0.05);
+}
+.tech-tab--active {
+  color: var(--dune-gold-bright);
+  border-bottom-color: var(--dune-gold);
+  background: rgba(212,168,67,0.07);
 }
 
 /* Viewport — relative so SVG overlay sits on top */
 #tech-tree-viewport {
   position: relative;
-  min-width: max-content;
+  padding: 24px 20px;
+  flex: 1;
 }
 
 /* SVG overlay for connection lines */
@@ -1783,41 +1819,19 @@
   overflow: visible;
 }
 
-/* Branch row */
-.tech-branch-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0;
-  margin-bottom: 28px;
-}
-.tech-branch-label {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 9px;
-  letter-spacing: 3px;
-  color: rgba(212,168,67,0.35);
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  transform: rotate(180deg);
-  margin-right: 12px;
-  width: 20px;
-  flex-shrink: 0;
-  align-self: center;
-}
-
-/* Tier column */
-.tech-tier-col {
+/* Branch content area — one active branch at a time */
+.tech-branch-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: 128px;
-  margin-right: 44px;
-  flex-shrink: 0;
+  gap: 24px;
 }
-.tech-tier-col:last-child { margin-right: 0; }
-.tech-tier-placeholder {
-  width: 128px;
-  height: 80px;
-  /* invisible, keeps column width consistent */
+
+/* Tier row — nodes side by side horizontally */
+.tech-tier-row {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 /* Node card */
@@ -1867,11 +1881,23 @@
 
 /* State: locked */
 .tech-node--locked {
-  opacity: 0.38;
+  opacity: 0.22;
+  filter: grayscale(60%);
   cursor: not-allowed;
   border-color: rgba(212,168,67,0.07);
 }
 .tech-node--locked .tech-node-cost { color: rgba(212,168,67,0.3); }
+
+/* Lock icon — only visible when locked */
+.tech-node-lock {
+  display: none;
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  font-size: 11px;
+  line-height: 1;
+}
+.tech-node--locked .tech-node-lock { display: block; }
 
 /* State: available */
 .tech-node--available {
@@ -1942,15 +1968,3 @@
 /* Unlocked nodes: no pointer cursor */
 .tech-node--unlocked { cursor: default; }
 
-/* Cross-branch requirement tag shown inline on node */
-.tech-node-crossreq {
-  font-size: 8px;
-  letter-spacing: 0.5px;
-  color: rgba(212,168,67,0.45);
-  line-height: 1.2;
-  margin-bottom: 1px;
-}
-.tech-node-crossreq::before {
-  content: '← ';
-  color: rgba(212,168,67,0.3);
-}

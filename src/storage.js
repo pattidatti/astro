@@ -1,19 +1,38 @@
 import { gameState } from './game/GameState.js';
 
-const SAVE_KEY = 'astro_save';
+let currentSaveSlot = 'slot_1';
 
-export function saveToLocal() {
+export function setCurrentSaveSlot(slot) {
+  currentSaveSlot = slot;
+}
+
+export function getCurrentSaveSlot() {
+  return currentSaveSlot;
+}
+
+function getSaveKey(slot) {
+  return `astro_save_${slot}`;
+}
+
+export function migrateOldSaves() {
+  const oldSave = localStorage.getItem('astro_save');
+  if (oldSave && !localStorage.getItem('astro_save_slot_1')) {
+    localStorage.setItem('astro_save_slot_1', oldSave);
+  }
+}
+
+export function saveToLocal(slot = currentSaveSlot) {
   try {
     const data = gameState.serialize();
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    localStorage.setItem(getSaveKey(slot), JSON.stringify(data));
   } catch (e) {
     console.warn('LocalStorage save failed:', e);
   }
 }
 
-export function loadFromLocal() {
+export function loadFromLocal(slot = currentSaveSlot) {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(getSaveKey(slot));
     if (raw) return JSON.parse(raw);
   } catch (e) {
     console.warn('LocalStorage load failed:', e);
@@ -21,8 +40,26 @@ export function loadFromLocal() {
   return null;
 }
 
-export function hasLocalSave() {
-  return !!localStorage.getItem(SAVE_KEY);
+export function hasLocalSave(slot = currentSaveSlot) {
+  return !!localStorage.getItem(getSaveKey(slot));
+}
+
+export function deleteLocalSave(slot) {
+  localStorage.removeItem(getSaveKey(slot));
+}
+
+export function getAllLocalSaves() {
+  migrateOldSaves();
+  const saves = {};
+  for (const slot of ['slot_1', 'slot_2', 'slot_3']) {
+    try {
+      const raw = localStorage.getItem(getSaveKey(slot));
+      saves[slot] = raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      saves[slot] = null;
+    }
+  }
+  return saves;
 }
 
 let autoSaveInterval = null;
