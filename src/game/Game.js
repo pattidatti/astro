@@ -53,6 +53,36 @@ export function createGame() {
   // Animation loop
   const animationLoop = new AnimationLoop(renderPipeline, cameraController, sceneManager);
 
+  // --- RTS overlay DOM elements ---
+  const _rtsSelectBox = document.createElement('div');
+  _rtsSelectBox.id = 'rts-select-box';
+  document.getElementById('hud-overlay').appendChild(_rtsSelectBox);
+  inputManager._boxSelectEl = _rtsSelectBox;
+
+  const _rtsIndicator = document.createElement('div');
+  _rtsIndicator.id = 'rts-mode-indicator';
+  _rtsIndicator.innerHTML =
+    '<div class="rts-dot"></div>' +
+    '<div class="rts-label">ADMIRAL MODE</div>' +
+    '<div class="rts-hint">[V] to exit · LMB drag: select · RMB: waypoint</div>';
+  document.getElementById('hud-overlay').appendChild(_rtsIndicator);
+
+  const _rtsWaypointLabel = document.createElement('div');
+  _rtsWaypointLabel.id = 'rts-waypoint-label';
+  _rtsWaypointLabel.textContent = 'WAYPOINT';
+  document.getElementById('hud-overlay').appendChild(_rtsWaypointLabel);
+
+  // Toggle indicator pill when RTS mode changes
+  const _origToggleRTS = cameraController.toggleRTSMode.bind(cameraController);
+  cameraController.toggleRTSMode = () => {
+    _origToggleRTS();
+    _rtsIndicator.classList.toggle('visible', cameraController.isRTSMode);
+    if (!cameraController.isRTSMode) {
+      // Hide waypoint label when leaving RTS
+      _rtsWaypointLabel.style.display = 'none';
+    }
+  };
+
   // --- Skybox ---
   const skybox = new Skybox(sceneManager.scene);
   skybox.setPlanetPalette(gameState.activePlanetDef);
@@ -526,6 +556,52 @@ export function createGame() {
   const _godRayUV = new THREE.Vector2();
   const _godRayNDC = new THREE.Vector3();
 
+  // --- RTS: waypoint 3D state ---
+  let _rtsWaypoint3D   = null;  // THREE.Vector3 of active waypoint position
+  let _rtsWaypointMesh = null;  // THREE.LineSegments crosshair
+
+  function _buildWaypointCrosshair(pos) {
+    const r = 5;
+    const pts = [
+      -r,0,0,  r,0,0,
+       0,0,-r,  0,0,r,
+    ];
+    const positions = new Float32Array(pts.length);
+    for (let i = 0; i < pts.length; i++) positions[i] = pts[i];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setIndex([0,1, 2,3]);
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xffdd30,
+      transparent: true,
+      opacity: 1.0,
+      depthTest: false,
+    });
+    const mesh = new THREE.LineSegments(geo, mat);
+    mesh.position.copy(pos);
+    return mesh;
+  }
+
+  // Box-select: log result (fleet meshes populated in Phase 4)
+  inputManager.onBoxSelect((selected) => {
+    console.log(`[RTS] Box-select: ${selected.length} fleet units selected`);
+  });
+
+  // Waypoint: place crosshair, log position
+  inputManager.onWaypoint((pos) => {
+    console.log(`[RTS] Waypoint: (${pos.x.toFixed(1)}, ${pos.z.toFixed(1)})`);
+    // Remove previous crosshair if still visible
+    if (_rtsWaypointMesh) {
+      sceneManager.scene.remove(_rtsWaypointMesh);
+      _rtsWaypointMesh.geometry.dispose();
+      _rtsWaypointMesh.material.dispose();
+    }
+    _rtsWaypoint3D   = pos.clone();
+    _rtsWaypointMesh = _buildWaypointCrosshair(pos);
+    sceneManager.scene.add(_rtsWaypointMesh);
+    _rtsWaypointLabel.style.display = 'none'; // will reappear on next frame
+  });
+
   // Per-frame update
   animationLoop.onUpdate((dt, time) => {
     galaxy.update(camera, dt, time);
@@ -536,6 +612,31 @@ export function createGame() {
     minimap.update(time, cameraController);
     fleetPanel.update();
     renderPipeline.tick(time);
+
+    // Waypoint crosshair: project 3D position to screen and update label
+    if (_rtsWaypoint3D && cameraController.isRTSMode) {
+      _rtsWaypointLabel.textContent = 'WAYPOINT';
+      const ndc = _rtsWaypoint3D.clone().project(camera);
+      const sx = (ndc.x *  0.5 + 0.5) * window.innerWidth;
+      const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+      if (ndc.z < 1.0) {
+        _rtsWaypointLabel.style.display = 'block';
+        _rtsWaypointLabel.style.left = sx + 'px';
+        _rtsWaypointLabel.style.top  = (sy - 6) + 'px';
+      }
+      // Fade the crosshair mesh over time
+      if (_rtsWaypointMesh) {
+        _rtsWaypointMesh.material.opacity -= dt * 0.25;
+        if (_rtsWaypointMesh.material.opacity <= 0) {
+          sceneManager.scene.remove(_rtsWaypointMesh);
+          _rtsWaypointMesh.geometry.dispose();
+          _rtsWaypointMesh.material.dispose();
+          _rtsWaypointMesh = null;
+          _rtsWaypoint3D   = null;
+          _rtsWaypointLabel.style.display = 'none';
+        }
+      }
+    }
 
     // Ship tooltip: update position and ETA each frame
     if (_selectedShipId !== null) {

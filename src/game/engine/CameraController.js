@@ -12,6 +12,13 @@ const MAX_POLAR = Math.PI - 0.1;
 const FREE_MOVE_SPEED = 30;
 const FREE_LOOK_SPEED = 0.002;
 
+// RTS camera
+const RTS_RADIUS    = 120;   // tactical combat overview distance
+const RTS_PHI       = 0.38;  // ~22° above horizon — isometric feel
+const RTS_PHI_EXIT  = Math.PI / 3; // standard orbital angle when leaving RTS
+const RTS_MIN_DIST  = 40;
+const RTS_MAX_DIST  = 400;
+
 export class CameraController {
   constructor(camera, domElement) {
     this.camera = camera;
@@ -37,6 +44,11 @@ export class CameraController {
     this.keys = {};
     this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
+    // RTS mode
+    this.isRTSMode = false;
+    this._rtsSpherical = null; // saved state before entering RTS
+    this._rtsTarget    = null;
+
     this._lastZoom = 0;
 
     this._bindEvents();
@@ -57,6 +69,9 @@ export class CameraController {
       this.keys[e.code] = true;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
         this.freeMode = true;
+      }
+      if (e.code === 'KeyV') {
+        this.toggleRTSMode();
       }
     });
     window.addEventListener('keyup', (e) => {
@@ -90,16 +105,20 @@ export class CameraController {
         this.euler.x -= e.movementY * FREE_LOOK_SPEED;
         this.euler.x = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, this.euler.x));
         this.camera.quaternion.setFromEuler(this.euler);
-      } else {
-        // Orbital rotation
+      } else if (!this.isRTSMode) {
+        // Orbital rotation — disabled in RTS mode (LMB = box select)
         this.targetSpherical.theta -= e.movementX * 0.005;
         this.targetSpherical.phi -= e.movementY * 0.005;
         this.targetSpherical.phi = Math.max(MIN_POLAR, Math.min(MAX_POLAR, this.targetSpherical.phi));
       }
     }
 
-    if (this.isPanning) {
-      // Pan the orbital target
+    // RMB drag in RTS: rotate theta only (pan is blocked — RMB click = waypoint)
+    if (this.isPanning && this.isRTSMode && this.dragDistance > 4) {
+      this.targetSpherical.theta -= e.movementX * 0.005;
+      // phi stays locked to RTS_PHI via update()
+    } else if (this.isPanning && !this.isRTSMode) {
+      // Normal MMB/RMB pan
       const panSpeed = this.spherical.radius * 0.001;
       const right = new THREE.Vector3();
       const up = new THREE.Vector3();
@@ -166,6 +185,33 @@ export class CameraController {
     return this.dragDistance < 8;
   }
 
+  /**
+   * Toggle isometric RTS admiral view.
+   * Enter: keeps current XZ target, flies up to tactical zoom + locks phi.
+   * Exit:  stays at current XZ target + theta, just resets phi to normal orbital.
+   */
+  toggleRTSMode() {
+    if (this.isRTSMode) {
+      // Exit RTS — stay where we are but tilt back to orbital angle
+      this.isRTSMode = false;
+      this._rtsSpherical = null;
+      this._rtsTarget    = null;
+      // Keep current target + theta; just normalise phi and radius
+      this.targetSpherical.phi    = RTS_PHI_EXIT;
+      // If we were really close, pull back a little so the view isn't jarring
+      if (this.targetSpherical.radius > MAX_DISTANCE) {
+        this.targetSpherical.radius = MAX_DISTANCE;
+      }
+    } else {
+      // Enter RTS — keep current XZ focus, zoom to tactical distance
+      this.isRTSMode = true;
+      // NOTE: _trackFn is NOT cleared — existing planet/fleet tracking continues
+      // Keep current targetTarget (stay centred on what we were looking at)
+      this.targetSpherical.radius = RTS_RADIUS;
+      this.targetSpherical.phi    = RTS_PHI;
+    }
+  }
+
   /** Get approximate zoom level category */
   /**
    * Subtle zoom-in punch that bounces back via damping.
@@ -199,7 +245,7 @@ export class CameraController {
 
   update(dt) {
     if (this.freeMode) {
-      // Free movement with WASD
+      // ── Free-fly mode (Shift held) ────────────────────────────────────────
       const speed = FREE_MOVE_SPEED * dt;
       const dir = new THREE.Vector3();
       this.camera.getWorldDirection(dir);
@@ -212,8 +258,32 @@ export class CameraController {
       if (this.keys['KeyD']) this.camera.position.addScaledVector(right, speed);
       if (this.keys['Space']) this.camera.position.y += speed;
       if (this.keys['KeyC']) this.camera.position.y -= speed;
+      return; // free mode skips orbital logic entirely
+    }
+
+    // ── Shared orbital/RTS input ────────────────────────────────────────────
+    if (this.isRTSMode) {
+      // WASD pans on the XZ plane; phi stays locked
+      const wasdKeys = this.keys['KeyW'] || this.keys['KeyS'] || this.keys['KeyA'] || this.keys['KeyD'];
+      if (wasdKeys) {
+        this._trackFn = null; // manual pan cancels object tracking
+        const panSpeed = this.spherical.radius * 0.5 * dt;
+        const forward = new THREE.Vector3();
+        this.camera.getWorldDirection(forward);
+        forward.y = 0;
+        if (forward.lengthSq() < 0.0001) forward.set(0, 0, -1);
+        forward.normalize();
+        const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+        if (this.keys['KeyW']) this.targetTarget.addScaledVector(forward, panSpeed);
+        if (this.keys['KeyS']) this.targetTarget.addScaledVector(forward, -panSpeed);
+        if (this.keys['KeyA']) this.targetTarget.addScaledVector(right, -panSpeed);
+        if (this.keys['KeyD']) this.targetTarget.addScaledVector(right, panSpeed);
+      }
+      // Lock phi and clamp radius
+      this.targetSpherical.phi    = RTS_PHI;
+      this.targetSpherical.radius = Math.max(RTS_MIN_DIST, Math.min(RTS_MAX_DIST, this.targetSpherical.radius));
     } else {
-      // WASD pan in orbital mode
+      // ── Normal orbital mode ─────────────────────────────────────────────
       const wasdKeys = this.keys['KeyW'] || this.keys['KeyS'] || this.keys['KeyA'] || this.keys['KeyD'];
       if (wasdKeys) {
         this._trackFn = null;
@@ -230,39 +300,37 @@ export class CameraController {
         if (this.keys['KeyD']) this.targetTarget.addScaledVector(right, panSpeed);
       }
 
-      // If tracking a moving object, update target each frame
-      if (this._trackFn) {
-        const pos = this._trackFn();
-        if (pos) this.targetTarget.copy(pos);
-      }
-
-      // Restore zoom after punch (1 frame delay so damping catches the dip)
+      // Restore zoom after punch
       if (this._punchFrame) {
         this._punchFrame = false;
       } else if (this._punchRestore) {
         this.targetSpherical.radius = this._punchRestore;
         this._punchRestore = null;
       }
+    }
 
-      // Smooth orbital interpolation (frame-rate independent)
-      const damping = 1 - Math.pow(1 - ORBIT_DAMPING, dt * 60);
-      this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * damping;
-      this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * damping;
-      this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * damping;
+    // ── Track a moving object (works in both orbital and RTS mode) ──────────
+    if (this._trackFn) {
+      const pos = this._trackFn();
+      if (pos) this.targetTarget.copy(pos);
+    }
 
-      this.target.lerp(this.targetTarget, damping);
+    // ── Common: smooth interpolation + position update (both orbital & RTS) ──
+    const damping = 1 - Math.pow(1 - ORBIT_DAMPING, dt * 60);
+    this.spherical.theta  += (this.targetSpherical.theta  - this.spherical.theta)  * damping;
+    this.spherical.phi    += (this.targetSpherical.phi    - this.spherical.phi)    * damping;
+    this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * damping;
+    this.target.lerp(this.targetTarget, damping);
+    this._updateCameraPosition();
 
-      this._updateCameraPosition();
-
-      // Camera shake
-      if (this._shakeDuration > 0 && this._shakeElapsed < this._shakeDuration) {
-        this._shakeElapsed += dt;
-        const decay = 1 - (this._shakeElapsed / this._shakeDuration);
-        const offsetX = (Math.random() - 0.5) * 2 * this._shakeIntensity * decay;
-        const offsetY = (Math.random() - 0.5) * 2 * this._shakeIntensity * decay;
-        this.camera.position.x += offsetX;
-        this.camera.position.y += offsetY;
-      }
+    // Camera shake
+    if (this._shakeDuration > 0 && this._shakeElapsed < this._shakeDuration) {
+      this._shakeElapsed += dt;
+      const decay = 1 - (this._shakeElapsed / this._shakeDuration);
+      const offsetX = (Math.random() - 0.5) * 2 * this._shakeIntensity * decay;
+      const offsetY = (Math.random() - 0.5) * 2 * this._shakeIntensity * decay;
+      this.camera.position.x += offsetX;
+      this.camera.position.y += offsetY;
     }
   }
 
