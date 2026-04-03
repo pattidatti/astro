@@ -22,6 +22,14 @@ export class RouteSystem {
       }
     }
 
+    // Build ship-count lookup maps once per tick to avoid O(n) filter per route
+    const shipsByRoute = new Map();
+    const shipsByFromPlanet = new Map();
+    for (const s of gameState.activeShips) {
+      shipsByRoute.set(s.routeId, (shipsByRoute.get(s.routeId) || 0) + 1);
+      shipsByFromPlanet.set(s.fromPlanet, (shipsByFromPlanet.get(s.fromPlanet) || 0) + 1);
+    }
+
     // Dispatch new ships from active routes
     for (const route of gameState.routes) {
       if (!route.active) continue;
@@ -35,11 +43,8 @@ export class RouteSystem {
       if (this._roamingFleetSystem && this._roamingFleetSystem.isLaneBlocked(route.fromPlanet, route.toPlanet)) continue;
 
       // Check ship slot availability
-      const activeFromRoute = gameState.activeShips.filter(s => s.routeId === route.id).length;
-      if (activeFromRoute > 0) continue; // one ship per route at a time
-
-      const totalActiveFromPlanet = gameState.activeShips.filter(s => s.fromPlanet === route.fromPlanet).length;
-      if (totalActiveFromPlanet >= gameState.getShipSlots(route.fromPlanet)) continue;
+      if ((shipsByRoute.get(route.id) || 0) > 0) continue; // one ship per route at a time
+      if ((shipsByFromPlanet.get(route.fromPlanet) || 0) >= gameState.getShipSlots(route.fromPlanet)) continue;
 
       // Check if source has enough resource
       if (!gameState.siloHas(route.fromPlanet, route.resource, route.amount)) continue;

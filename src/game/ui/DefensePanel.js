@@ -46,9 +46,10 @@ export class DefensePanel {
 
     // ── Defense Upgrades ──
     const ownedDefenses = Object.entries(combat.defenses).filter(([, lv]) => lv > 0);
-    if (ownedDefenses.length > 0) {
+    const defUpgHtml = ownedDefenses.length > 0 ? this._renderDefenseUpgrades(planetId, combat) : '';
+    if (defUpgHtml) {
       html += `<div class="panel-section-title" style="margin-top:12px">DEFENSE UPGRADES</div>`;
-      html += this._renderDefenseUpgrades(planetId, combat);
+      html += defUpgHtml;
     }
 
     // ── Active Abilities ──
@@ -102,9 +103,18 @@ export class DefensePanel {
   }
 
   _renderDefenseGrid(planetId, combat) {
+    // Map from DEFENSE_TYPES key → tech tree node ID
+    const DEFENSE_TECH_MAP = {
+      cannon:      'cannon',       // free, always shows
+      satellite:   'satellite',
+      defenseShip: 'patrol_craft', // internal id differs from tech node id
+      shield:      'shield',
+    };
+
     let html = '<div class="hire-grid">';
 
     for (const [id, def] of Object.entries(DEFENSE_TYPES)) {
+      if (!gameState.isTechUnlocked(DEFENSE_TECH_MAP[id])) continue;
       const level = combat.defenses[id] || 0;
       const maxed = level >= def.maxLevel;
       const cost = maxed ? null : def.energyCost[level];
@@ -128,18 +138,27 @@ export class DefensePanel {
   }
 
   _renderDefenseUpgrades(planetId, combat) {
-    let html = '<div class="defense-upgrades">';
+    const DEFENSE_UPG_TECH_MAP = {
+      cannon:      'cannon_upgrades',
+      satellite:   'satellite_upgrades',
+      defenseShip: 'patrol_upgrades',
+      shield:      'shield_upgrades',
+    };
+
+    let rows = '';
 
     for (const upg of DEFENSE_UPGRADES) {
       const defLevel = combat.defenses[upg.defenseType] || 0;
       if (defLevel <= 0) continue;
+      // Also require the upgrade category to be unlocked
+      if (!gameState.isTechUnlocked(DEFENSE_UPG_TECH_MAP[upg.defenseType])) continue;
 
       const level = combat.defenseLevels[upg.id] || 0;
       const maxed = level >= upg.maxLevel;
       const cost = maxed ? null : upg.energyCost[level];
       const canAfford = cost !== null && gameState.siloHas(planetId, 'energy', cost);
 
-      html += `
+      rows += `
         <div class="defense-upg-row">
           <span class="defense-upg-name">${upg.icon} ${upg.name}</span>
           <span class="defense-upg-level">${level}/${upg.maxLevel}</span>
@@ -153,8 +172,8 @@ export class DefensePanel {
       `;
     }
 
-    html += '</div>';
-    return html;
+    if (!rows) return ''; // nothing visible — caller skips the section title
+    return `<div class="defense-upgrades">${rows}</div>`;
   }
 
   _renderAbilities(planetId, combat) {

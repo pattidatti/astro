@@ -290,16 +290,18 @@ export class CameraController {
 
     // Dynamic near/far based on zoom distance to reduce Z-fighting
     const d = this.spherical.radius;
+    let near, far;
     if (d < 20) {
-      this.camera.near = 0.05;
-      this.camera.far = 500;
+      near = 0.05; far = 500;
     } else if (d < 80) {
-      this.camera.near = 0.1;
-      this.camera.far = 1000;
+      near = 0.1; far = 1000;
     } else {
-      this.camera.near = 1.0;
-      this.camera.far = 2000;
+      near = 1.0; far = 2000;
     }
-    this.camera.updateProjectionMatrix();
+    if (this.camera.near !== near || this.camera.far !== far) {
+      this.camera.near = near;
+      this.camera.far = far;
+      this.camera.updateProjectionMatrix();
+    }
   }
 }

@@ -25,9 +25,10 @@
   <!-- HUD Overlay -->
   <div id="hud-overlay" style="visibility:hidden">
 
-    <!-- Top-left panel: menu button + minimap -->
+    <!-- Top-left panel: menu button + research button -->
     <div id="top-left-hud">
       <button id="menu-btn" title="Menu [ESC]">&#x2630; MENU</button>
+      <button id="research-btn" title="Research Tree [T]">&#x1F52C; RESEARCH</button>
     </div>
 
     <!-- Left floating panel — Space Base -->
@@ -104,6 +105,23 @@
 
   <!-- Lock-on tooltip (defense satellites / patrol ships) -->
   <div id="lockOn-tooltip"></div>
+
+  <!-- Tech Tree Modal -->
+  <div id="tech-tree-overlay" class="tech-overlay">
+    <div id="tech-tree-modal" class="tech-modal">
+      <div class="tech-modal-header">
+        <span class="tech-modal-title">RESEARCH TREE</span>
+        <span class="tech-modal-subtitle">Cost deducted from focused planet energy silo</span>
+        <span id="tech-modal-energy" class="tech-modal-energy">&#x26A1; 0</span>
+        <button id="tech-close-btn" class="tech-close-btn">&#x2715;</button>
+      </div>
+      <div class="tech-modal-body">
+        <div id="tech-tree-viewport">
+          <svg id="tech-tree-svg"></svg>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

@@ -108,6 +108,7 @@ export class DustCloud {
 
   update(dt) {
     const pos = this.points.geometry.attributes.position.array;
+    const _limitSq = (11 + DUST_RADIUS) * (11 + DUST_RADIUS);
 
     for (let i = 0; i < DUST_COUNT; i++) {
       const idx = i * 3;
@@ -116,8 +117,8 @@ export class DustCloud {
       pos[idx + 2] += this.velocities[i].z * dt;
 
       // Wrap particles back to inner zone when they stray too far
-      const dist = Math.sqrt(pos[idx] ** 2 + pos[idx + 1] ** 2 + pos[idx + 2] ** 2);
-      if (dist > 11 + DUST_RADIUS) {
+      const distSq = pos[idx] ** 2 + pos[idx + 1] ** 2 + pos[idx + 2] ** 2;
+      if (distSq > _limitSq) {
         const r = 11 + Math.random() * 2;
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos(2 * Math.random() - 1);

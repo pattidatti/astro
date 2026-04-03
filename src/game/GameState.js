@@ -3,6 +3,7 @@ import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult
 import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP,
          BUILDER_REPAIR_RATE, RECOLONIZE_COST_MULT, FALL_ROBOT_SURVIVAL } from './data/defenses.js';
 import { ENEMY_TYPES } from './data/enemies.js';
+import { TECH_NODES, TECH_BY_ID, FREE_TECH_IDS } from './data/techTree.js';
 
 const SAVE_VERSION = 3;
 
@@ -76,6 +77,14 @@ class GameState extends EventEmitter {
   constructor() {
     super();
     this._initFresh();
+    // Re-check tech availability when state changes that could unlock new nodes
+    this.on('siloChanged', ({ resource }) => {
+      if (resource === 'energy') this._checkNewTechAvailable();
+    });
+    this.on('focusedPlanet', () => this._checkNewTechAvailable());
+    this.on('baseBuilt',     () => this._checkNewTechAvailable());
+    this.on('techUnlocked',  () => this._checkNewTechAvailable());
+
     // When base is built on a planet, remove any waiting arrival colony ship
     this.on('baseBuilt', (planetId) => {
       const idx = this.colonyShipsArriving.findIndex(s => s.toPlanetId === planetId);
@@ -120,6 +129,10 @@ class GameState extends EventEmitter {
     this.colonyShipsArriving = []; // [{ id, fromPlanetId, toPlanetId }] — in orbit at destination, waiting for base
     this.tutorialStep = 0;
     this.lastSaved = Date.now();
+
+    // Global tech tree
+    this.unlockedTech = new Set(FREE_TECH_IDS);
+    this._newTechAvailable = false; // drives HUD pulse
 
     // Combat runtime state
     this.activeAttacks = [];      // [{ id, type, planetId, enemies, wave, elapsed, ... }]
@@ -234,6 +247,58 @@ class GameState extends EventEmitter {
     if (!ps) return false;
     const silo = ps.silos[resource];
     return silo && silo.capacity > 0 && silo.amount < silo.capacity;
+  }
+
+  // ─── Tech tree ────────────────────────────────────────────────────────────
+
+  /** Returns true if the given tech node is unlocked. */
+  isTechUnlocked(nodeId) {
+    return this.unlockedTech.has(nodeId);
+  }
+
+  /**
+   * Returns true if the node can be unlocked right now:
+   *   - all prerequisites are unlocked
+   *   - focused planet's energy silo has enough
+   */
+  canUnlockTech(nodeId) {
+    const node = TECH_BY_ID[nodeId];
+    if (!node || node.free || this.isTechUnlocked(nodeId)) return false;
+    if (node.requires.some(r => !this.isTechUnlocked(r))) return false;
+    return this.siloHas(this.focusedPlanet, 'energy', node.cost);
+  }
+
+  /**
+   * Unlock a tech node. Deducts energy from focused planet.
+   * Returns true on success.
+   */
+  unlockTech(nodeId) {
+    if (!this.canUnlockTech(nodeId)) return false;
+    const node = TECH_BY_ID[nodeId];
+    this.deductFromSilo(this.focusedPlanet, 'energy', node.cost);
+    this.unlockedTech.add(nodeId);
+    this._newTechAvailable = false;
+    this._checkNewTechAvailable();
+    this.emit('techUnlocked', nodeId);
+    return true;
+  }
+
+  /**
+   * Check if any not-yet-unlocked node has all prerequisites met.
+   * Emits 'newTechAvailable' once when the flag transitions false → true.
+   * Intentionally does NOT check affordability — pulses when a research path
+   * opens up, letting the player plan even before they can afford it.
+   */
+  _checkNewTechAvailable() {
+    const prev = this._newTechAvailable;
+    this._newTechAvailable = TECH_NODES.some(n =>
+      !n.free &&
+      !this.isTechUnlocked(n.id) &&
+      n.requires.every(r => this.isTechUnlocked(r))
+    );
+    if (this._newTechAvailable && !prev) {
+      this.emit('newTechAvailable');
+    }
   }
 
   // ─── Colony ship system ───────────────────────────────────────────────────
@@ -782,6 +847,7 @@ class GameState extends EventEmitter {
       colonizationTime: { ...this.colonizationTime },
       tutorialStep: this.tutorialStep,
       stats: { ...this.stats },
+      unlockedTech: Array.from(this.unlockedTech),
       lastSaved: Date.now(),
     };
   }
@@ -838,6 +904,50 @@ class GameState extends EventEmitter {
           activeEffects: [],
           fallen: false,
         };
+      }
+    }
+
+    // Tech tree — load saved unlocks + always include free nodes
+    const savedTech = data.unlockedTech ?? null;
+    this.unlockedTech = new Set([...FREE_TECH_IDS, ...(savedTech ?? [])]);
+
+    // Retroactive grants for saves that predate the tech tree
+    if (!savedTech) {
+      for (const pid of this.ownedPlanets) {
+        const ps = this.planetState[pid];
+        if (!ps) continue;
+        if (ps.robots.miner.count > 0)           this.unlockedTech.add('miner_bot');
+        if (ps.robots.builder.count > 0)          this.unlockedTech.add('builder_bot');
+        if (ps.robots.scout.count > 0) {          this.unlockedTech.add('miner_bot'); this.unlockedTech.add('scout_bot'); }
+        if ((ps.robots.miner.speedLevel || 0) > 0 || (ps.robots.miner.loadLevel || 0) > 0)
+          this.unlockedTech.add('miner_upgrades');
+        if ((ps.robots.energyBot.speedLevel || 0) > 0 || (ps.robots.energyBot.loadLevel || 0) > 0)
+          this.unlockedTech.add('energy_upgrades');
+        if ((ps.robots.builder.speedLevel || 0) > 0 || (ps.robots.builder.loadLevel || 0) > 0)
+          this.unlockedTech.add('builder_upgrades');
+        if ((ps.robots.scout.speedLevel || 0) > 0 || (ps.robots.scout.loadLevel || 0) > 0)
+          this.unlockedTech.add('scout_upgrades');
+        if ((ps.baseLevels.shipSpeed || 0) > 0)    this.unlockedTech.add('base_shipspeed');
+        if ((ps.baseLevels.shipSlots || 0) > 0)    { this.unlockedTech.add('base_shipspeed'); this.unlockedTech.add('base_shipslots'); }
+        if ((ps.baseLevels.passiveEnergy || 0) > 0) { this.unlockedTech.add('builder_bot'); this.unlockedTech.add('base_passive'); }
+        if ((ps.combat?.defenses?.satellite || 0) > 0)   { this.unlockedTech.add('satellite'); }
+        if ((ps.combat?.defenses?.defenseShip || 0) > 0) this.unlockedTech.add('patrol_craft');
+        if ((ps.combat?.defenses?.shield || 0) > 0)      { this.unlockedTech.add('satellite'); this.unlockedTech.add('shield'); }
+        // Defense upgrade tech grants — based on actually purchased upgrade levels
+        const dl = ps.combat?.defenseLevels || {};
+        if ((dl.cannon_damage || 0) > 0 || (dl.cannon_firerate || 0) > 0)
+          { this.unlockedTech.add('satellite'); this.unlockedTech.add('cannon_upgrades'); }
+        if ((dl.sat_damage || 0) > 0 || (dl.sat_firerate || 0) > 0)
+          { this.unlockedTech.add('satellite'); this.unlockedTech.add('satellite_upgrades'); }
+        if ((dl.ship_damage || 0) > 0 || (dl.ship_armor || 0) > 0)
+          { this.unlockedTech.add('patrol_craft'); this.unlockedTech.add('patrol_upgrades'); }
+        if ((dl.shield_capacity || 0) > 0 || (dl.shield_regen || 0) > 0)
+          { this.unlockedTech.add('satellite'); this.unlockedTech.add('shield'); this.unlockedTech.add('shield_upgrades'); }
+      }
+      if (this.colonyShipsInOrbit.length > 0 || this.colonyShipsInFlight.length > 0 ||
+          this.colonyShipsArriving.length > 0 || this.ownedPlanets.length > 1) {
+        this.unlockedTech.add('builder_bot');
+        this.unlockedTech.add('colony_ship');
       }
     }
 

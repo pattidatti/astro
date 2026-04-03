@@ -89,13 +89,19 @@ export class AsteroidBelt {
   }
 
   update(dt) {
+    // Always advance angles so asteroids resume smoothly when belt fades back in
+    for (let i = 0; i < ASTEROID_COUNT; i++) {
+      this._orbitAngles[i]  += this._orbitSpeeds[i]  * dt;
+      this._selfRotAngles[i] += this._selfRotSpeeds[i] * dt;
+    }
+
+    // Skip expensive matrix sync when belt is not visible (LOD hides it beyond ~220)
+    if (!this.mesh.visible) return;
+
     const dummy = this._dummy;
     const _quat = this._quat;
 
     for (let i = 0; i < ASTEROID_COUNT; i++) {
-      this._orbitAngles[i]  += this._orbitSpeeds[i]  * dt;
-      this._selfRotAngles[i] += this._selfRotSpeeds[i] * dt;
-
       const a = this._orbitAngles[i];
       const r = this._orbitRadii[i];
 

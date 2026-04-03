@@ -36,6 +36,7 @@ export class Galaxy {
 
     /** Set by Game.js after scene is available. */
     this.roamingFleetManager = null;
+    this._frameCount = 0;
   }
 
   _createGalacticBelt() {
@@ -254,6 +255,7 @@ export class Galaxy {
    * @param {number} time - Elapsed time
    */
   update(camera, dt, time) {
+    this._frameCount++;
     const cameraPos = camera.position;
 
     // Update central star
@@ -288,20 +290,23 @@ export class Galaxy {
     }
 
     // Update each planet system's LOD — distance measured to planet, not center
+    let _sysIdx = 0;
     for (const id in this.systems) {
       const system = this.systems[id];
       const distance = cameraPos.distanceTo(system.planetWorldPosition);
 
       // Distant planets: always update orbit (smooth motion), throttle visuals
+      // Stagger across planets so not all 8 update on the same frame
       if (distance > 430) {
         system.group.visible = true;
         system._updateOrbit(time);
-        if (Math.random() < 0.1) {
+        if (this._frameCount % 10 === _sysIdx % 10) {
           system.updateLOD(distance, time, dt, camera);
         }
       } else {
         system.updateLOD(distance, time, dt, camera);
       }
+      _sysIdx++;
     }
   }
 

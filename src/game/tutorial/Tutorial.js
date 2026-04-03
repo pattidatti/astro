@@ -99,9 +99,14 @@ export class Tutorial {
         targetEl: () => document.querySelector('.build-base-btn'),
       },
       {
-        message: 'HIRE AN ENERGY HARVESTER',
+        message: 'HIRE AN ENERGY BOT',
         condition: () => (gameState.getPlanetState('xerion')?.robots.energyBot.count ?? 0) >= 1,
         targetEl: () => document.querySelector('.hire-energy-btn'),
+      },
+      {
+        message: 'UNLOCK MINER BOT IN RESEARCH',
+        condition: () => gameState.isTechUnlocked('miner_bot'),
+        targetEl: () => document.getElementById('research-btn'),
       },
       {
         message: 'HIRE YOUR FIRST MINER',

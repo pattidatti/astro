@@ -3,6 +3,7 @@ import { gameState } from './GameState.js';
 import { PLANETS } from './data/planets.js';
 import { PlanetPanel } from './ui/PlanetPanel.js';
 import { CombatHUD } from './ui/CombatHUD.js';
+import { TechTreeWindow } from './ui/TechTreeWindow.js';
 import { AudioManager } from './audio/AudioManager.js';
 
 const fmt = (n) => {
@@ -21,9 +22,12 @@ export class HUDBridge {
     this.game = game;
     this._planetPanel = new PlanetPanel();
     this._combatHUD = new CombatHUD();
+    this._techTree = new TechTreeWindow();
     this._panelsVisible = false;
     this._currentPlanetId = gameState.focusedPlanet;
     this._suppressNextPlanetChanged = false;
+    this._hoverBoxLastX = null;
+    this._hoverBoxLastY = null;
 
     this.dom = {
       upgTooltip:          document.getElementById('upg-tooltip'),
@@ -40,6 +44,12 @@ export class HUDBridge {
         onMenu();
       });
     }
+
+    document.getElementById('research-btn')?.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      AudioManager.play('UI_CLICK');
+      this._techTree.toggle();
+    });
 
     this._setupPlanetHover();
     this._setupStationHover();
@@ -238,6 +248,15 @@ export class HUDBridge {
       const p = PLANETS.find(x => x.id === planetId);
       this.toast(`⚠ SILO FULL: ${resource.toUpperCase()} on ${p?.name || planetId}`, 'warn');
     });
+    gameState.on('newTechAvailable', () => {
+      // Don't toast/pulse if the player already has the tree open
+      if (this._techTree._visible) return;
+      document.getElementById('research-btn')?.classList.add('research-btn--pulse');
+      this.toast('NEW RESEARCH AVAILABLE', 'success');
+    });
+    gameState.on('techUnlocked', () => {
+      AudioManager.play('BASE_UPGRADED');
+    });
   }
 
   update(_dt) {
@@ -251,8 +270,13 @@ export class HUDBridge {
       this._tmpVec.project(camera);
       const x = (this._tmpVec.x * 0.5 + 0.5) * window.innerWidth;
       const y = (-this._tmpVec.y * 0.5 + 0.5) * window.innerHeight;
-      this.dom.hoverTargetBox.style.left = x + 'px';
-      this.dom.hoverTargetBox.style.top  = y + 'px';
+      const hx = Math.round(x), hy = Math.round(y);
+      if (hx !== this._hoverBoxLastX || hy !== this._hoverBoxLastY) {
+        this.dom.hoverTargetBox.style.left = hx + 'px';
+        this.dom.hoverTargetBox.style.top  = hy + 'px';
+        this._hoverBoxLastX = hx;
+        this._hoverBoxLastY = hy;
+      }
       this.dom.hoverTargetBox.classList.add('visible');
     } else {
       this.dom.hoverTargetBox.classList.remove('visible');

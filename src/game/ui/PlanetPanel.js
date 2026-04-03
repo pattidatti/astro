@@ -55,6 +55,9 @@ export class PlanetPanel {
     this._renderTimer = 0;
     this._tooltipEl = document.getElementById('upg-tooltip');
     this._prevSiloAmounts = {}; // track previous amounts for drain flash
+    this._siloEls = null;      // cached DOM refs per resource
+    this._siloBuiltForPlanet = null;
+    this._siloBuiltCapacity = {}; // resource → capacity when DOM was last built
 
     this._colonyPopupEl = document.getElementById('colony-ship-popup');
     this._colonyPopupVisible = false;
@@ -98,6 +101,7 @@ export class PlanetPanel {
     gameState.on('planetFell', rerender);
     gameState.on('planetRecolonized', rerender);
     gameState.on('colonyShipLaunched', rerender);
+    gameState.on('techUnlocked', rerender);
     const rerenderRoutes = () => { if (this._visible) this._renderRoutes(); };
     gameState.on('shipLaunched', rerenderRoutes);
     gameState.on('shipArrived', rerenderRoutes);
@@ -309,12 +313,22 @@ export class PlanetPanel {
       return;
     }
 
+    // base_storage is always available; others need tech tree unlock
+    const BASE_TECH_MAP = {
+      base_storage:   null,               // always available
+      base_shipspeed: 'base_shipspeed',
+      base_shipslots: 'base_shipslots',
+      base_passive:   'base_passive',
+    };
+
     // Show upgrade grid
     el.innerHTML = `<div class="panel-section-title">BASE UPGRADES</div>`;
     const grid = document.createElement('div');
     grid.className = 'base-upg-grid';
 
     for (const upg of BASE_UPGRADES) {
+      const techId = BASE_TECH_MAP[upg.id];
+      if (techId && !gameState.isTechUnlocked(techId)) continue;
       const lv = ps.baseLevels[upg.effect] ?? 0;
       const maxed = lv >= upg.maxLevel;
       const cost = maxed ? null : { energy: upg.energyCost[lv] };
@@ -410,11 +424,67 @@ export class PlanetPanel {
     const ps = gameState.getPlanetState(this._planetId);
     if (!ps) return;
 
-    el.innerHTML = `<div class="panel-section-title">SILOS</div>`;
+    // Check whether a full rebuild is needed (planet changed or storage upgraded)
+    const needsRebuild = this._siloBuiltForPlanet !== this._planetId ||
+      ['ore', 'energy', 'crystal'].some(r =>
+        ps.silos[r] && this._siloBuiltCapacity[r] !== ps.silos[r].capacity
+      );
 
+    if (needsRebuild) {
+      // Full DOM build — only happens on planet change or capacity change
+      el.innerHTML = `<div class="panel-section-title">SILOS</div>`;
+      this._siloEls = {};
+      this._siloBuiltForPlanet = this._planetId;
+
+      for (const resource of ['ore', 'energy', 'crystal']) {
+        const silo = ps.silos[resource];
+        // Always record capacity (even 0) so the needsRebuild check stays stable
+        this._siloBuiltCapacity[resource] = silo?.capacity ?? 0;
+        if (!silo || silo.capacity === 0) continue;
+
+        const row = document.createElement('div');
+        row.className = 'silo-bar-row';
+
+        const label = document.createElement('span');
+        label.className = 'silo-label';
+        label.textContent = RESOURCE_LABELS[resource];
+
+        const track = document.createElement('div');
+        track.className = 'silo-track';
+
+        const fill = document.createElement('div');
+        fill.className = `silo-fill ${resource}`;
+        track.appendChild(fill);
+
+        const amount = document.createElement('span');
+        amount.className = 'silo-amount';
+
+        const fullBadge = document.createElement('span');
+        fullBadge.className = 'silo-full-badge';
+        fullBadge.textContent = 'FULL';
+        fullBadge.style.display = 'none';
+
+        const rateEl = document.createElement('span');
+        rateEl.className = `silo-rate ${resource}`;
+        rateEl.style.display = 'none';
+
+        row.appendChild(label);
+        row.appendChild(track);
+        row.appendChild(amount);
+        row.appendChild(fullBadge);
+        row.appendChild(rateEl);
+        el.appendChild(row);
+
+        this._siloEls[resource] = { track, fill, amount, fullBadge, rateEl };
+      }
+    }
+
+    // Update-only path — runs every productionTick
     for (const resource of ['ore', 'energy', 'crystal']) {
+      const refs = this._siloEls?.[resource];
+      if (!refs) continue;
       const silo = ps.silos[resource];
-      if (!silo || silo.capacity === 0) continue;
+      if (!silo) continue;
 
       const pct = silo.capacity > 0 ? (silo.amount / silo.capacity) * 100 : 0;
       const full = pct >= 99.5;
@@ -427,20 +497,13 @@ export class PlanetPanel {
       const rate = this._computeRate(this._planetId, resource);
       const rateStr = rate > 0 ? `+${rate >= 10 ? fmt(rate) : rate.toFixed(1)}/s` : '';
 
-      const fillClass = `silo-fill ${resource}${full ? ' full' : ''}${warning ? ' warning' : ''}`;
-
-      const row = document.createElement('div');
-      row.className = 'silo-bar-row';
-      row.innerHTML = `
-        <span class="silo-label">${RESOURCE_LABELS[resource]}</span>
-        <div class="silo-track${drained ? ' silo-track--drain' : ''}">
-          <div class="${fillClass}" style="width:${pct.toFixed(1)}%"></div>
-        </div>
-        <span class="silo-amount">${fmt(silo.amount)}/${fmt(silo.capacity)}</span>
-        ${full ? '<span class="silo-full-badge">FULL</span>' : ''}
-        ${rateStr ? `<span class="silo-rate ${resource}">${rateStr}</span>` : ''}
-      `;
-      el.appendChild(row);
+      refs.track.className = `silo-track${drained ? ' silo-track--drain' : ''}`;
+      refs.fill.className = `silo-fill ${resource}${full ? ' full' : ''}${warning ? ' warning' : ''}`;
+      refs.fill.style.width = pct.toFixed(1) + '%';
+      refs.amount.textContent = `${fmt(silo.amount)}/${fmt(silo.capacity)}`;
+      refs.fullBadge.style.display = full ? '' : 'none';
+      refs.rateEl.textContent = rateStr;
+      refs.rateEl.style.display = rateStr ? '' : 'none';
     }
   }
 
@@ -734,11 +797,20 @@ export class PlanetPanel {
       return;
     }
 
+    const ROBOT_TECH_MAP = {
+      miner:     'miner_bot',
+      energyBot: 'energy_bot',
+      builder:   'builder_bot',
+      scout:     'scout_bot',
+    };
+
     const grid = document.createElement('div');
     grid.className = 'hire-grid';
 
     for (const action of ROBOT_ACTIONS) {
       const robotType = action.type;
+      // Hide robot types that haven't been unlocked in the tech tree
+      if (!gameState.isTechUnlocked(ROBOT_TECH_MAP[robotType])) continue;
       const robot = ps.robots[robotType];
       const energyCost = action.energyCostFn(ps);
       const canAfford = gameState.siloHas(this._planetId, 'energy', energyCost);
@@ -818,8 +890,18 @@ export class PlanetPanel {
 
     if (!ps || !ps.hasBase) { el.innerHTML = ''; return; }
 
-    // Only show upgrades for robot types that have at least 1 robot
-    const relevantUpgrades = ROBOT_UPGRADES.filter(upg => ps.robots[upg.robotType]?.count > 0);
+    const ROBOT_UPG_TECH_MAP = {
+      miner:     'miner_upgrades',
+      energyBot: 'energy_upgrades',
+      builder:   'builder_upgrades',
+      scout:     'scout_upgrades',
+    };
+
+    // Only show upgrades for robot types that have ≥1 robot AND the upgrade tech is unlocked
+    const relevantUpgrades = ROBOT_UPGRADES.filter(upg =>
+      ps.robots[upg.robotType]?.count > 0 &&
+      gameState.isTechUnlocked(ROBOT_UPG_TECH_MAP[upg.robotType])
+    );
     if (relevantUpgrades.length === 0) { el.innerHTML = ''; return; }
 
     el.innerHTML = `<div class="panel-section-title">BOT UPGRADES</div>`;
@@ -894,6 +976,9 @@ export class PlanetPanel {
 
     // No base = no colony ship option
     if (!ps || !ps.hasBase) { el.innerHTML = ''; return; }
+
+    // Colony ship must be unlocked in tech tree
+    if (!gameState.isTechUnlocked('colony_ship')) { el.innerHTML = ''; return; }
 
     const buildQueue = ps.colonyShipBuildQueue || [];
     const inOrbit = gameState.colonyShipsInOrbit.some(s => s.fromPlanetId === this._planetId);

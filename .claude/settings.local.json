@@ -22,7 +22,8 @@
       "Bash(curl -s http://localhost:5173)",
       "Bash(git checkout:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(\"C:/Users/patti/dev/astro/src/ui/HUD.css\":*)"
     ]
   }
 }

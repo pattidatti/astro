@@ -22,6 +22,7 @@ export class InputManager {
     this._hoveredAnyMesh = null;
     this._onHoverAnyCallbacks = [];
     this._onMissedClickCallbacks = [];
+    this._lastRaycastTime = 0;
 
     // Click handler — only fire on pointerup if it wasn't a drag
     domElement.addEventListener('pointerup', (e) => this._onPointerUp(e));
@@ -95,6 +96,11 @@ export class InputManager {
     const rect = this.domElement.getBoundingClientRect();
     this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Throttle raycasting to ~30fps — mousemove fires up to 200+ times/sec
+    const now = performance.now();
+    if (now - this._lastRaycastTime < 33) return;
+    this._lastRaycastTime = now;
 
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const hits = this.raycaster.intersectObjects(this.clickables, false);
