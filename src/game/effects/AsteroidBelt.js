@@ -51,7 +51,7 @@ export class AsteroidBelt {
 
     for (let i = 0; i < ASTEROID_COUNT; i++) {
       this._orbitAngles[i]  = Math.random() * Math.PI * 2;
-      this._orbitRadii[i]   = 20 + Math.random() * 15;   // 20–35 units
+      this._orbitRadii[i]   = 25 + Math.random() * 15;   // 25–40 units
       this._orbitSpeeds[i]  = (0.03 + Math.random() * 0.06) * (Math.random() < 0.5 ? 1 : -1);
       this._orbitHeights[i] = (Math.random() - 0.5) * 4; // ±2 units
       this._scales[i]       = 0.05 + Math.random() * 0.20;

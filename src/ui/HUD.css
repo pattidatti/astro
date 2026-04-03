@@ -40,16 +40,56 @@
   pointer-events: auto;
 }
 
-/* ── TOP-LEFT PANEL (menu + minimap) ── */
-#top-left-hud {
+/* ── TOP NAV BUTTONS (menu + research) ── */
+#top-nav {
   position: fixed;
   top: 16px;
   left: 16px;
   z-index: 50;
   display: flex;
+  gap: 6px;
+}
+#menu-btn,
+#research-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-align: center;
+  padding: 7px 14px;
+  background: rgba(10, 12, 16, 0.9);
+  border: 1px solid var(--dune-border);
+  border-radius: 6px;
+  color: var(--dune-text-secondary);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+  line-height: 1;
+}
+#menu-btn:hover,
+#research-btn:hover {
+  color: var(--dune-gold);
+  background: rgba(212, 168, 67, 0.08);
+  border-color: var(--dune-gold);
+}
+.btn-key {
+  display: inline-block;
+  font-size: 9px;
+  opacity: 0.55;
+  margin-left: 3px;
+  vertical-align: middle;
+  letter-spacing: 0;
+}
+
+/* ── TOP-LEFT MINIMAP PANEL ── */
+#top-left-hud {
+  position: fixed;
+  top: 52px;
+  left: 16px;
+  z-index: 50;
+  display: flex;
   flex-direction: column;
-  width: auto;
-  min-width: 160px;
+  width: 160px;
   border: 1px solid var(--dune-border);
   border-radius: 8px;
   overflow: hidden;
@@ -59,38 +99,6 @@
 #top-left-hud.minimap-hidden {
   opacity: 0;
   pointer-events: none;
-}
-.top-btn-row {
-  display: flex;
-  width: 100%;
-}
-#menu-btn {
-  flex: 1;
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  font-family: 'Orbitron', sans-serif;
-  text-align: center;
-  padding: 7px 0;
-  background: rgba(10, 12, 16, 0.9);
-  border: none;
-  border-bottom: 1px solid var(--dune-border);
-  border-radius: 0;
-  color: var(--dune-text-secondary);
-  cursor: pointer;
-  transition: color 0.2s, background 0.2s;
-  line-height: 1;
-}
-#menu-btn:hover {
-  color: var(--dune-gold);
-  background: rgba(212, 168, 67, 0.08);
-}
-.btn-key {
-  display: inline-block;
-  font-size: 9px;
-  opacity: 0.55;
-  margin-left: 3px;
-  vertical-align: middle;
-  letter-spacing: 0;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1673,32 +1681,7 @@
   font-style: italic;
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   RESEARCH BUTTON (top-left HUD)
-   ══════════════════════════════════════════════════════════════════════════ */
 
-#research-btn {
-  flex: 1;
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  font-family: 'Orbitron', sans-serif;
-  text-align: center;
-  padding: 7px 0;
-  background: rgba(10, 12, 16, 0.9);
-  border: none;
-  border-left: 1px solid var(--dune-border);
-  border-bottom: 1px solid var(--dune-border);
-  border-radius: 0;
-  color: var(--dune-text-secondary);
-  cursor: pointer;
-  transition: color 0.2s, background 0.2s;
-  line-height: 1;
-  white-space: nowrap;
-}
-#research-btn:hover {
-  color: var(--dune-gold);
-  background: rgba(212, 168, 67, 0.08);
-}
 @keyframes research-pulse {
   0%, 100% { color: var(--dune-text-secondary); box-shadow: none; }
   50%       { color: var(--dune-gold-bright); box-shadow: 0 0 10px rgba(212,168,67,0.35) inset; }

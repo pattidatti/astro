@@ -34,7 +34,7 @@ export class Station3D {
 
     this._build();
     this.orbitAngle  = Math.random() * Math.PI * 2;
-    this.orbitRadius = 15;
+    this.orbitRadius = 17;
     this.orbitSpeed  = 0.1;
   }
 
