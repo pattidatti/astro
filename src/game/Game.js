@@ -411,10 +411,22 @@ export function createGame() {
     const startPos = startSystem.planetWorldPosition;
     cameraController.targetTarget.copy(startPos);
     cameraController.target.copy(startPos);
-    cameraController.spherical.radius = 30;
-    cameraController.targetSpherical.radius = 30;
+    cameraController.spherical.radius = 55;
+    cameraController.targetSpherical.radius = 55;
     cameraController.trackObject(() => startSystem.planetWorldPosition, 55);
   }
+
+  // Snap camera to correct planet when save loads (no animation)
+  gameState.on('stateLoaded', () => {
+    const system = galaxy.getSystem(gameState.activePlanet);
+    if (!system) return;
+    const pos = system.planetWorldPosition;
+    cameraController.target.copy(pos);
+    cameraController.targetTarget.copy(pos);
+    cameraController.spherical.radius = 55;
+    cameraController.targetSpherical.radius = 55;
+    cameraController.trackObject(() => system.planetWorldPosition, 55);
+  });
 
   // Planet events — track orbiting planet position
   gameState.on('planetChanged', (id) => {

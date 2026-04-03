@@ -24,6 +24,10 @@
   transition: opacity 0.5s ease, transform 0.5s ease;
   pointer-events: none;
 }
+/* Animations inside the landing screen must run even when the game is paused */
+#landing-overlay * {
+  animation-play-state: running !important;
+}
 
 /* ── BACKGROUND LAYERS ── */
 #landing-bg-gradient {

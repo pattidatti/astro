@@ -3,7 +3,7 @@ import * as THREE from 'three';
 const TRAIL_LENGTH      = 20;
 const CARGO_THRESHOLD   = 3;
 const ORBIT_MIN         = 11.5;
-const ORBIT_MAX         = 13.5;
+const ORBIT_MAX         = 16.5;
 const PLANET_SURFACE_RADIUS = 10;
 
 const MINE_STATE = {
@@ -47,7 +47,8 @@ export class Robot3D {
     this.orbitSpeed   = 0.3 + Math.random() * 0.2;
     this.angle        = Math.random() * Math.PI * 2;
     this.phaseOffset  = Math.random() * Math.PI * 2;
-    this.verticalAmp  = 0.8 + Math.random() * 1.2;
+    this.verticalAmp  = 2.5 + Math.random() * 4.0;
+    this.northBias    = 1.0 + Math.random() * 2.0;
 
     // Cargo
     this.cargo = Math.random() * CARGO_THRESHOLD;
@@ -146,7 +147,7 @@ export class Robot3D {
     const nz = this.surfacePoint.z / PLANET_SURFACE_RADIUS;
     const tx = -nz;
     const tz =  nx;
-    const dist = 1.5 + Math.random() * 2.0;
+    const dist = 2.0 + Math.random() * 5.0;
     this.surfaceMoveEnd.set(
       this.surfacePoint.x + tx * dist,
       this.surfacePoint.y,
@@ -270,7 +271,7 @@ export class Robot3D {
 
     this.group.position.set(
       Math.cos(this.angle) * (this.orbitRadius + wobble),
-      Math.sin(this.phaseOffset + time * 0.5) * this.verticalAmp,
+      Math.sin(this.phaseOffset + time * 0.5) * this.verticalAmp + this.northBias,
       Math.sin(this.angle) * (this.orbitRadius + wobble),
     );
 
