@@ -165,7 +165,10 @@ export class LandingScreen {
     document.removeEventListener('keydown', this._onKeyDown);
     this._overlay.classList.add('landing-exit');
     const hud = document.getElementById('hud-overlay');
-    if (hud) hud.style.display = '';
+    if (hud) {
+      hud.style.display = '';
+      hud.style.visibility = '';
+    }
     this._overlay.addEventListener('transitionend', () => {
       this._overlay.remove();
     }, { once: true });
