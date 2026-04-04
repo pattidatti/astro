@@ -45,7 +45,7 @@ export class EnemyStationManager3D {
       const def = ENEMY_STATION_DEFS.find(d => d.id === base.id);
       if (!def) continue;
 
-      const station3D = new EnemyStation3D(def);
+      const station3D = new EnemyStation3D(def, { isFreefloating: true });
       this._group.add(station3D.group);
       this._activeStations.set(base.id, station3D);
 

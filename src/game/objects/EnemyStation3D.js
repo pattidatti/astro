@@ -11,9 +11,10 @@ const TYPE_COLORS = {
 };
 
 export class EnemyStation3D {
-  constructor(stationDef) {
+  constructor(stationDef, options = {}) {
     this.stationId  = stationDef.id;
     this.type       = stationDef.type;
+    this.isFreefloating = options.isFreefloating ?? false;
 
     // Orbit properties — used when planet-anchored (parent positions free-floating)
     this.orbitAngle  = Math.random() * Math.PI * 2;
@@ -175,7 +176,7 @@ export class EnemyStation3D {
     const intensity = INTENSITY[phase] ?? 0.1;
 
     for (const mat of this._emissiveMats) {
-      if (mat.isBasicMaterial) continue; // port glow — skip emissive set
+      if (mat.isMeshBasicMaterial) continue; // port glow — skip emissive set
       mat.emissive?.setHex(col);
       mat.emissiveIntensity = intensity;
     }
@@ -189,20 +190,22 @@ export class EnemyStation3D {
   // ── Update ────────────────────────────────────────────────────────────────
 
   update(time, dt, camera) {
-    // Self-orbit for planet-anchored mode
-    this.orbitAngle += this.orbitSpeed * dt;
-    this.group.position.set(
-      Math.cos(this.orbitAngle) * this.orbitRadius,
-      0,
-      Math.sin(this.orbitAngle) * this.orbitRadius
-    );
+    // Self-orbit for planet-anchored mode (skip for free-floating)
+    if (!this.isFreefloating) {
+      this.orbitAngle += this.orbitSpeed * dt;
+      this.group.position.set(
+        Math.cos(this.orbitAngle) * this.orbitRadius,
+        0,
+        Math.sin(this.orbitAngle) * this.orbitRadius
+      );
+    }
 
     // War-phase pulsing red (2-second cycle)
     if (this._phase === 'war') {
       this._warTime += dt;
       const pulse = 0.8 + 0.4 * Math.sin(this._warTime * Math.PI); // period = 2s
       for (const mat of this._emissiveMats) {
-        if (mat.isBasicMaterial) continue;
+        if (mat.isMeshBasicMaterial) continue;
         mat.emissive?.setHex(0xff2200);
         mat.emissiveIntensity = pulse;
       }

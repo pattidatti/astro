@@ -164,7 +164,7 @@ class GameState extends EventEmitter {
     this.colonyShipsArriving = []; // [{ id, fromPlanetId, toPlanetId }] — in orbit at destination, waiting for base
     this.playerFleets = []; // [{ id, planetId, position, waypoint, state, ships, speed }]
     this.fleetEngagements = []; // [{ id, playerFleetId, roamingFleetId, elapsed }]
-    this.enemyStations = [];       // populated by migration / new game
+    this.enemyStations = buildDefaultEnemyStations();  // all 7 stations initialized on new game
     this.stationSieges = [];       // active player fleet sieges on enemy stations
     this.wreckageFields = [];      // runtime-only, not persisted
     this._militaryBasePosFns = {}; // planetId → () => THREE.Vector3 (runtime, not serialized)
@@ -1748,7 +1748,7 @@ class GameState extends EventEmitter {
     }
 
     // v5→v6 migration: initialize enemy station data if not present
-    if (!this.enemyStations?.length) {
+    if (!this.enemyStations) {
       this.enemyStations = buildDefaultEnemyStations();
     }
 

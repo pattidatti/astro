@@ -206,11 +206,9 @@ export class Minimap {
       }
     }
 
-    // Draw enemy stations (red diamonds)
+    // Draw enemy stations (red diamonds, gray for cleared)
     if (this._galaxy && gameState.enemyStations) {
       for (const st of gameState.enemyStations) {
-        if (st.cleared) continue; // Skip destroyed stations
-
         let pos = null;
         if (st.anchorPlanet) {
           // Planet-anchored: same position as planet (same orbit around sun)
@@ -230,14 +228,35 @@ export class Minimap {
 
         if (!pos) continue;
 
-        // Draw red diamond (rotated square)
-        const dia = 4;
-        ctx.save();
-        ctx.fillStyle = 'rgba(255, 50, 50, 0.8)';
-        ctx.translate(pos.x, pos.y);
-        ctx.rotate(Math.PI / 4);
-        ctx.fillRect(-dia, -dia, dia * 2, dia * 2);
-        ctx.restore();
+        if (st.cleared) {
+          // Draw gray diamond for cleared stations
+          const dia = 4;
+          ctx.save();
+          ctx.fillStyle = 'rgba(80, 80, 80, 0.4)';
+          ctx.translate(pos.x, pos.y);
+          ctx.rotate(Math.PI / 4);
+          ctx.fillRect(-dia, -dia, dia * 2, dia * 2);
+          ctx.restore();
+        } else {
+          // Draw pulsing ring around active station
+          ctx.save();
+          const pulse = 6 + Math.sin(this._time * 4) * 2;
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, pulse, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255, 50, 50, 0.6)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+
+          // Draw red diamond (rotated square)
+          const dia = 4;
+          ctx.save();
+          ctx.fillStyle = 'rgba(255, 50, 50, 0.8)';
+          ctx.translate(pos.x, pos.y);
+          ctx.rotate(Math.PI / 4);
+          ctx.fillRect(-dia, -dia, dia * 2, dia * 2);
+          ctx.restore();
+        }
       }
     }
 
