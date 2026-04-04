@@ -4,6 +4,7 @@ import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP,
          BUILDER_REPAIR_RATE, RECOLONIZE_COST_MULT, FALL_ROBOT_SURVIVAL } from './data/defenses.js';
 import { ENEMY_TYPES } from './data/enemies.js';
 import { TECH_NODES, TECH_BY_ID, FREE_TECH_IDS, getMaxColonyShipsInFlight } from './data/techTree.js';
+import { MILITARY_SHIPS } from './data/militaryShips.js';
 
 const SAVE_VERSION = 4;
 
@@ -135,7 +136,8 @@ class GameState extends EventEmitter {
     this.colonyShipsInOrbit = []; // [{ id, fromPlanetId }]
     this.colonyShipsInFlight = []; // [{ id, fromPlanetId, toPlanetId, duration, elapsed }]
     this.colonyShipsArriving = []; // [{ id, fromPlanetId, toPlanetId }] — in orbit at destination, waiting for base
-    this.playerFleets = []; // [{ id, fleetType, position, target, state, ... }]
+    this.playerFleets = []; // [{ id, planetId, position, waypoint, state, ships, speed }]
+    this._militaryBasePosFns = {}; // planetId → () => THREE.Vector3 (runtime, not serialized)
     this.tutorialStep = 0;
     this.lastSaved = Date.now();
 
@@ -737,6 +739,143 @@ class GameState extends EventEmitter {
     return true;
   }
 
+  // ─── Military ship production queue ───────────────────────────────────────
+
+  /**
+   * Register a live world-position getter for a planet's military base.
+   * Called by SolarSystem when the base is built or restored.
+   * Used by _rallyPosition() to know where to spawn new fleets.
+   */
+  registerMilitaryBasePosFn(planetId, fn) {
+    this._militaryBasePosFns[planetId] = fn;
+  }
+
+  unregisterMilitaryBasePosFn(planetId) {
+    delete this._militaryBasePosFns[planetId];
+  }
+
+  /**
+   * Queue one ship of the given type for production on a planet's military base.
+   * Costs are deducted immediately from the base silo (or planet silo for crystal).
+   */
+  queueShipBuild(planetId, shipType) {
+    const ps  = this.getPlanetState(planetId);
+    const mb  = ps?.militaryBase;
+    if (!mb?.built || mb.hangars === 0) return false;
+
+    const shipDef = MILITARY_SHIPS[shipType];
+    if (!shipDef) return false;
+    if (!this.isTechUnlocked(shipDef.tech)) return false;
+
+    // Check fleet cap: active + queued + new must not exceed cap
+    const queuedCap = mb.queue.reduce((s, q) => s + (MILITARY_SHIPS[q.type]?.fleetCapCost ?? 0), 0);
+    const activeCap = this.getUsedFleetCap(planetId);
+    if (activeCap + queuedCap + shipDef.fleetCapCost > mb.fleetCap) return false;
+
+    // Check resources
+    const cost = shipDef.cost;
+    if (cost.ore    && mb.silo.ore.amount    < cost.ore)    return false;
+    if (cost.energy && mb.silo.energy.amount < cost.energy) return false;
+    if (cost.crystal && !this.siloHas(planetId, 'crystal', cost.crystal)) return false;
+
+    // Deduct from base silo (ore + energy), planet silo (crystal)
+    if (cost.ore)    mb.silo.ore.amount    -= cost.ore;
+    if (cost.energy) mb.silo.energy.amount -= cost.energy;
+    if (cost.crystal) this.deductFromSilo(planetId, 'crystal', cost.crystal);
+
+    mb.queue.push({ type: shipType, progress: 0, buildTime: shipDef.buildTime });
+    this.emit('militaryShipQueued', { planetId, shipType });
+    return true;
+  }
+
+  /**
+   * Advance all military ship build queues by dt seconds.
+   * Called by ProductionSystem each frame.
+   */
+  tickShipBuildQueues(dt) {
+    for (const planetId of this.ownedPlanets) {
+      const mb = this.getPlanetState(planetId)?.militaryBase;
+      if (!mb?.built || !mb.queue.length) continue;
+
+      const item = mb.queue[0];
+      item.progress += dt;
+
+      if (item.progress >= item.buildTime) {
+        mb.queue.shift();
+        this._spawnShipIntoFleet(planetId, item.type);
+        this.emit('playerShipBuilt', { planetId, shipType: item.type });
+      }
+    }
+  }
+
+  /**
+   * Spawn a completed ship into the player fleet at this planet's rally point.
+   * Finds an existing orbiting fleet or creates a new one.
+   */
+  _spawnShipIntoFleet(planetId, shipType) {
+    const shipDef = MILITARY_SHIPS[shipType];
+    if (!shipDef) return;
+
+    let fleet = this.playerFleets.find(f => f.planetId === planetId && f.state === 'orbiting');
+
+    if (!fleet) {
+      const pos = this._rallyPosition(planetId);
+      fleet = {
+        id:       `pf_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        planetId,
+        position: pos,
+        waypoint: null,
+        state:    'orbiting',
+        ships:    [],
+        speed:    shipDef.speed,
+      };
+      this.playerFleets.push(fleet);
+      this.emit('playerFleetSpawned', fleet);
+    }
+
+    fleet.ships.push({
+      type:         shipType,
+      hp:           shipDef.hp,
+      maxHP:        shipDef.hp,
+      fleetCapCost: shipDef.fleetCapCost,
+      localPos:     { x: 0, y: 0, z: 0 }, // runtime — scattered by PlayerFleet3D on activate
+      vel:          { x: 0, z: 0 },        // runtime — Boids velocity
+    });
+    fleet.speed = Math.min(...fleet.ships.map(s => MILITARY_SHIPS[s.type]?.speed ?? 10));
+
+    this.emit('playerFleetChanged', { fleetId: fleet.id });
+  }
+
+  /**
+   * World-space rally point for new fleets near a planet's military base.
+   * Uses live position from registered SolarSystem getter if available.
+   */
+  _rallyPosition(planetId) {
+    const posFn = this._militaryBasePosFns?.[planetId];
+    if (posFn) {
+      const p = posFn();
+      if (p) return { x: p.x + 10, y: 0, z: p.z + 10 };
+    }
+    return { x: 10 + Math.random() * 5, y: 0, z: 10 + Math.random() * 5 };
+  }
+
+  /** Total fleet cap consumed by active fleets belonging to a planet's base. */
+  getUsedFleetCap(planetId) {
+    return this.playerFleets
+      .filter(f => f.planetId === planetId)
+      .reduce((sum, f) => sum + f.ships.reduce((s, sh) => s + (sh.fleetCapCost ?? 1), 0), 0);
+  }
+
+  /** Dispatch a fleet to a new waypoint. Sets state → 'moving'. */
+  dispatchFleetWaypoint(fleetId, waypoint) {
+    const fleet = this.playerFleets.find(f => f.id === fleetId);
+    if (!fleet || !fleet.ships.length) return false;
+    fleet.waypoint = { x: waypoint.x, y: 0, z: waypoint.z };
+    fleet.state    = 'moving';
+    this.emit('playerFleetDispatched', { fleetId, waypoint: fleet.waypoint });
+    return true;
+  }
+
   // ─── Route management ─────────────────────────────────────────────────────
 
   addRoute(route) {
@@ -1082,7 +1221,13 @@ class GameState extends EventEmitter {
       colonyShipsInOrbit: JSON.parse(JSON.stringify(this.colonyShipsInOrbit)),
       colonyShipsInFlight: JSON.parse(JSON.stringify(this.colonyShipsInFlight)),
       colonyShipsArriving: JSON.parse(JSON.stringify(this.colonyShipsArriving)),
-      playerFleets: JSON.parse(JSON.stringify(this.playerFleets)),
+      playerFleets: this.playerFleets.map(f => ({
+        ...f,
+        ships: f.ships.map(s => ({
+          type: s.type, hp: s.hp, maxHP: s.maxHP, fleetCapCost: s.fleetCapCost,
+          // localPos and vel are runtime-only — not saved
+        })),
+      })),
       activeAttacks: attacks,
       roamingFleets: JSON.parse(JSON.stringify(this.roamingFleets)),
       lastAttackTime: { ...this.lastAttackTime },
@@ -1112,6 +1257,14 @@ class GameState extends EventEmitter {
     this.colonyShipsInFlight = data.colonyShipsInFlight ?? [];
     this.colonyShipsArriving = data.colonyShipsArriving ?? [];
     this.playerFleets        = data.playerFleets ?? [];
+    // Re-init runtime-only per-ship fields stripped during serialization
+    for (const fleet of this.playerFleets) {
+      for (const ship of fleet.ships) {
+        if (!ship.localPos) ship.localPos = { x: 0, y: 0, z: 0 };
+        if (!ship.vel)      ship.vel      = { x: 0, z: 0 };
+      }
+    }
+    this._militaryBasePosFns = {}; // always reset on load
     this.activeAttacks       = data.activeAttacks ?? [];
     this.roamingFleets       = data.roamingFleets ?? [];
     this.lastAttackTime      = data.lastAttackTime ?? {};
