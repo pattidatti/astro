@@ -494,14 +494,15 @@ export class SolarSystem {
       this.dustCloud.update(dt, time);
     }
 
-    // Nebula volumes — fade out 300→350
+    // Nebula volumes — fade out 300→350; two dimmest hidden beyond 280
     const nebFade = THREE.MathUtils.smoothstep(350, 300, distance);
+    const nearNeb = distance < 280;
     this.nebulaVolume.mesh.visible = nebFade > 0;
     this.nebulaVolume2.mesh.visible = nebFade > 0;
     this.nebulaVolume3.mesh.visible = nebFade > 0;
     this.nebulaVolume4.mesh.visible = nebFade > 0;
-    this.nebulaVolume5.mesh.visible = nebFade > 0;
-    this.nebulaVolume6.mesh.visible = nebFade > 0;
+    this.nebulaVolume5.mesh.visible = nebFade > 0 && nearNeb;
+    this.nebulaVolume6.mesh.visible = nebFade > 0 && nearNeb;
     if (nebFade > 0 && camera) {
       this.nebulaVolume.material.uniforms.uOpacity.value = nebFade;
       this.nebulaVolume.update(time, camera);

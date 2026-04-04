@@ -261,18 +261,24 @@ export class Galaxy {
     // Update central star
     this.centralStar.update(time);
 
-    // Update cosmic background nebulas
+    // Update cosmic background nebulas — throttled to every other frame (uTime advances
+    // ~0.010/frame; skipping one frame shifts by ~0.00017, imperceptible)
+    const updateNebulas = this._frameCount % 2 === 0;
     for (const neb of this._cosmicNebulas) {
-      neb.update(time, camera);
+      neb.mesh.lookAt(camera.position); // billboard every frame
+      if (updateNebulas) neb.material.uniforms.uTime.value = time;
     }
 
     // Update galactic asteroid belts
     this._galacticBelt.update(dt);
     this._outerBelt.update(dt);
 
-    // Update ambient dust clouds
+    // Update ambient dust clouds — skip update when camera is far away
+    // scale * 60 gives a conservative visibility radius per cloud size
     for (const cloud of this._ambientDustClouds) {
-      cloud.update(dt);
+      if (cameraPos.distanceTo(cloud.group.position) < cloud.group.scale.x * 60) {
+        cloud.update(dt);
+      }
     }
 
     // Update fleet visuals and threat indicators
