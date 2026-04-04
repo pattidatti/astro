@@ -16,6 +16,7 @@ import { RoamingFleetSystem } from './game/systems/RoamingFleetSystem.js';
 import { FleetMovementSystem } from './game/systems/FleetMovementSystem.js';
 import { FleetCombatSystem } from './game/systems/FleetCombatSystem.js';
 import { SupplySystem } from './game/systems/SupplySystem.js';
+import { EnemyStationSystem } from './game/systems/EnemyStationSystem.js';
 import { Tutorial } from './game/tutorial/Tutorial.js';
 
 async function openPauseMenu() {
@@ -121,8 +122,22 @@ async function boot() {
   const combatSystem = new CombatSystem(game.animationLoop, threatSystem);
   combatSystem.reconstructAttacks();
 
-  const roamingFleetSystem = new RoamingFleetSystem(game.animationLoop, threatSystem);
+  const roamingFleetSystem = new RoamingFleetSystem(
+    game.animationLoop,
+    threatSystem,
+    (fleetId) => game.galaxy?.roamingFleetManager?.getFleetWorldPosition(fleetId) ?? null,
+    (stationId) => game.galaxy?.enemyStationManager?.getStationWorldPosition(stationId) ?? null
+  );
   roamingFleetSystem.reconstructFleets();
+
+  // Phase 3: EnemyStationSystem — state machine, awakening, snitch mechanic, distress flare
+  const enemyStationSystem = new EnemyStationSystem(
+    game.animationLoop,
+    roamingFleetSystem,
+    threatSystem,
+    game.galaxy
+  );
+  enemyStationSystem.reconstructStations();
 
   const routeSystem = new RouteSystem(game.animationLoop, roamingFleetSystem);
   routeSystem.reconstructActiveShips();

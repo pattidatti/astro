@@ -1,5 +1,6 @@
 import { gameState } from '../GameState.js';
 import { RoamingFleet3D } from './RoamingFleet3D.js';
+import { SnitchPath3D } from './SnitchPath3D.js';
 
 const POOL_SIZE = 6;
 
@@ -14,6 +15,9 @@ export class RoamingFleetManager3D {
     this._galaxy  = galaxy;
     this._pool    = [];
     this._active  = new Map(); // fleetId → RoamingFleet3D
+
+    // Phase 3: Snitch path visual (red line from snitching scout to target station)
+    this._snitchPath = new SnitchPath3D(scene);
 
     // Cached planet id list — planets never change count, safe to cache at construction
     this._allPlanetIds = Object.keys(this._galaxy.systems);
@@ -71,11 +75,38 @@ export class RoamingFleetManager3D {
 
       fleet3D.update(fromPos, toPos, fleet, avoidPositions);
     }
+
+    // Phase 3: Drive SnitchPath3D visual
+    let snitchFleet = null, snitchFleet3D = null;
+    for (const [fleetId, fleet3D] of this._active) {
+      const fleet = fleetLookup.get(fleetId);
+      if (fleet?.isSnitching && fleet.snitchTarget) {
+        snitchFleet = fleet;
+        snitchFleet3D = fleet3D;
+        break;
+      }
+    }
+    if (snitchFleet && snitchFleet3D) {
+      const toPos = this._getTargetStationPos(snitchFleet.snitchTarget);
+      if (snitchFleet3D.worldPosition && toPos) {
+        this._snitchPath.update(snitchFleet3D.worldPosition, toPos);
+      }
+    } else {
+      this._snitchPath.hide();
+    }
   }
 
   /** Get the 3D object for a fleet (used for camera tracking). */
   getFleet3D(fleetId) {
     return this._active.get(fleetId) ?? null;
+  }
+
+  /** Get world position of a target station (planet-anchored or free-floating). */
+  _getTargetStationPos(stationId) {
+    const st = gameState.enemyStations?.find(s => s.id === stationId);
+    if (!st) return null;
+    if (st.anchorPlanet) return this._galaxy.getPlanetWorldPosition(st.anchorPlanet);
+    return this._galaxy.enemyStationManager?.getStationWorldPosition(stationId) ?? null;
   }
 
   /** Get the world position of a roaming fleet (used by FleetCombatSystem for proximity checks). */

@@ -272,6 +272,25 @@ export class HUDBridge {
     gameState.on('techUnlocked', () => {
       AudioManager.play('BASE_UPGRADED');
     });
+
+    // Phase 3: Enemy Station events
+    gameState.on('stationAwakened', ({ stationId }) => {
+      const st = gameState.enemyStations?.find(s => s.id === stationId);
+      const name = st?.anchorPlanet
+        ? (PLANETS.find(p => p.id === st.anchorPlanet)?.name ?? stationId)
+        : stationId;
+      this.toast(`⚡ STATION AWAKENED: ${name}`, 'warn');
+    });
+    gameState.on('stationAlerted', ({ stationId }) => {
+      const st = gameState.enemyStations?.find(s => s.id === stationId);
+      const name = st?.anchorPlanet
+        ? (PLANETS.find(p => p.id === st.anchorPlanet)?.name ?? stationId)
+        : stationId;
+      this.toast(`🔴 STATION ALERTED: ${name}`, 'warn');
+    });
+    gameState.on('distressFlare', () => {
+      this.toast('🚨 DISTRESS FLARE DETECTED', 'error');
+    });
   }
 
   update(_dt) {

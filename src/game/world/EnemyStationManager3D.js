@@ -101,6 +101,14 @@ export class EnemyStationManager3D {
     return targets;
   }
 
+  /**
+   * Return current world position of a free-floating station (or null).
+   */
+  getStationWorldPosition(stationId) {
+    const st3D = this._activeStations.get(stationId);
+    return st3D ? st3D.group.position : null;
+  }
+
   dispose() {
     gameState.off('stateLoaded',            this._onStateLoaded);
     gameState.off('enemyStationDestroyed', this._onDestroyed);

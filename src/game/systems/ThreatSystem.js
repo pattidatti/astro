@@ -253,4 +253,62 @@ export class ThreatSystem {
       });
     }
   }
+
+  /**
+   * Spawn an invasion from an enemy station.
+   * Station invasions are NOT counted against MAX_CONCURRENT_ATTACKS.
+   * @param {string} planetId - Target player planet
+   * @param {string} stationId - Origin enemy station id
+   * @returns {boolean} - true if spawned
+   */
+  spawnStationInvasion(planetId, stationId) {
+    // Still respect "already under attack" to avoid stacking on same planet
+    if (gameState.activeAttacks.some(a => a.planetId === planetId)) return false;
+
+    const ps = gameState.getPlanetState(planetId);
+    if (!ps || !ps.hasBase || ps.combat.fallen) return false;
+
+    const threatLevel = scaleThreat(gameState.ownedPlanets.length, planetId);
+    const effectiveThreat = Math.max(threatLevel, 3);
+
+    const templates = getInvasionTemplates(effectiveThreat);
+    if (!templates.length) return false;
+
+    const template = templates[Math.floor(Math.random() * templates.length)];
+    const mothershipDef = ENEMY_TYPES.mothership;
+
+    const mothership = {
+      type: 'mothership',
+      hp: Math.floor(mothershipDef.hp * template.mothership.hpMult),
+      maxHP: Math.floor(mothershipDef.hp * template.mothership.hpMult),
+      damage: mothershipDef.damage,
+      target: mothershipDef.target,
+    };
+
+    const firstWave = template.waves[0] || [];
+    const enemies = this._createEnemiesFromComposition(firstWave, effectiveThreat);
+
+    const hasMilBase = ps?.militaryBase?.built && ps.militaryBase.hp > 0;
+
+    const attack = {
+      id: `station_invasion_${_nextAttackId++}`,
+      type: 'invasion',
+      planetId,
+      enemies,
+      mothership,
+      wave: 0,
+      waveTimer: 0,
+      elapsed: 0,
+      template: {
+        waves: template.waves,
+        spawnInterval: mothershipDef.spawnInterval,
+      },
+      targetMilitaryBase: hasMilBase,
+      fromStationId: stationId,  // Phase 3: tag for EnemyStationSystem counter tracking
+    };
+
+    gameState.activeAttacks.push(attack);
+    gameState.emit('attackStarted', { attack, planetId, type: 'invasion' });
+    return true;
+  }
 }

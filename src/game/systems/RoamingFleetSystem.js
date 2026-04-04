@@ -12,6 +12,8 @@ const INVASION_SPEED = 0.025;  // t/s between planets (free path)
 const SCOUT_SPAWN_CHANCE = 0.003;    // per second
 const INVASION_SPAWN_CHANCE = 0.001; // per second
 const INTERCEPT_THRESHOLD = 0.08;
+const SNITCH_DETECT_RADIUS = 30;   // matches ENGAGE_RADIUS from fleetCombatStats.js
+const SNITCH_SPEED = 0.03;         // slower than SCOUT_SPEED (0.04) — creates catchable window
 
 const ALL_PLANETS = ['xerion', 'drakon', 'crystara', 'voltara', 'glacius', 'nebulox', 'solaris', 'voidex'];
 
@@ -25,8 +27,10 @@ const ALL_PLANETS = ['xerion', 'drakon', 'crystara', 'voltara', 'glacius', 'nebu
  * Fleets convert to ThreatSystem attacks on reaching a player planet.
  */
 export class RoamingFleetSystem {
-  constructor(animationLoop, threatSystem) {
+  constructor(animationLoop, threatSystem, getFleetWorldPosFn = null, getStationWorldPosFn = null) {
     this._threatSystem = threatSystem;
+    this._getFleetWorldPos = getFleetWorldPosFn;
+    this._getStationWorldPos = getStationWorldPosFn;
     animationLoop.onUpdate((dt) => this._tick(dt));
   }
 
@@ -36,6 +40,7 @@ export class RoamingFleetSystem {
     this._tickInterception(clampedDt);
     this._tickDefenseShipCombat(clampedDt);
     this._tickSpawning(clampedDt);
+    this._tickSnitchBehavior(clampedDt);
   }
 
   // ─── Movement ─────────────────────────────────────────────────────────────
@@ -48,6 +53,13 @@ export class RoamingFleetSystem {
       const alive = fleet.enemies.filter(e => e.hp > 0);
       const mothershipAlive = fleet.mothership ? fleet.mothership.hp > 0 : false;
       if (alive.length === 0 && !mothershipAlive) {
+        // Phase 3: Clean up station scout tracking
+        const originStation = gameState.enemyStations?.find(s => s.scoutIds?.includes(fleet.id));
+        if (originStation) originStation.scoutIds = originStation.scoutIds.filter(id => id !== fleet.id);
+
+        // Clear snitch state (no stationAlerted emitted if killed mid-snitch)
+        if (fleet.isSnitching) this._clearSnitchState(fleet);
+
         gameState.roamingFleets.splice(i, 1);
         gameState.emit('fleetDestroyed', { fleetId: fleet.id });
         continue;
@@ -268,6 +280,11 @@ export class RoamingFleetSystem {
       mothership: null,
       notified: false,
       threatLevel,
+      // Phase 3: snitch fields
+      isSnitching: false,
+      snitchTarget: null,
+      snitchMode: null,
+      _stationOriginId: null,
     };
 
     gameState.roamingFleets.push(fleet);
@@ -329,6 +346,11 @@ export class RoamingFleetSystem {
       mothership,
       notified: false,
       threatLevel,
+      // Phase 3: snitch fields (invasions don't snitch, but keep shape uniform)
+      isSnitching: false,
+      snitchTarget: null,
+      snitchMode: null,
+      _stationOriginId: null,
     };
 
     gameState.roamingFleets.push(fleet);
@@ -341,6 +363,97 @@ export class RoamingFleetSystem {
       if (f.type !== 'scout') return false;
       return (f.fromPlanet === a && f.toPlanet === b) || (f.fromPlanet === b && f.toPlanet === a);
     });
+  }
+
+  // ─── Phase 3: Snitch behavior ─────────────────────────────────────────────
+
+  _tickSnitchBehavior(dt) {
+    for (const fleet of gameState.roamingFleets) {
+      if (fleet.type !== 'scout') continue;
+      if (!fleet.enemies.some(e => e.hp > 0)) continue;
+
+      if (!fleet.isSnitching) {
+        // Detection scan: is any player fleet within SNITCH_DETECT_RADIUS?
+        const ePos = this._getFleetWorldPos ? this._getFleetWorldPos(fleet.id) : null;
+        if (!ePos) continue;
+
+        for (const pFleet of gameState.playerFleets) {
+          if (!pFleet.ships.some(s => s.hp > 0)) continue;
+          const dx = pFleet.position.x - ePos.x;
+          const dz = pFleet.position.z - ePos.z;
+          const dist = Math.sqrt(dx * dx + dz * dz);
+          if (dist < SNITCH_DETECT_RADIUS) {
+            // Activate snitching: find nearest non-cleared, non-dormant station
+            const target = this._findNearestStation(ePos);
+            if (target) {
+              fleet.isSnitching = true;
+              fleet.snitchTarget = target.stationId;
+              fleet.snitchMode = target.viaHyperlane ? 'hyperlane' : 'freespace';
+              gameState.emit('fleetSnitching', { fleetId: fleet.id, stationId: target.stationId });
+            }
+            break;
+          }
+        }
+      } else {
+        // Already snitching: move at SNITCH_SPEED toward snitchTarget's planet
+        const targetStation = gameState.enemyStations?.find(s => s.id === fleet.snitchTarget);
+        if (!targetStation || targetStation.cleared) {
+          // Target gone — abort
+          this._clearSnitchState(fleet);
+          continue;
+        }
+
+        // Advance position
+        fleet.position = Math.min(1, fleet.position + SNITCH_SPEED * dt);
+
+        if (fleet.position >= 1) {
+          // Arrived at snitchTarget — alert the station
+          gameState.emit('stationAlerted', { stationId: fleet.snitchTarget });
+          this._clearSnitchState(fleet);
+          // Scout continues normally (picks next destination)
+          if (gameState.roamingFleets.includes(fleet)) {
+            this._pickNextDestination(fleet);
+          }
+        }
+      }
+    }
+  }
+
+  _clearSnitchState(fleet) {
+    fleet.isSnitching = false;
+    fleet.snitchTarget = null;
+    fleet.snitchMode = null;
+  }
+
+  _findNearestStation(fromPos) {
+    // fromPos is a THREE.Vector3
+    // Returns { stationId, viaHyperlane } or null
+    if (!this._getStationWorldPos) return null;
+
+    let best = null;
+    let bestDist = Infinity;
+
+    for (const st of (gameState.enemyStations || [])) {
+      if (st.cleared || st.phase === 'dormant') continue; // only alert active stations
+      const pos = this._getStationWorldPos(st.id);
+      if (!pos) continue;
+      const dx = fromPos.x - pos.x;
+      const dz = fromPos.z - pos.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = { stationId: st.id, viaHyperlane: false };
+      }
+    }
+    return best;
+  }
+
+  _pickNextDestination(fleet) {
+    // Reset position and swap source/destination for next leg
+    fleet.position = 0;
+    const tmp = fleet.fromPlanet;
+    fleet.fromPlanet = fleet.toPlanet;
+    fleet.toPlanet = tmp;
   }
 
   // ─── Public interface (mirrors HyperlanePatrolSystem) ─────────────────────
@@ -357,6 +470,67 @@ export class RoamingFleetSystem {
         (f.fromPlanet === toPlanet   && f.toPlanet === fromPlanet);
       return match && f.enemies.some(e => e.hp > 0);
     });
+  }
+
+  /**
+   * Spawn a scout fleet originating from an enemy station, targeting a player planet.
+   * Called by EnemyStationSystem._tickScoutSpawning().
+   * @param {string} stationId - The enemy station's state id (e.g. 'station_drakon')
+   * @param {string} targetPlanetId - A player-owned planet id
+   * @param {string|null} fromPlanetOverride - Explicit from-planet for free-floating stations
+   * @returns {string|null} - fleet.id on success, null on failure
+   */
+  spawnStationScout(stationId, targetPlanetId, fromPlanetOverride = null) {
+    if (gameState.roamingFleets.length >= MAX_ROAMING_FLEETS) return null;
+
+    const stState = gameState.enemyStations?.find(s => s.id === stationId);
+    if (!stState) return null;
+
+    const fromPlanet = fromPlanetOverride ?? stState.anchorPlanet;
+    if (!fromPlanet) return null;
+
+    const threatLevel = this._getMaxThreat();
+    const hpScale = 1 + Math.max(0, (threatLevel - 1)) * 0.15;
+
+    // Single interceptor scout — deliberately lightweight
+    const def = ENEMY_TYPES.interceptor;
+    const enemies = [{
+      id: `fleet_e_${_nextEnemyId++}`,
+      type: 'interceptor',
+      hp: Math.floor(def.hp * hpScale),
+      maxHP: Math.floor(def.hp * hpScale),
+      damage: def.damage,
+      speed: def.speed,
+      target: def.target,
+      stealRate: def.stealRate || 0,
+    }];
+
+    const fleet = {
+      id: `fleet_${_nextFleetId++}`,
+      type: 'scout',
+      fromPlanet,
+      toPlanet: targetPlanetId,
+      position: 0,
+      speed: SCOUT_SPEED,
+      enemies,
+      mothership: null,
+      notified: false,
+      threatLevel,
+      isSnitching: false,
+      snitchTarget: null,
+      snitchMode: null,
+      _stationOriginId: stationId,
+    };
+
+    gameState.roamingFleets.push(fleet);
+    gameState.emit('fleetSpawned', { fleet });
+    this._checkAndNotify(fleet);
+
+    // Register this scout's id with the station state so EnemyStationSystem
+    // can clean up on fleet destruction
+    stState.scoutIds.push(fleet.id);
+
+    return fleet.id;
   }
 
   /**

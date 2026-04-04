@@ -32,5 +32,6 @@ export function buildDefaultEnemyStations() {
     lastSpawnTime: 0,
     scoutIds: [],
     cleared: false,
+    distressFlareFired: false,
   }));
 }

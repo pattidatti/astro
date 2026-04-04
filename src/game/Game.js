@@ -515,6 +515,22 @@ export function createGame() {
     }
   });
 
+  // Phase 3: Enemy Station destruction VFX
+  gameState.on('enemyStationDestroyed', ({ stationId }) => {
+    const st = gameState.enemyStations?.find(s => s.id === stationId);
+    let pos = null;
+    if (st?.anchorPlanet) {
+      pos = galaxy.getPlanetWorldPosition(st.anchorPlanet);
+    } else {
+      const st3D = galaxy.enemyStationManager?._activeStations?.get(stationId);
+      if (st3D) pos = st3D.group.position.clone();
+    }
+    if (pos) {
+      combatEffects.explosion(pos, 4.0, 0xff4400);
+      if (cameraController.shake) cameraController.shake(0.12, 0.6);
+    }
+  });
+
   // Update station damage visuals per-frame
   gameState.on('stationDamaged', ({ planetId }) => {
     const sys = galaxy.getSystem(planetId);

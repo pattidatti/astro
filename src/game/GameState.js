@@ -1752,6 +1752,11 @@ class GameState extends EventEmitter {
       this.enemyStations = buildDefaultEnemyStations();
     }
 
+    // v6→v7 migration: add distressFlareFired field
+    for (const st of (this.enemyStations || [])) {
+      if (st.distressFlareFired === undefined) st.distressFlareFired = false;
+    }
+
     this.emit('stateLoaded');
     this.emit('robotHired', { planetId: this.focusedPlanet });
     this.emit('focusedPlanet', this.focusedPlanet);
