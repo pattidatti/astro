@@ -440,6 +440,9 @@ export class SolarSystem {
     // Update orbital position every frame
     this._updateOrbit(time);
 
+    // Planet geometry LOD — hi-res inside 80, lo-res beyond
+    this.planet.setLOD(distance < 80);
+
     // Planet shader
     if (distance < 180) {
       this.planet.update(time);

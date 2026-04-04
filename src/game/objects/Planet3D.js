@@ -66,10 +66,17 @@ export class Planet3D {
       },
     });
 
-    const geo = new THREE.SphereGeometry(this.radius, 64, 64);
-    this.planetMesh = new THREE.Mesh(geo, this.planetMaterial);
-    this.planetMesh.castShadow = true;
-    this.group.add(this.planetMesh);
+    // Hi-res (close) and lo-res (distant) — shared material, separate geometry
+    this._planetMeshHi = new THREE.Mesh(new THREE.SphereGeometry(this.radius, 64, 64), this.planetMaterial);
+    this._planetMeshHi.castShadow = true;
+    this.group.add(this._planetMeshHi);
+
+    this._planetMeshLo = new THREE.Mesh(new THREE.SphereGeometry(this.radius, 32, 32), this.planetMaterial);
+    this._planetMeshLo.castShadow = true;
+    this._planetMeshLo.visible = false;
+    this.group.add(this._planetMeshLo);
+
+    this.planetMesh = this._planetMeshHi; // active reference (starts hi-res)
   }
 
   _createAtmosphere() {
@@ -89,9 +96,14 @@ export class Planet3D {
       blending: THREE.AdditiveBlending,
     });
 
-    const atmGeo = new THREE.SphereGeometry(this.radius * 1.15, 48, 48);
-    this.atmosphereMesh = new THREE.Mesh(atmGeo, this.atmosphereMaterial);
-    this.group.add(this.atmosphereMesh);
+    this._atmosphereMeshHi = new THREE.Mesh(new THREE.SphereGeometry(this.radius * 1.15, 48, 48), this.atmosphereMaterial);
+    this.group.add(this._atmosphereMeshHi);
+
+    this._atmosphereMeshLo = new THREE.Mesh(new THREE.SphereGeometry(this.radius * 1.15, 24, 24), this.atmosphereMaterial);
+    this._atmosphereMeshLo.visible = false;
+    this.group.add(this._atmosphereMeshLo);
+
+    this.atmosphereMesh = this._atmosphereMeshHi; // active reference
   }
 
   _createRings() {
@@ -111,16 +123,49 @@ export class Planet3D {
       depthWrite: false,
     });
 
-    const ringGeo = new THREE.RingGeometry(innerRadius, outerRadius, 128, 1);
-    this.ringMesh = new THREE.Mesh(ringGeo, this.ringMaterial);
-    this.ringMesh.rotation.x = -Math.PI / 2 + 0.15; // slight tilt
-    this.ringMesh.receiveShadow = true;
-    this.group.add(this.ringMesh);
+    this._ringMeshHi = new THREE.Mesh(new THREE.RingGeometry(innerRadius, outerRadius, 128, 1), this.ringMaterial);
+    this._ringMeshHi.rotation.x = -Math.PI / 2 + 0.15;
+    this._ringMeshHi.receiveShadow = true;
+    this.group.add(this._ringMeshHi);
+
+    this._ringMeshLo = new THREE.Mesh(new THREE.RingGeometry(innerRadius, outerRadius, 64, 1), this.ringMaterial);
+    this._ringMeshLo.rotation.x = -Math.PI / 2 + 0.15;
+    this._ringMeshLo.receiveShadow = true;
+    this._ringMeshLo.visible = false;
+    this.group.add(this._ringMeshLo);
+
+    this.ringMesh = this._ringMeshHi; // active reference
   }
 
   /** Get the main mesh for raycasting / click detection */
   get clickTarget() {
     return this.planetMesh;
+  }
+
+  /**
+   * Switch between hi-res (distance < 80) and lo-res geometry.
+   * Called by SolarSystem.updateLOD(). Preserves current visibility state.
+   */
+  setLOD(hiRes) {
+    const nextPlanet = hiRes ? this._planetMeshHi : this._planetMeshLo;
+    const prevPlanet = hiRes ? this._planetMeshLo : this._planetMeshHi;
+    nextPlanet.visible = this.planetMesh.visible;
+    prevPlanet.visible = false;
+    this.planetMesh = nextPlanet;
+
+    const nextAtm = hiRes ? this._atmosphereMeshHi : this._atmosphereMeshLo;
+    const prevAtm = hiRes ? this._atmosphereMeshLo : this._atmosphereMeshHi;
+    nextAtm.visible = this.atmosphereMesh.visible;
+    prevAtm.visible = false;
+    this.atmosphereMesh = nextAtm;
+
+    if (this._ringMeshHi) {
+      const nextRing = hiRes ? this._ringMeshHi : this._ringMeshLo;
+      const prevRing = hiRes ? this._ringMeshLo : this._ringMeshHi;
+      nextRing.visible = this.ringMesh.visible;
+      prevRing.visible = false;
+      this.ringMesh = nextRing;
+    }
   }
 
   /** Update shader time uniform */
@@ -134,12 +179,15 @@ export class Planet3D {
   }
 
   dispose() {
-    this.planetMesh.geometry.dispose();
+    this._planetMeshHi.geometry.dispose();
+    this._planetMeshLo.geometry.dispose();
     this.planetMaterial.dispose();
-    this.atmosphereMesh.geometry.dispose();
+    this._atmosphereMeshHi.geometry.dispose();
+    this._atmosphereMeshLo.geometry.dispose();
     this.atmosphereMaterial.dispose();
-    if (this.ringMesh) {
-      this.ringMesh.geometry.dispose();
+    if (this._ringMeshHi) {
+      this._ringMeshHi.geometry.dispose();
+      this._ringMeshLo.geometry.dispose();
       this.ringMaterial.dispose();
     }
   }
