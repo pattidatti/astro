@@ -127,6 +127,21 @@ export class LandingScreen {
       document.getElementById('btn-login').style.display = 'none';
     }
 
+    // Check for auth errors from a previous redirect
+    const authErr = getAuthError();
+    if (authErr) {
+      const footerRight = document.getElementById('footer-right');
+      if (footerRight) {
+        footerRight.textContent = authErr.toUpperCase();
+        footerRight.classList.add('landing-footer-error');
+        setTimeout(() => {
+          footerRight.classList.remove('landing-footer-error');
+          this._updateFooter();
+        }, 6000);
+      }
+      clearAuthError();
+    }
+
     // If boot mode, no local save, no Firebase
     if (!this._inGame && !isFirebaseConfigured()) {
       const saves = getAllLocalSaves();
@@ -277,27 +292,24 @@ export class LandingScreen {
 
   async _handleLogin() {
     const btn = document.getElementById('btn-login');
-    const footerRight = document.getElementById('footer-right');
     btn.disabled = true;
-    btn.querySelector('.landing-btn-sub').textContent = 'Opening Google sign-in...';
+    btn.querySelector('.landing-btn-sub').textContent = 'Redirecting to Google...';
 
-    const user = await upgradeToGoogle();
-    if (user) {
-      btn.style.display = 'none';
-      this._updateFooter();
-    } else {
+    // This will trigger a page reload/redirect
+    await upgradeToGoogle();
+    
+    // If we're still here, either the redirect didn't happen yet or failed immediately
+    const err = getAuthError();
+    if (err) {
       btn.disabled = false;
       btn.querySelector('.landing-btn-sub').textContent = 'Link account for cloud saves';
-      footerRight.textContent = 'LOGIN FAILED';
-      footerRight.classList.add('landing-footer-error');
-      setTimeout(() => {
-        footerRight.classList.remove('landing-footer-error');
-        this._updateFooter();
-      }, 3000);
+      const footerRight = document.getElementById('footer-right');
+      if (footerRight) {
+        footerRight.textContent = err.toUpperCase();
+        footerRight.classList.add('landing-footer-error');
+      }
     }
   }
-
-;
 
   _showSettingsPanel() {
     const panel = this._prepareSubPanel();
