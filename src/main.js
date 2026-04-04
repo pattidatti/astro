@@ -3,7 +3,7 @@ import { AudioManager } from './game/audio/AudioManager.js';
 import { MusicManager } from './game/audio/MusicManager.js';
 import { loadFromLocal, startAutoSave, setCurrentSaveSlot, getCurrentSaveSlot } from './storage.js';
 import { initFirebase, isFirebaseConfigured } from './firebase.js';
-import { onAuthReady, signInAnon, getCurrentUser, handleAuthRedirect } from './auth.js';
+import { onAuthReady, signInAnon, getCurrentUser, handleAuthRedirect, isRedirectInProgress } from './auth.js';
 import { loadFromFirestore, startCloudSync, resolveSaveConflict } from './db.js';
 import { createGame } from './game/Game.js';
 import { HUDBridge } from './game/HUDBridge.js';
@@ -48,11 +48,22 @@ async function boot() {
   initFirebase();
 
   if (isFirebaseConfigured()) {
+    console.log('[Boot] Initializing Auth sequence...');
     // Check if we just returned from an auth redirect
     await handleAuthRedirect();
 
     onAuthReady(async (u) => {
-      if (!u) await signInAnon();
+      // ONLY trigger anonymous sign-in if:
+      // 1. No user is logged in
+      // 2. We are NOT currently in the middle of a redirect process
+      if (!u && !isRedirectInProgress()) {
+        console.log('[Boot] No user found and no redirect in progress. Signing in anonymously...');
+        await signInAnon();
+      } else if (u) {
+        console.log('[Boot] Auth ready. User:', u.email || 'Anonymous', `(${u.uid})`);
+      } else {
+        console.log('[Boot] Auth ready, but redirect is in progress. Skipping anonymous sign-in.');
+      }
     });
   }
 

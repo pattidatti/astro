@@ -1,5 +1,5 @@
 import { hasLocalSave, getAllLocalSaves, deleteLocalSave } from '../storage.js';
-import { getCurrentUser, isGoogleUser, upgradeToGoogle } from '../auth.js';
+import { getCurrentUser, isGoogleUser, upgradeToGoogle, getAuthError, clearAuthError, isRedirectInProgress } from '../auth.js';
 import { loadFromFirestore, getAllCloudSaves } from '../db.js';
 import { isFirebaseConfigured } from '../firebase.js';
 import { AudioManager } from '../game/audio/AudioManager.js';
@@ -125,6 +125,9 @@ export class LandingScreen {
     // Login button — hide if already Google user
     if (isGoogleUser()) {
       document.getElementById('btn-login').style.display = 'none';
+    } else if (isRedirectInProgress()) {
+      const loginSub = document.querySelector('#btn-login .landing-btn-sub');
+      if (loginSub) loginSub.textContent = 'Finalizing Google login...';
     }
 
     // Check for auth errors from a previous redirect

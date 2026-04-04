@@ -2,6 +2,7 @@ import { signInAnonymously, GoogleAuthProvider, linkWithRedirect, getRedirectRes
 import { auth, isFirebaseConfigured } from './firebase.js';
 
 let authError = null;
+let isRedirecting = false;
 
 export function getAuthError() {
   return authError;
@@ -9,6 +10,13 @@ export function getAuthError() {
 
 export function clearAuthError() {
   authError = null;
+}
+
+/**
+ * Returns true if we are currently awaiting or triggering an auth redirect.
+ */
+export function isRedirectInProgress() {
+  return isRedirecting;
 }
 
 export function onAuthReady(callback) {
@@ -24,10 +32,12 @@ export function onAuthReady(callback) {
 export async function signInAnon() {
   if (!auth) return null;
   try {
+    console.log('[Auth] Attempting anonymous sign-in...');
     const result = await signInAnonymously(auth);
+    console.log('[Auth] Anonymous sign-in success:', result.user.uid);
     return result.user;
   } catch (e) {
-    console.warn('Anonymous sign-in failed:', e);
+    console.warn('[Auth] Anonymous sign-in failed:', e);
     return null;
   }
 }
@@ -49,27 +59,33 @@ export function isGoogleUser() {
 export async function handleAuthRedirect() {
   if (!auth) return null;
   
+  console.log('[Auth] Checking for redirect result...');
+  isRedirecting = true;
+  
   try {
     const result = await getRedirectResult(auth);
     if (result) {
-      console.log('Auth redirect success:', result.user.email);
+      console.log('[Auth] Redirect success! User:', result.user.email);
+      isRedirecting = false;
       return result.user;
     }
+    console.log('[Auth] No redirect result found.');
   } catch (e) {
-    console.warn('Auth redirect error:', e);
+    console.error('[Auth] Redirect error:', e.code, e.message);
     
     // If account already exists, we must sign in directly instead of linking
     if (e.code === 'auth/credential-already-in-use') {
-      console.log('Account exists — re-triggering redirect for sign-in...');
+      console.log('[Auth] Conflict: Account already exists. Switching to direct sign-in redirect...');
       const provider = new GoogleAuthProvider();
+      // Keep isRedirecting = true because page will reload
       await signInWithRedirect(auth, provider);
       return null;
     }
     
     authError = mapAuthError(e);
-    return null;
   }
   
+  isRedirecting = false;
   return null;
 }
 
@@ -78,11 +94,15 @@ export async function upgradeToGoogle() {
   const provider = new GoogleAuthProvider();
   clearAuthError();
   
+  console.log('[Auth] Starting Google link redirect...');
+  isRedirecting = true;
+  
   try {
     // Start redirect flow to link account
     await linkWithRedirect(auth.currentUser, provider);
   } catch (e) {
-    console.warn('Redirect trigger failed:', e);
+    console.error('[Auth] Redirect trigger failed:', e);
+    isRedirecting = false;
     authError = mapAuthError(e);
     return null;
   }
