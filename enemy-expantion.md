@@ -32,11 +32,16 @@ Independent elliptical orbits around the central sun. Generic visual style (host
 ```js
 // galaxyLayout.js
 FREE_FLOATING_BASES: [
-  { id: 'outpost_alpha', orbitRadius: 550,  orbitAngle: Math.PI * 0.3, orbitSpeed: 0.003, inclination: 0.05 },
-  { id: 'outpost_beta',  orbitRadius: 950,  orbitAngle: Math.PI * 1.1, orbitSpeed: 0.002, inclination: 0.07 },
-  { id: 'outpost_gamma', orbitRadius: 1250, orbitAngle: Math.PI * 1.7, orbitSpeed: 0.001, inclination: 0.04 },
+  { id: 'outpost_alpha', orbitRadius: 550,  orbitAngle: Math.PI * 0.3, orbitSpeed: 0.003, inclination: 0.05,
+    patrolLanes: [['crystara', 'glacius']] },
+  { id: 'outpost_beta',  orbitRadius: 950,  orbitAngle: Math.PI * 1.1, orbitSpeed: 0.002, inclination: 0.07,
+    patrolLanes: [['drakon', 'voidex']] },
+  { id: 'outpost_gamma', orbitRadius: 1250, orbitAngle: Math.PI * 1.7, orbitSpeed: 0.001, inclination: 0.04,
+    patrolLanes: [['xerion', 'drakon']] },
 ]
 ```
+
+> **Merk:** Det er ikke stasjonene selv som blokkerer hyperlaner — det er patrol-skipene de sender ut. Outpost-spawnte scouts f\u00e5r `fromPlanet`/`toPlanet` fra den konfigurerte `patrolLanes`-lista, slik at de fungerer med det eksisterende `isLaneBlocked()`-systemet.
 
 ---
 
@@ -69,22 +74,26 @@ Skirmish──[station takes direct damage]──────► War
 ### Distress Flare
 At **< 15% HP**: a pulsating red particle pillar (200 units high, `MiningBurst`-style emitter) appears — **purely visual**. Simultaneously, a snitch scout is dispatched toward the nearest neighboring station, which triggers that station's Alert phase on arrival via the normal snitch mechanic.
 
+> **Chain-reaksjon cap:** Maks 1 ledd. En stasjon som blir alertet via distress flare sender **ikke** sin egen distress flare videre — den kan fortsatt produsere vanlige snitch-scouts, men ingen kaskade av distress-kallet.
+
 ---
 
 ## 4. The Snitch Mechanic
 
 When a scout fleet **witnesses a battle** (a player fleet engages any entity within proximity of the scout):
 
-- Scout sets `isSnitching: true`, `snitchTarget: nearestStationId`
-- Scout flees along the hyperlane graph toward the target station
-- **Speed**: 0.03 units/s (player interceptors move at 0.05 — a narrow but real catch window)
+- Scout sets `isSnitching: true`, `snitchTarget: nearestStationId`, `snitchMode: 'hyperlane' | 'freespace'`
+- Scout flees toward the target station:
+  - **`snitchMode: 'hyperlane'`** — planet-anchored stations: navigerer langs hyperlane-grafen
+  - **`snitchMode: 'freespace'`** — free-floating outposts: reiser i rett linje gjennom fri rom
+- **Speed**: 0.03 units/s (player fleet speed is typically 0.05+ — a narrow but real catch window)
 - **Red Path Visual**: a solid red `LineSegments` line renders from the scout's current position to its destination station (no particles — distinct from `RouteLane3D`)
 - **On arrival**: destination station immediately advances to Alert phase; emits `stationAlerted` event
-- **Chain reaction**: the newly alerted station spawns its own scouts, which can snitch further
+- **Chain reaction**: the newly alerted station spawns its own scouts, which can snitch further (but does **not** re-dispatch a distress flare — max 1 chain for distress)
 
 **Implementation:**
 - Extend `RoamingFleetSystem` with `_tickSnitchBehavior()`
-- Add `isSnitching: bool`, `snitchTarget: string | null` to roaming fleet state
+- Add `isSnitching: bool`, `snitchTarget: string | null`, `snitchMode: 'hyperlane' | 'freespace'` to roaming fleet state
 - New file: `src/game/world/SnitchPath3D.js` — `LineSegments` rendered per active snitching scout
 
 ---
@@ -105,6 +114,7 @@ Station-spawned scout fleets use the **existing `isLaneBlocked()` system** in `R
 ### Flow
 1. Player enters Admiral Mode (V key) and **box-selects** ships
 2. **Left-click** on enemy station mesh → `EnemyStationPanel` opens (HP/shield bars, phase, type, debuff info)
+   - Disambiguering fra box-select: `InputManager` bruker **5px drag-threshold**. Hvis musen beveger seg < 5px mellom `mousedown` og `mouseup` = klikk (panel åpnes). Hvis > 5px = box-select starter.
 3. **Right-click** on station with ships selected → station set as attack waypoint in `FleetMovementSystem`
 4. Fleet arrives within **~20 units** → `FleetCombatSystem._tickStationCombat()` activates
 
@@ -127,7 +137,7 @@ Upon station destruction, **3–5 persistent debris nodes** spawn at the station
 
 ### Scavenger Ship (New Unit)
 
-Built on the **military base**, deployed manually in Admiral Mode.
+Built on the **military base**, deployed manually in Admiral Mode. Deployes som **solo-flåte** (1 skip = eget entry i `playerFleets[]`) — ikke som del av en multi-skip flåte. Dette unngår behov for per-skip seleksjon innad i en flåte.
 
 ```js
 // militaryShips.js
@@ -148,7 +158,7 @@ Built on the **military base**, deployed manually in Admiral Mode.
 - When within `tractorRange` (15 units) and stationary: tractor beam activates
   - Visual: amber `LineSegments` from scavenger to each nearby wreckage node
   - Floating "+N ore/crystal" numbers drift upward
-  - Resources fill the scavenger's hold; overflow distributed to nearby Carriers
+  - Resources fill the scavenger's hold; **når holdet er fullt stopper tractor beam** (overflow til Carriers er ikke i scope for v1)
 - Player delivers by **right-clicking a target** (owned planet / Station3D / military base) with the scavenger selected
   - Ship flies to target and auto-docks
   - Visual: beam to silo + "+N ore/crystal" floating confirmation numbers
@@ -162,9 +172,12 @@ Admiral Mode (V key) is a **camera mode only** — isometric RTS view with box-s
 
 ### Emergency Jump (Fleet Ability)
 - **Cost**: 40% of fleet's `supply.energy.max` — blocked if current energy < 40% max
-- **Cooldown**: 300 seconds — visualized as a pie-chart overlay on the fleet icon in `PlayerFleetPanel`
+- **Cooldown**: 300 seconds — visualized as a fill-bar (samme mønster som Titan Ultimate: `pfp-cooldown-bar-wrap` / `pfp-cd-fill`) i `PlayerFleetPanel`
 - **Target**: auto-selects nearest owned `Station3D` or military base (shortest 3D distance)
-- **Effect**: instant teleport + `WarpDistortionEffect` (0.4s radial blur shader) + audio "pop"
+  - `FleetMovementSystem` kaller `this._galaxy.getOwnedStationPositions()` → `[{planetId, worldPos}]`
+  - `Galaxy.js` eksponerer `getOwnedStationPositions()` — ny metode
+  - `FleetMovementSystem.setGalaxy(galaxy)` settes ved init i `Game.js`
+- **Effect**: instant teleport + `WarpDistortionEffect` (0.4s full GLSL radial blur shader i `RenderPipeline.js`, uniform: `uCenter`, `uStrength`, `uProgress`) + audio "pop"
 - **Button**: in `PlayerFleetPanel`, below the Titan button
 
 ### Auto-Resupply at Friendly Stations
@@ -205,7 +218,7 @@ When a player fleet orbits a friendly `Station3D` or military base:
 ### `GameState` additions
 
 ```js
-// Persisted (save v4)
+// Persisted (save v6 — kodebasen var på v5, dette bumper til v6)
 enemyStations: [
   {
     id: 'station_drakon',
@@ -216,11 +229,22 @@ enemyStations: [
     shieldHP: number,
     shieldMaxHP: number,
     phase: 'dormant' | 'alert' | 'skirmish' | 'war',
-    lastSpawnTime: number,
+    lastSpawnTime: number,           // for 180s invasion cooldown (War phase)
     scoutIds: string[],              // active scout fleet IDs spawned by this station
     cleared: boolean,
   }
 ]
+
+// Also persisted (save v6)
+stationSieges: [
+  {
+    id: string,
+    playerFleetId: string,
+    enemyStationId: string,
+    elapsed: number,
+  }
+]
+// reconstructSieges() called on load, analogous to reconstructEngagements()
 
 // Runtime only (not persisted)
 wreckageFields: [
@@ -241,9 +265,9 @@ scavengerHolds: [
 
 ## 11. Technical Implementation Roadmap
 
-- [ ] **Phase 1 — Data & State**: `GameState` additions + save v4 migration; `galaxyLayout.js` free-floating base params; `militaryShips.js` scavenger type; `techTree.js` scavenger_vessels node
-- [ ] **Phase 2 — 3D Visuals**: `EnemyStation3D.js` (4 typed + generic variants, phase-based emissive animation, HP bar); integrate into `SolarSystem.js` (radius 50) and `Galaxy.js` (orbital update loop); `Minimap.js` red diamonds
-- [ ] **Phase 3 — State Machine & Escalation**: `EnemyStationSystem.js` (Dormant→Alert→Skirmish→War); awakening triggers in `ThreatSystem` and proximity check; `RoamingFleetSystem` station spawn source + `_tickSnitchBehavior()`; `SnitchPath3D.js` red line visual; distress flare particle effect
-- [ ] **Phase 4 — Station Combat**: `FleetCombatSystem._tickStationCombat()` (bidirectional DPS, shield, phase-scaled retaliation, type debuffs); `FleetMovementSystem` station as stationary attack target; `InputManager` click handling; `EnemyStationPanel.js`; station destruction → wreckage spawn
-- [ ] **Phase 5 — Scavenger & Wreckage**: `WreckageField.js` (debris nodes, resource pools, 10-min lifetime); scavenger tractor beam + hold + delivery flow; auto-resupply beam at friendly stations; `HUDBridge` + `CombatHUD` notifications
-- [ ] **Phase 6 — Emergency Jump & Polish**: `PlayerFleetPanel` Emergency Jump button + 300s pie-chart; `WarpDistortionEffect` shader; audio pass (hums, sirens, crash, warp pop); `HUD.css` new styles
+- [ ] **Phase 1 — Data & State**: `GameState` additions + save **v6** migration (`enemyStations[]`, `stationSieges[]`, runtime `wreckageFields[]`/`scavengerHolds[]`); `galaxyLayout.js` free-floating base params + `patrolLanes`; `militaryShips.js` scavenger type (solo-fleet deploy); `techTree.js` scavenger_vessels node; ny `src/game/data/enemyStations.js` med 7 stasjonsdefinitioner
+- [ ] **Phase 2 — 3D Visuals**: `EnemyStation3D.js` (**fra scratch**, ~200 linjer, 5 varianter, fase-basert emissiv, HP-bar Mothership3D-mønster, shield dome); `EnemyStationManager3D.js`; integrer i `SolarSystem.js` (radius 50) og `Galaxy.js` (orbital update loop + `getOwnedStationPositions()` + rename `getStationClickTargets()` → `getPlayerStationClickTargets()`); `Minimap.js` røde diamanter; `SnitchPath3D.js`
+- [ ] **Phase 3 — State Machine & Escalation**: `EnemyStationSystem.js` (Dormant→Alert→Skirmish→War, **180s invasion cooldown** via `lastSpawnTime`); awakening triggers i `ThreatSystem`; proximity check; `RoamingFleetSystem` station spawn source + `_tickSnitchBehavior()` (to modi: hyperlane/freespace); distress flare (**maks 1 ledd**)
+- [ ] **Phase 4 — Station Combat**: `FleetCombatSystem._tickStationCombat()` + `reconstructSieges()`; `FleetMovementSystem` stasjon som stationary angrepswaypoint + `setGalaxy()` + Emergency Jump `_execEmergencyJump()`; `InputManager` **5px drag-threshold** for klikk vs box-select; `EnemyStationPanel.js`; stasjonsdestuksjon → wreckage spawn
+- [ ] **Phase 5 — Scavenger & Wreckage**: `WreckageField3D.js` (debris nodes, resource pools, 10-min lifetime); scavenger tractor beam + hold (**fullt hold = stopper innsamling**) + delivery flow; auto-resupply ved `Station3D` (30/s); `RouteLane3D.setBlocked()`; `HUDBridge` + `CombatHUD` notifikasjoner
+- [ ] **Phase 6 — Emergency Jump & Polish**: `PlayerFleetPanel` Emergency Jump-knapp + 300s **fill-bar** (ikke pie-chart — følger Titan-mønster); **full GLSL radial blur shader** i `RenderPipeline.js` (`WarpDistortionEffect`, uniform: uCenter/uStrength/uProgress); audio pass (hums, sirens, crash, warp pop); `HUD.css` nye stiler
