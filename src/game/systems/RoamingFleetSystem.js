@@ -68,6 +68,9 @@ export class RoamingFleetSystem {
       // Pause movement if engaged in fleet combat
       if (gameState.getEngagementForFleet(fleet.id)) continue;
 
+      // Phase 3: Snitch fleets are driven by _tickSnitchBehavior, not _tickMovement
+      if (fleet.isSnitching) continue;
+
       fleet.position = Math.min(1, fleet.position + fleet.speed * dt);
       gameState.emit('fleetMoved', { fleetId: fleet.id, position: fleet.position });
 
@@ -379,6 +382,7 @@ export class RoamingFleetSystem {
 
         for (const pFleet of gameState.playerFleets) {
           if (!pFleet.ships.some(s => s.hp > 0)) continue;
+          if (!pFleet.position) continue; // fleet position not yet initialized
           const dx = pFleet.position.x - ePos.x;
           const dz = pFleet.position.z - ePos.z;
           const dist = Math.sqrt(dx * dx + dz * dz);
@@ -448,14 +452,6 @@ export class RoamingFleetSystem {
     return best;
   }
 
-  _pickNextDestination(fleet) {
-    // Reset position and swap source/destination for next leg
-    fleet.position = 0;
-    const tmp = fleet.fromPlanet;
-    fleet.fromPlanet = fleet.toPlanet;
-    fleet.toPlanet = tmp;
-  }
-
   // ─── Public interface (mirrors HyperlanePatrolSystem) ─────────────────────
 
   /**
@@ -488,6 +484,7 @@ export class RoamingFleetSystem {
 
     const fromPlanet = fromPlanetOverride ?? stState.anchorPlanet;
     if (!fromPlanet) return null;
+    if (fromPlanet === targetPlanetId) return null; // can't spawn fleet with same source/dest
 
     const threatLevel = this._getMaxThreat();
     const hpScale = 1 + Math.max(0, (threatLevel - 1)) * 0.15;
@@ -528,7 +525,7 @@ export class RoamingFleetSystem {
 
     // Register this scout's id with the station state so EnemyStationSystem
     // can clean up on fleet destruction
-    stState.scoutIds.push(fleet.id);
+    (stState.scoutIds ??= []).push(fleet.id);
 
     return fleet.id;
   }

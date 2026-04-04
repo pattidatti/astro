@@ -36,7 +36,7 @@ export class CombatSystem {
         // Planet no longer valid — end attack
         gameState.activeAttacks.splice(i, 1);
         gameState.lastAttackTime[attack.planetId] = Date.now();
-        gameState.emit('attackEnded', { attackId: attack.id, planetId: attack.planetId, reason: 'invalid' });
+        gameState.emit('attackEnded', { attackId: attack.id, attack, planetId: attack.planetId, reason: 'invalid' });
         continue;
       }
 
@@ -61,7 +61,7 @@ export class CombatSystem {
       if (allEnemiesDead && mothershipDead && wavesComplete) {
         gameState.activeAttacks.splice(i, 1);
         gameState.lastAttackTime[attack.planetId] = Date.now();
-        gameState.emit('attackEnded', { attackId: attack.id, planetId: attack.planetId, reason: 'victory' });
+        gameState.emit('attackEnded', { attackId: attack.id, attack, planetId: attack.planetId, reason: 'victory' });
       }
     }
 

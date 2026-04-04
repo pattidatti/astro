@@ -46,7 +46,11 @@ export class RoamingFleetManager3D {
 
   /** Called by Galaxy.update() each frame. */
   update(dt, time) {
-    if (this._active.size === 0) return;
+    // Phase 3: Always update snitch path (even if no fleets active) — must hide if needed
+    if (this._active.size === 0) {
+      this._snitchPath.hide();
+      return;
+    }
 
     // O(1) fleet lookup — avoids O(n) find() inside the per-fleet loop
     const fleetLookup = new Map(gameState.roamingFleets.map(f => [f.id, f]));

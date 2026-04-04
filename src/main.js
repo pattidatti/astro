@@ -126,7 +126,13 @@ async function boot() {
     game.animationLoop,
     threatSystem,
     (fleetId) => game.galaxy?.roamingFleetManager?.getFleetWorldPosition(fleetId) ?? null,
-    (stationId) => game.galaxy?.enemyStationManager?.getStationWorldPosition(stationId) ?? null
+    (stationId) => {
+      // Support both planet-anchored and free-floating stations
+      const st = gameState.enemyStations?.find(s => s.id === stationId);
+      if (!st) return null;
+      if (st.anchorPlanet) return game.galaxy?.getPlanetWorldPosition(st.anchorPlanet) ?? null;
+      return game.galaxy?.enemyStationManager?.getStationWorldPosition(stationId) ?? null;
+    }
   );
   roamingFleetSystem.reconstructFleets();
 

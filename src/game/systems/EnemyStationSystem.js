@@ -164,9 +164,9 @@ export class EnemyStationSystem {
   _onHullDamaged(stationId) {
     const st = gameState.enemyStations?.find(s => s.id === stationId);
     if (!st || st.cleared) return;
-    if (st.phase === 'dormant') this._awakenStation(st); // wake before escalating
-    if (st.phase !== 'war') {
-      st.phase = 'war';
+    const prev = st.phase;
+    st.phase = 'war'; // direct damage escalates immediately to war
+    if (prev !== 'war') {
       gameState.emit('stationPhaseChanged', { stationId: st.id, phase: 'war' });
     }
   }
@@ -257,7 +257,7 @@ export class EnemyStationSystem {
     for (const st of gameState.enemyStations) {
       if (st.cleared || st.distressFlareFired) continue;
       if (st.phase === 'dormant') continue;
-      if (st.hp / st.maxHP > DISTRESS_HP_THRESHOLD) continue;
+      if (!st.maxHP || st.hp / st.maxHP > DISTRESS_HP_THRESHOLD) continue;
 
       // Prevent flare from a station that was itself alerted by a flare
       if (this._flareReceivers.has(st.id)) continue;
@@ -288,13 +288,15 @@ export class EnemyStationSystem {
         // Mark neighbor as a flare receiver (chain cap = 1)
         this._flareReceivers.add(nearestNeighbor.id);
 
-        // Directly alert the neighbor (immediate effect)
-        this._awakenStation(nearestNeighbor);
-        if (nearestNeighbor.phase !== 'war') {
-          nearestNeighbor.phase = 'alert';
+        // Directly alert the neighbor (immediate effect) — only if dormant or can upgrade to alert
+        if (nearestNeighbor.phase === 'dormant') {
+          this._awakenStation(nearestNeighbor);
           gameState.emit('stationAlerted', { stationId: nearestNeighbor.id });
-          gameState.emit('stationPhaseChanged', { stationId: nearestNeighbor.id, phase: 'alert' });
+        } else if (nearestNeighbor.phase === 'alert') {
+          // Already alert — no change
+          gameState.emit('stationAlerted', { stationId: nearestNeighbor.id });
         }
+        // If already skirmish or war, distress flare has no effect
       }
     }
   }
