@@ -19,6 +19,7 @@ export class CombatSystem {
   constructor(animationLoop, threatSystem) {
     this._threatSystem = threatSystem;
     this._focusTargets = {}; // planetId → enemyId (player focus-fire target)
+    this._aliveEnemiesScratch = []; // reused per tick to avoid filter() array allocations
     animationLoop.onUpdate((dt) => this._tick(dt));
   }
 
@@ -88,7 +89,10 @@ export class CombatSystem {
 
     // ── Defenses fire at enemies ──
     const focusTarget = this._focusTargets[planetId];
-    const aliveEnemies = attack.enemies.filter(e => e.hp > 0);
+    // Reuse scratch array — avoids new array allocation on every tick
+    const aliveEnemies = this._aliveEnemiesScratch;
+    aliveEnemies.length = 0;
+    for (const e of attack.enemies) { if (e.hp > 0) aliveEnemies.push(e); }
 
     for (const [typeId, level] of Object.entries(combat.defenses)) {
       if (level <= 0) continue;
@@ -235,7 +239,10 @@ export class CombatSystem {
 
     // Calculate defense DPS
     const defenseDPS = calcDefenseDPS(combat);
-    const aliveEnemies = attack.enemies.filter(e => e.hp > 0);
+    // Reuse scratch array — avoids new array allocation on every tick
+    const aliveEnemies = this._aliveEnemiesScratch;
+    aliveEnemies.length = 0;
+    for (const e of attack.enemies) { if (e.hp > 0) aliveEnemies.push(e); }
 
     // Apply defense damage to enemies (distributed evenly)
     if (aliveEnemies.length > 0 && defenseDPS > 0) {

@@ -15,6 +15,9 @@ export class RoamingFleetManager3D {
     this._pool    = [];
     this._active  = new Map(); // fleetId → RoamingFleet3D
 
+    // Cached planet id list — planets never change count, safe to cache at construction
+    this._allPlanetIds = Object.keys(this._galaxy.systems);
+
     // Pre-allocate pool
     for (let i = 0; i < POOL_SIZE; i++) {
       this._pool.push(new RoamingFleet3D(scene));
@@ -39,11 +42,18 @@ export class RoamingFleetManager3D {
 
   /** Called by Galaxy.update() each frame. */
   update(dt, time) {
-    // Gather all live planet positions once per frame for avoidance computation
-    const allPlanetIds = Object.keys(this._galaxy.systems);
+    if (this._active.size === 0) return;
+
+    // O(1) fleet lookup — avoids O(n) find() inside the per-fleet loop
+    const fleetLookup = new Map(gameState.roamingFleets.map(f => [f.id, f]));
+
+    // Build full avoidance position list once per frame (not per fleet)
+    const allAvoidPositions = this._allPlanetIds
+      .map(id => this._galaxy.getPlanetWorldPosition(id))
+      .filter(Boolean);
 
     for (const [fleetId, fleet3D] of this._active) {
-      const fleet = gameState.roamingFleets.find(f => f.id === fleetId);
+      const fleet = fleetLookup.get(fleetId);
       if (!fleet) {
         this._onRemoved(fleetId);
         continue;
@@ -51,11 +61,11 @@ export class RoamingFleetManager3D {
       const fromPos = this._galaxy.getPlanetWorldPosition(fleet.fromPlanet);
       const toPos   = this._galaxy.getPlanetWorldPosition(fleet.toPlanet);
 
-      // Bystander planet positions (exclude source and destination)
-      const avoidPositions = allPlanetIds
-        .filter(id => id !== fleet.fromPlanet && id !== fleet.toPlanet)
-        .map(id => this._galaxy.getPlanetWorldPosition(id))
-        .filter(Boolean);
+      // Exclude source and destination planets from avoidance (by index)
+      const avoidPositions = allAvoidPositions.filter(
+        (_, i) => this._allPlanetIds[i] !== fleet.fromPlanet &&
+                  this._allPlanetIds[i] !== fleet.toPlanet
+      );
 
       fleet3D.update(fromPos, toPos, fleet, avoidPositions);
     }

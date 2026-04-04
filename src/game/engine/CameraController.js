@@ -51,6 +51,15 @@ export class CameraController {
 
     this._lastZoom = 0;
 
+    // Scratch vectors — pre-allocated to avoid GC pressure from per-frame new THREE.Vector3()
+    // Each has a single designated usage domain; never shared across async boundaries.
+    this._scratchDir     = new THREE.Vector3(); // free-fly getWorldDirection / orbital WASD forward
+    this._scratchRight   = new THREE.Vector3(); // free-fly right / orbital WASD right
+    this._scratchUp      = new THREE.Vector3(0, 1, 0); // constant up axis for crossVectors
+    this._scratchOffset  = new THREE.Vector3(); // _updateCameraPosition: setFromSpherical result
+    this._scratchNewPos  = new THREE.Vector3(); // _updateCameraPosition: candidate camera position
+    this._scratchPushDir = new THREE.Vector3(); // _updateCameraPosition: collision push direction
+
     this._bindEvents();
     this._updateCameraPosition();
   }
@@ -247,15 +256,13 @@ export class CameraController {
     if (this.freeMode) {
       // ── Free-fly mode (Shift held) ────────────────────────────────────────
       const speed = FREE_MOVE_SPEED * dt;
-      const dir = new THREE.Vector3();
-      this.camera.getWorldDirection(dir);
-      const right = new THREE.Vector3();
-      right.crossVectors(dir, this.camera.up).normalize();
+      this.camera.getWorldDirection(this._scratchDir);
+      this._scratchRight.crossVectors(this._scratchDir, this.camera.up).normalize();
 
-      if (this.keys['KeyW']) this.camera.position.addScaledVector(dir, speed);
-      if (this.keys['KeyS']) this.camera.position.addScaledVector(dir, -speed);
-      if (this.keys['KeyA']) this.camera.position.addScaledVector(right, -speed);
-      if (this.keys['KeyD']) this.camera.position.addScaledVector(right, speed);
+      if (this.keys['KeyW']) this.camera.position.addScaledVector(this._scratchDir, speed);
+      if (this.keys['KeyS']) this.camera.position.addScaledVector(this._scratchDir, -speed);
+      if (this.keys['KeyA']) this.camera.position.addScaledVector(this._scratchRight, -speed);
+      if (this.keys['KeyD']) this.camera.position.addScaledVector(this._scratchRight, speed);
       if (this.keys['Space']) this.camera.position.y += speed;
       if (this.keys['KeyC']) this.camera.position.y -= speed;
       return; // free mode skips orbital logic entirely
@@ -268,16 +275,15 @@ export class CameraController {
       if (wasdKeys) {
         this._trackFn = null; // manual pan cancels object tracking
         const panSpeed = this.spherical.radius * 0.5 * dt;
-        const forward = new THREE.Vector3();
-        this.camera.getWorldDirection(forward);
-        forward.y = 0;
-        if (forward.lengthSq() < 0.0001) forward.set(0, 0, -1);
-        forward.normalize();
-        const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
-        if (this.keys['KeyW']) this.targetTarget.addScaledVector(forward, panSpeed);
-        if (this.keys['KeyS']) this.targetTarget.addScaledVector(forward, -panSpeed);
-        if (this.keys['KeyA']) this.targetTarget.addScaledVector(right, -panSpeed);
-        if (this.keys['KeyD']) this.targetTarget.addScaledVector(right, panSpeed);
+        this.camera.getWorldDirection(this._scratchDir);
+        this._scratchDir.y = 0;
+        if (this._scratchDir.lengthSq() < 0.0001) this._scratchDir.set(0, 0, -1);
+        this._scratchDir.normalize();
+        this._scratchRight.crossVectors(this._scratchDir, this._scratchUp).normalize();
+        if (this.keys['KeyW']) this.targetTarget.addScaledVector(this._scratchDir, panSpeed);
+        if (this.keys['KeyS']) this.targetTarget.addScaledVector(this._scratchDir, -panSpeed);
+        if (this.keys['KeyA']) this.targetTarget.addScaledVector(this._scratchRight, -panSpeed);
+        if (this.keys['KeyD']) this.targetTarget.addScaledVector(this._scratchRight, panSpeed);
       }
       // Lock phi and clamp radius
       this.targetSpherical.phi    = RTS_PHI;
@@ -288,16 +294,15 @@ export class CameraController {
       if (wasdKeys) {
         this._trackFn = null;
         const panSpeed = this.spherical.radius * 0.8 * dt;
-        const forward = new THREE.Vector3();
-        this.camera.getWorldDirection(forward);
-        forward.y = 0;
-        if (forward.lengthSq() < 0.0001) forward.set(0, 0, -1);
-        forward.normalize();
-        const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
-        if (this.keys['KeyW']) this.targetTarget.addScaledVector(forward, panSpeed);
-        if (this.keys['KeyS']) this.targetTarget.addScaledVector(forward, -panSpeed);
-        if (this.keys['KeyA']) this.targetTarget.addScaledVector(right, -panSpeed);
-        if (this.keys['KeyD']) this.targetTarget.addScaledVector(right, panSpeed);
+        this.camera.getWorldDirection(this._scratchDir);
+        this._scratchDir.y = 0;
+        if (this._scratchDir.lengthSq() < 0.0001) this._scratchDir.set(0, 0, -1);
+        this._scratchDir.normalize();
+        this._scratchRight.crossVectors(this._scratchDir, this._scratchUp).normalize();
+        if (this.keys['KeyW']) this.targetTarget.addScaledVector(this._scratchDir, panSpeed);
+        if (this.keys['KeyS']) this.targetTarget.addScaledVector(this._scratchDir, -panSpeed);
+        if (this.keys['KeyA']) this.targetTarget.addScaledVector(this._scratchRight, -panSpeed);
+        if (this.keys['KeyD']) this.targetTarget.addScaledVector(this._scratchRight, panSpeed);
       }
 
       // Restore zoom after punch
@@ -335,25 +340,25 @@ export class CameraController {
   }
 
   _updateCameraPosition() {
-    const offset = new THREE.Vector3().setFromSpherical(this.spherical);
-    const newPos = new THREE.Vector3().copy(this.target).add(offset);
+    this._scratchOffset.setFromSpherical(this.spherical);
+    this._scratchNewPos.copy(this.target).add(this._scratchOffset);
 
     // Planet collision: prevent camera from entering planet sphere
     if (this._planetColliders) {
       for (const { position, radius } of this._planetColliders) {
         const minDist = radius + PLANET_BUFFER;
-        if (newPos.distanceTo(position) < minDist) {
-          const dir = newPos.clone().sub(position);
-          if (dir.lengthSq() < 0.0001) dir.set(0, 1, 0);
-          dir.normalize();
-          newPos.copy(position).addScaledVector(dir, minDist);
-          this.spherical.radius = newPos.distanceTo(this.target);
+        if (this._scratchNewPos.distanceTo(position) < minDist) {
+          this._scratchPushDir.copy(this._scratchNewPos).sub(position);
+          if (this._scratchPushDir.lengthSq() < 0.0001) this._scratchPushDir.set(0, 1, 0);
+          this._scratchPushDir.normalize();
+          this._scratchNewPos.copy(position).addScaledVector(this._scratchPushDir, minDist);
+          this.spherical.radius = this._scratchNewPos.distanceTo(this.target);
           this.targetSpherical.radius = Math.max(this.targetSpherical.radius, this.spherical.radius);
         }
       }
     }
 
-    this.camera.position.copy(newPos);
+    this.camera.position.copy(this._scratchNewPos);
     this.camera.lookAt(this.target);
 
     // Dynamic near/far based on zoom distance to reduce Z-fighting
