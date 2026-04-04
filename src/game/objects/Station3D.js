@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { gameState } from '../GameState.js';
 
 const HULL      = 0xc8c0b0;
@@ -31,6 +32,7 @@ export class Station3D {
     this._flashState     = 0;
     this._flashTimer     = 0;
     this._flashCount     = 0;
+    this._mergedGeos     = [];
 
     this._build();
     this.orbitAngle  = Math.random() * Math.PI * 2;
@@ -53,6 +55,7 @@ export class Station3D {
     this._buildSolarMasts();
     this._buildEngineSection();
     this._buildAntennaArray();
+    this._batchStaticGeometry();
     this.group.scale.setScalar(0.75);
   }
 
@@ -123,6 +126,7 @@ export class Station3D {
         const win = this._mk(new THREE.PlaneGeometry(0.10, 0.065), mat);
         win.position.set(Math.cos(a) * 0.83, wy, Math.sin(a) * 0.83);
         win.rotation.y = -(a - Math.PI / 2);
+        win.userData.animated = true;
         this._windows.push({ mat, phase: (row * 10 + w) * 0.628 });
         G.add(win);
       }
@@ -154,6 +158,7 @@ export class Station3D {
       win.position.set(Math.cos(a) * 0.40, 2.01, Math.sin(a) * 0.40);
       win.rotation.y = -(a - Math.PI / 2);
       win.rotation.z = 0.28;
+      win.userData.animated = true;
       this._windows.push({ mat, phase: i * 0.785 + 3.14 });
       G.add(win);
     }
@@ -175,13 +180,16 @@ export class Station3D {
       metalness: 0.3, roughness: 0.5,
     });
     this._reactor = this._mk(new THREE.SphereGeometry(0.38, 18, 18), reactorMat);
+    this._reactor.userData.animated = true;
     G.add(this._reactor);
 
     this._reactorRing = this._mk(new THREE.TorusGeometry(0.54, 0.028, 8, 32), this._gm());
+    this._reactorRing.userData.animated = true;
     G.add(this._reactorRing);
 
     this._reactorRing2 = this._mk(new THREE.TorusGeometry(0.54, 0.022, 8, 32), this._gm());
     this._reactorRing2.rotation.x = Math.PI / 2;
+    this._reactorRing2.userData.animated = true;
     G.add(this._reactorRing2);
 
     // 4 containment half-arcs
@@ -259,6 +267,7 @@ export class Station3D {
         });
         const win = this._mk(new THREE.PlaneGeometry(0.10, 0.08), mat);
         win.position.set(-0.26 + w * 0.26, 0.04, 0.23);
+        win.userData.animated = true;
         this._windows.push({ mat, phase: j * 3 + w + 10.0 });
         pg.add(win);
       }
@@ -267,6 +276,7 @@ export class Station3D {
       const navMat = new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 3.0 });
       const nav = this._mk(new THREE.SphereGeometry(0.04, 5, 5), navMat);
       nav.position.set(0, 0.24, 0);
+      nav.userData.animated = true;
       this._antennaTips.push({ mesh: nav, phase: j * 1.57 + 7.0 });
       pg.add(nav);
 
@@ -355,13 +365,15 @@ export class Station3D {
       const hangar = this._mk(new THREE.PlaneGeometry(0.60, 0.60), hangarMat);
       hangar.rotation.y = Math.PI / 2;
       hangar.position.x = 3.95;
-      this._hangarMats.push(hangarMat);
+      hangar.userData.animated = true;
+      this._hangarMats.push({ mat: hangarMat, mesh: hangar });
       A.add(hangar);
 
       // Outer docking ring
       const dockOuter = this._mk(new THREE.TorusGeometry(0.33, 0.034, 8, 24), this._gm());
       dockOuter.rotation.y = Math.PI / 2;
       dockOuter.position.x = 3.95;
+      dockOuter.userData.animated = true;
       this._dockRings.push({ mesh: dockOuter, dir: 1 });
       A.add(dockOuter);
 
@@ -369,6 +381,7 @@ export class Station3D {
       const dockInner = this._mk(new THREE.TorusGeometry(0.22, 0.020, 6, 20), this._gdm());
       dockInner.rotation.y = Math.PI / 2;
       dockInner.position.x = 3.97;
+      dockInner.userData.animated = true;
       this._dockRings.push({ mesh: dockInner, dir: -1 });
       A.add(dockInner);
 
@@ -385,6 +398,7 @@ export class Station3D {
       const rlMat = new THREE.MeshStandardMaterial({ color: 0xff3333, emissive: 0xff3333, emissiveIntensity: 2.5 });
       const rl = this._mk(new THREE.SphereGeometry(0.04, 6, 6), rlMat);
       rl.position.set(3.97, 0.40, 0.40);
+      rl.userData.animated = true;
       this._antennaTips.push({ mesh: rl, phase: i * 2.09 + 5.0 });
       A.add(rl);
 
@@ -500,6 +514,7 @@ export class Station3D {
       const glow = this._mk(new THREE.CircleGeometry(0.15, 8), glowMat);
       glow.rotation.x = Math.PI / 2;
       glow.position.set(0.72, -2.19, 0);
+      glow.userData.animated = true;
       this._engines.push({ mat: glowMat, phase: i * (Math.PI / 3) });
       E.add(glow);
 
@@ -522,6 +537,7 @@ export class Station3D {
     const topLightMat = new THREE.MeshStandardMaterial({ color: 0xff4444, emissive: 0xff4444, emissiveIntensity: 2.5 });
     const topLight = this._mk(new THREE.SphereGeometry(0.038, 6, 6), topLightMat);
     topLight.position.y = 3.38;
+    topLight.userData.animated = true;
     this._antennaTips.push({ mesh: topLight, phase: 0.0 });
     G.add(topLight);
 
@@ -572,6 +588,7 @@ export class Station3D {
           const xtipMat = new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0xff8800, emissiveIntensity: 2.5 });
           const xtip = this._mk(new THREE.SphereGeometry(0.024, 5, 5), xtipMat);
           xtip.position.set(x + xe, baseY + h * 0.68, z);
+          xtip.userData.animated = true;
           this._antennaTips.push({ mesh: xtip, phase: i * 1.31 + 1.6 });
           G.add(xtip);
         }
@@ -581,6 +598,7 @@ export class Station3D {
       const tipMat = new THREE.MeshStandardMaterial({ color: 0xff3333, emissive: 0xff3333, emissiveIntensity: 2.5 });
       const tip = this._mk(new THREE.SphereGeometry(0.034, 6, 6), tipMat);
       tip.position.set(x, baseY + h + 0.04, z);
+      tip.userData.animated = true;
       this._antennaTips.push({ mesh: tip, phase: i * 1.31 });
       G.add(tip);
     }
@@ -731,7 +749,7 @@ export class Station3D {
 
     // Hangar glow breathe
     for (const m of this._hangarMats) {
-      m.emissiveIntensity = 1.1 + Math.sin(time * 2.4) * 0.45;
+      m.mat.emissiveIntensity = 1.1 + Math.sin(time * 2.4) * 0.45;
     }
 
     // Docking rings — inner and outer counter-rotate
@@ -750,7 +768,7 @@ export class Station3D {
       const boost = this._purchasePulse * 4.0;
       if (this._reactor) this._reactor.material.emissiveIntensity += boost;
       for (const eng of this._engines) eng.mat.emissiveIntensity += boost;
-      for (const m of this._hangarMats) m.emissiveIntensity += boost;
+      for (const m of this._hangarMats) m.mat.emissiveIntensity += boost;
       for (const w of this._windows) w.mat.emissiveIntensity += boost * 0.5;
     }
   }
@@ -959,6 +977,61 @@ export class Station3D {
     const v = new THREE.Vector3();
     td.pivot.getWorldPosition(v);
     return v;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATIC GEOMETRY BATCHING — merges non-animated meshes by material
+  // ─────────────────────────────────────────────────────────────────────────
+
+  _batchStaticGeometry() {
+    // Recursively collect non-animated meshes, accumulating the full transform
+    // chain from root so positions are baked relative to the batch root.
+    const collectStatics = (node, stopAt, parentMatrix, buckets) => {
+      for (const child of [...node.children]) {
+        if (child === stopAt) continue;
+        child.updateMatrix();
+        const childMatrix = parentMatrix.clone().multiply(child.matrix);
+        if (child.isMesh && !child.userData.animated) {
+          const geo = child.geometry.clone();
+          geo.applyMatrix4(childMatrix);
+          if (!buckets.has(child.material)) buckets.set(child.material, []);
+          buckets.get(child.material).push({ geo, mesh: child, parent: child.parent });
+        }
+        if (child.children.length > 0) {
+          collectStatics(child, stopAt, childMatrix, buckets);
+        }
+      }
+    };
+
+    const identity = new THREE.Matrix4();
+
+    // Batch main group (excluding outerRingGroup which rotates independently)
+    const mainBuckets = new Map();
+    collectStatics(this.group, this._outerRingGroup, identity, mainBuckets);
+    this._applyBatch(mainBuckets, this.group);
+
+    // Batch outerRingGroup separately — merged geo stays inside so it rotates with it
+    const ringBuckets = new Map();
+    collectStatics(this._outerRingGroup, null, identity, ringBuckets);
+    this._applyBatch(ringBuckets, this._outerRingGroup);
+  }
+
+  _applyBatch(buckets, targetParent) {
+    for (const [mat, entries] of buckets) {
+      if (entries.length === 0) continue;
+      const merged = mergeGeometries(entries.map(e => e.geo), false);
+      if (!merged) {
+        for (const { geo } of entries) geo.dispose();
+        continue;
+      }
+      this._mergedGeos.push(merged);
+      for (const { geo, mesh, parent } of entries) {
+        geo.dispose();
+        parent.remove(mesh);
+        mesh.geometry.dispose();
+      }
+      targetParent.add(new THREE.Mesh(merged, mat));
+    }
   }
 
   dispose() {
