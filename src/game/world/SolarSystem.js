@@ -313,6 +313,8 @@ export class SolarSystem {
     this.orbitGroup.add(this.militaryBase._tetherMesh);
     this._milTetherUp = new THREE.Vector3(0, 1, 0); // cylinder default Y axis
     this._milTetherQuat = new THREE.Quaternion();
+    // Register live position getter so GameState can find the rally point
+    gameState.registerMilitaryBasePosFn(this.id, () => this.militaryBase?.worldPosition ?? null);
   }
 
   _removeMilitaryBase() {
@@ -321,6 +323,7 @@ export class SolarSystem {
     this.orbitGroup.remove(this.militaryBase._tetherMesh);
     this.militaryBase.dispose();
     this.militaryBase = null;
+    gameState.unregisterMilitaryBasePosFn(this.id);
   }
 
   _restoreMilitaryBase() {

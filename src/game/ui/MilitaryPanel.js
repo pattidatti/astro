@@ -1,6 +1,7 @@
 import { gameState } from '../GameState.js';
 import { AudioManager } from '../audio/AudioManager.js';
 import { PLANETS } from '../data/planets.js';
+import { MILITARY_SHIPS, SHIP_TYPES } from '../data/militaryShips.js';
 
 const fmt = (n) => {
   if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
@@ -42,6 +43,9 @@ export class MilitaryPanel {
     gameState.on('militaryBaseUpgraded', rerender);
     gameState.on('techUnlocked',         rerender);
     gameState.on('siloChanged',          rerender);
+    gameState.on('militaryShipQueued',   ({ planetId }) => { if (this._visible && planetId === this._planetId) this._renderRight(); });
+    gameState.on('playerShipBuilt',      ({ planetId }) => { if (this._visible && planetId === this._planetId) this._renderRight(); });
+    gameState.on('playerFleetChanged',   ()             => { if (this._visible) this._renderRight(); });
 
     // Fast silo bar update without full DOM rebuild
     gameState.on('militaryBaseSiloChanged', ({ planetId }) => {
@@ -246,23 +250,26 @@ export class MilitaryPanel {
     const built    = !!mb?.built;
     const fleetCap = mb?.fleetCap ?? 0;
     const hangars  = mb?.hangars  ?? 0;
+    const usedCap  = built ? gameState.getUsedFleetCap(this._planetId) : 0;
+    const queuedCap = built ? (mb.queue ?? []).reduce((s, q) => s + (MILITARY_SHIPS[q.type]?.fleetCapCost ?? 0), 0) : 0;
 
     // ── Fleet capacity overview ───────────────────────────────────────────
     const statsSec = document.createElement('div');
     statsSec.className = 'mil-section';
+    const capFull = fleetCap > 0 && usedCap + queuedCap >= fleetCap;
     statsSec.innerHTML = `
       <div class="mil-section-title">FLEET STATUS</div>
       <div class="mil-fleet-stat-row">
         <span class="mil-fleet-stat-label">CAPACITY</span>
-        <span class="mil-fleet-stat-val">${fleetCap > 0 ? fleetCap : '—'}</span>
+        <span class="mil-fleet-stat-val ${capFull ? 'mil-cap-full' : ''}">${fleetCap > 0 ? `${usedCap + queuedCap} / ${fleetCap}` : '—'}</span>
       </div>
       <div class="mil-fleet-stat-row">
         <span class="mil-fleet-stat-label">HANGARS</span>
         <span class="mil-fleet-stat-val">${built ? `${hangars}/5` : '—'}</span>
       </div>
       <div class="mil-fleet-stat-row">
-        <span class="mil-fleet-stat-label">ACTIVE</span>
-        <span class="mil-fleet-stat-val">0</span>
+        <span class="mil-fleet-stat-label">ACTIVE SHIPS</span>
+        <span class="mil-fleet-stat-val">${usedCap}</span>
       </div>`;
     this._bodyRight.appendChild(statsSec);
 
@@ -274,38 +281,100 @@ export class MilitaryPanel {
     if (!built || fleetCap === 0) {
       shipSec.innerHTML += `<div class="mil-info-text">Build hangars to unlock fleet production.</div>`;
     } else {
-      // Ship type cards — locked in Phase 2, will be activated in Phase 3
-      const shipTypes = [
-        { id: 'fighter',    name: 'FIGHTER',     icon: '✈', desc: 'Fast interceptor',   cost: { ore: 150, energy: 80  }, tech: 'fighter_mk1'  },
-        { id: 'bomber',     name: 'BOMBER',      icon: '💣', desc: 'Area damage',        cost: { ore: 300, energy: 200 }, tech: 'bomber_tech'  },
-        { id: 'carrier',    name: 'CARRIER',     icon: '🛸', desc: 'Fleet command ship', cost: { ore: 800, energy: 500 }, tech: 'carrier_tech' },
-      ];
-
-      for (const ship of shipTypes) {
+      // Ship type cards — all 5 types, gated by tech unlock
+      for (const shipType of SHIP_TYPES) {
+        const ship  = MILITARY_SHIPS[shipType];
         const techOk = gameState.isTechUnlocked(ship.tech);
-        const card   = document.createElement('div');
+
+        // Affordability check (base silo)
+        const mbSilo = mb.silo;
+        const canAffordOre    = !ship.cost.ore    || (mbSilo.ore.amount    >= ship.cost.ore);
+        const canAffordEnergy = !ship.cost.energy || (mbSilo.energy.amount >= ship.cost.energy);
+        const canAffordCrystal = !ship.cost.crystal || gameState.siloHas(this._planetId, 'crystal', ship.cost.crystal);
+        const capOk = (usedCap + queuedCap + ship.fleetCapCost) <= fleetCap;
+        const canBuild = techOk && canAffordOre && canAffordEnergy && canAffordCrystal && capOk;
+
+        const card = document.createElement('div');
         card.className = 'mil-ship-card' + (techOk ? '' : ' locked');
+
+        let costHtml = '';
+        if (techOk) {
+          const oreCls    = canAffordOre    ? '' : 'mil-cost-cant';
+          const enCls     = canAffordEnergy ? '' : 'mil-cost-cant';
+          const crystalCls = canAffordCrystal ? '' : 'mil-cost-cant';
+          costHtml  = `<span class="${oreCls}">⬡ ${fmt(ship.cost.ore)}</span> `;
+          costHtml += `<span class="${enCls}">⚡ ${fmt(ship.cost.energy)}</span>`;
+          if (ship.cost.crystal) costHtml += ` <span class="${crystalCls}">◈ ${fmt(ship.cost.crystal)}</span>`;
+        }
+
         card.innerHTML = `
           <span class="mil-ship-icon">${ship.icon}</span>
           <div class="mil-ship-info">
-            <span class="mil-ship-name">${ship.name}</span>
+            <span class="mil-ship-name">${ship.name.toUpperCase()}</span>
             <span class="mil-ship-desc">${techOk ? ship.desc : '🔒 Requires tech research'}</span>
-          </div>
-          ${techOk ? `
-            <button class="mil-ship-build-btn" disabled>
-              <span class="mil-ship-cost">⬡ ${ship.cost.ore}  ⚡ ${ship.cost.energy}</span>
-            </button>` : ''}`;
+          </div>`;
+
+        if (techOk) {
+          const btn = document.createElement('button');
+          btn.className = 'mil-ship-build-btn' + (canBuild ? '' : ' cant-afford');
+          btn.disabled  = !canBuild;
+          btn.innerHTML = `<span class="mil-ship-cost">${costHtml}</span>`;
+          btn.title = !capOk ? 'Fleet cap full' : !canBuild ? 'Insufficient resources' : `Build ${ship.name} (${ship.buildTime}s)`;
+          btn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            AudioManager.play('UI_CLICK');
+            gameState.queueShipBuild(this._planetId, shipType);
+          });
+          card.appendChild(btn);
+        }
+
         shipSec.appendChild(card);
       }
-
-      const note = document.createElement('div');
-      note.className = 'mil-info-text';
-      note.style.marginTop = '8px';
-      note.innerHTML = `<em>Ship construction coming in Phase 3.</em>`;
-      shipSec.appendChild(note);
     }
 
     this._bodyRight.appendChild(shipSec);
+
+    // ── Build queue section ───────────────────────────────────────────────
+    if (built && mb.queue?.length > 0) {
+      this._renderBuildQueue(mb.queue);
+    }
+  }
+
+  _renderBuildQueue(queue) {
+    const qSec = document.createElement('div');
+    qSec.className = 'mil-section';
+    qSec.innerHTML = `<div class="mil-section-title">BUILD QUEUE</div>`;
+
+    // First item — show live progress bar
+    const active = queue[0];
+    const activeDef = MILITARY_SHIPS[active.type];
+    if (activeDef) {
+      const pct = Math.min(100, (active.progress / active.buildTime) * 100);
+      const remaining = Math.max(0, active.buildTime - active.progress);
+      const row = document.createElement('div');
+      row.className = 'mil-queue-item';
+      row.innerHTML = `
+        <div class="mil-queue-header">
+          <span>${activeDef.icon} ${activeDef.name.toUpperCase()}</span>
+          <span class="mil-queue-eta">${remaining.toFixed(0)}s</span>
+        </div>
+        <div class="mil-queue-track">
+          <div class="mil-queue-fill" style="width:${pct.toFixed(1)}%"></div>
+        </div>`;
+      qSec.appendChild(row);
+    }
+
+    // Remaining items in queue
+    if (queue.length > 1) {
+      const pending = document.createElement('div');
+      pending.className = 'mil-info-text';
+      pending.style.marginTop = '4px';
+      const names = queue.slice(1).map(q => MILITARY_SHIPS[q.type]?.name ?? q.type).join(', ');
+      pending.textContent = `Queued: ${names}`;
+      qSec.appendChild(pending);
+    }
+
+    this._bodyRight.appendChild(qSec);
   }
 
   // ── Fast silo bar update (no DOM rebuild) ─────────────────────────────────

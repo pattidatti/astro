@@ -17,6 +17,7 @@ import { CombatEffects } from './effects/CombatEffects.js';
 import { ClickFeedback } from './effects/ClickFeedback.js';
 import { Minimap } from './ui/Minimap.js';
 import { RoamingFleetManager3D } from './world/RoamingFleetManager3D.js';
+import { PlayerFleetManager3D } from './world/PlayerFleetManager3D.js';
 import { FleetPanel } from './ui/FleetPanel.js';
 import { MilitaryPanel } from './ui/MilitaryPanel.js';
 
@@ -256,6 +257,35 @@ export function createGame() {
 
   // --- Military base panel ---
   const militaryPanel = new MilitaryPanel();
+
+  // --- Player fleet visuals + RTS selection ---
+  const playerFleetManager = new PlayerFleetManager3D(sceneManager.scene);
+  const _selectedPlayerFleets = new Set(); // Set<fleetId>
+
+  const _registerPlayerFleetClicks = () => {
+    for (const target of playerFleetManager.getClickTargets()) {
+      if (target.mesh.userData._playerFleetClickBound) continue;
+      target.mesh.userData._playerFleetClickBound = true;
+      inputManager.addClickable(target.mesh, () => {
+        // Toggle selection of this fleet
+        if (_selectedPlayerFleets.has(target.fleetId)) {
+          _selectedPlayerFleets.delete(target.fleetId);
+        } else {
+          _selectedPlayerFleets.add(target.fleetId);
+        }
+      });
+    }
+    // Refresh selectable mesh list for frustum box-select
+    inputManager.setPlayerFleetMeshes(playerFleetManager.getSelectableMeshes());
+  };
+
+  gameState.on('playerFleetSpawned', () => {
+    requestAnimationFrame(_registerPlayerFleetClicks);
+  });
+  // Restore fleets that exist in save on load
+  gameState.on('stateLoaded', () => {
+    requestAnimationFrame(_registerPlayerFleetClicks);
+  });
 
   // Helper to hide military panel when a planet is clicked / focused
   const _hideMilitaryPanel = () => militaryPanel.hide();
@@ -582,14 +612,20 @@ export function createGame() {
     return mesh;
   }
 
-  // Box-select: log result (fleet meshes populated in Phase 4)
+  // Box-select: update _selectedPlayerFleets from frustum result
   inputManager.onBoxSelect((selected) => {
-    console.log(`[RTS] Box-select: ${selected.length} fleet units selected`);
+    _selectedPlayerFleets.clear();
+    for (const mesh of selected) {
+      const fleetId = mesh.userData.playerFleetId;
+      if (fleetId) _selectedPlayerFleets.add(fleetId);
+    }
   });
 
-  // Waypoint: place crosshair, log position
+  // Waypoint: dispatch to all selected player fleets + place crosshair
   inputManager.onWaypoint((pos) => {
-    console.log(`[RTS] Waypoint: (${pos.x.toFixed(1)}, ${pos.z.toFixed(1)})`);
+    for (const fleetId of _selectedPlayerFleets) {
+      gameState.dispatchFleetWaypoint(fleetId, pos);
+    }
     // Remove previous crosshair if still visible
     if (_rtsWaypointMesh) {
       sceneManager.scene.remove(_rtsWaypointMesh);
@@ -611,6 +647,7 @@ export function createGame() {
     spawnFlight.update(dt);
     minimap.update(time, cameraController);
     fleetPanel.update();
+    playerFleetManager.update(cameraController.isRTSMode);
     renderPipeline.tick(time);
 
     // Waypoint crosshair: project 3D position to screen and update label

@@ -2297,13 +2297,13 @@
   gap: 10px;
   padding: 9px 10px;
   margin-bottom: 6px;
-  border: 1px solid rgba(180,30,30,0.3);
+  border: 1px solid rgba(212,168,67,0.2);
   border-radius: 4px;
   background: rgba(20,20,28,0.5);
   transition: background 0.15s;
 }
 .mil-ship-card:hover:not(.locked) {
-  background: rgba(180,30,30,0.08);
+  background: rgba(212,168,67,0.06);
 }
 .mil-ship-card.locked {
   opacity: 0.5;
@@ -2324,7 +2324,7 @@
   font-family: 'Orbitron', sans-serif;
   font-size: 12px;
   font-weight: 700;
-  color: #e04444;
+  color: #d4a843;
   letter-spacing: 1.5px;
 }
 .mil-ship-desc {
@@ -2336,21 +2336,65 @@
   text-overflow: ellipsis;
 }
 .mil-ship-build-btn {
-  background: rgba(180,30,30,0.08);
-  border: 1px solid rgba(180,30,30,0.35);
+  background: rgba(212,168,67,0.10);
+  border: 1px solid rgba(212,168,67,0.4);
   border-radius: 3px;
-  color: #cc4444;
-  cursor: not-allowed;
-  padding: 4px 8px;
+  color: #d4a843;
+  cursor: pointer;
+  padding: 5px 9px;
   font-size: 11px;
   flex-shrink: 0;
-  opacity: 0.7;
+  transition: background 0.15s, border-color 0.15s;
+}
+.mil-ship-build-btn:hover:not(:disabled) {
+  background: rgba(212,168,67,0.2);
+  border-color: rgba(212,168,67,0.7);
+}
+.mil-ship-build-btn:disabled,
+.mil-ship-build-btn.cant-afford {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .mil-ship-cost {
   font-family: 'Share Tech Mono', monospace;
   font-size: 10px;
-  color: var(--dune-text-dim);
+  color: inherit;
   white-space: nowrap;
+}
+.mil-cost-cant {
+  color: #ff5555;
+}
+.mil-cap-full {
+  color: #ff8844;
+}
+
+/* ── Build queue progress ── */
+.mil-queue-item {
+  margin-bottom: 6px;
+}
+.mil-queue-header {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text);
+  margin-bottom: 3px;
+}
+.mil-queue-eta {
+  color: var(--dune-gold);
+  font-weight: 700;
+}
+.mil-queue-track {
+  height: 5px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.mil-queue-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #c67b30, #d4a843);
+  border-radius: 3px;
+  transition: width 0.3s linear;
 }
 
 /* ══════════════════════════════════════════════════════

@@ -37,6 +37,7 @@ export class ProductionSystem {
 
     gameState.tickColonyShipBuilds(dt);
     gameState.tickColonyShipFlights(dt);
+    gameState.tickShipBuildQueues(dt);
 
     gameState.emit('productionTick', delta);
   }
