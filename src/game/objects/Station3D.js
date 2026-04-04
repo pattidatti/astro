@@ -41,10 +41,12 @@ export class Station3D {
   }
 
   // ── Material factories ────────────────────────────────────────────────────
-  _hm()  { return new THREE.MeshStandardMaterial({ color: HULL,     emissive: HULL,     emissiveIntensity: 0.18, metalness: 0.2,  roughness: 0.6  }); }
-  _mm()  { return new THREE.MeshStandardMaterial({ color: HULL_MID, emissive: HULL_MID, emissiveIntensity: 0.10, metalness: 0.25, roughness: 0.65 }); }
-  _gm()  { return new THREE.MeshStandardMaterial({ color: GOLD,     emissive: GOLD,     emissiveIntensity: 0.35, metalness: 0.85, roughness: 0.2  }); }
-  _gdm() { return new THREE.MeshStandardMaterial({ color: GOLD_DIM, emissive: GOLD_DIM, emissiveIntensity: 0.12, metalness: 0.8,  roughness: 0.4  }); }
+  // Memoized so all static meshes of the same type share one material reference,
+  // which lets _batchStaticGeometry() merge them into a single draw call.
+  _hm()  { return this._matH  ||= new THREE.MeshStandardMaterial({ color: HULL,     emissive: HULL,     emissiveIntensity: 0.18, metalness: 0.2,  roughness: 0.6  }); }
+  _mm()  { return this._matM  ||= new THREE.MeshStandardMaterial({ color: HULL_MID, emissive: HULL_MID, emissiveIntensity: 0.10, metalness: 0.25, roughness: 0.65 }); }
+  _gm()  { return this._matG  ||= new THREE.MeshStandardMaterial({ color: GOLD,     emissive: GOLD,     emissiveIntensity: 0.35, metalness: 0.85, roughness: 0.2  }); }
+  _gdm() { return this._matGd ||= new THREE.MeshStandardMaterial({ color: GOLD_DIM, emissive: GOLD_DIM, emissiveIntensity: 0.12, metalness: 0.8,  roughness: 0.4  }); }
   _mk(geo, mat) { return new THREE.Mesh(geo, mat); }
 
   _build() {
