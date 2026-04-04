@@ -28,7 +28,24 @@ const MAX_SPREAD      = 18;   // maximum localPos distance from center
 
 export class FleetMovementSystem {
   constructor(animationLoop) {
+    this._galaxy = null;
     animationLoop.onUpdate((dt) => this._tick(dt));
+  }
+
+  /** Set the Galaxy reference for position lookups. */
+  setGalaxy(galaxy) {
+    this._galaxy = galaxy;
+  }
+
+  /** Execute an emergency jump to the given planet's station. */
+  _execEmergencyJump(fleet, targetPlanetId) {
+    const owned = this._galaxy?.getOwnedStationPositions();
+    const dest = owned?.find(s => s.planetId === targetPlanetId);
+    if (!dest) return;
+    fleet.position = { x: dest.worldPos.x, y: 0, z: dest.worldPos.z };
+    fleet.waypoint = null;
+    fleet.state = 'orbiting';
+    gameState.emit('emergencyJumpExecuted', { fleetId: fleet.id, targetPlanetId });
   }
 
   _tick(dt) {
@@ -74,8 +91,9 @@ export class FleetMovementSystem {
       if (len > 0.001) { dirX /= len; dirZ /= len; }
     }
 
-    // Advance fleet center
-    const step = Math.min(fleet.speed * dt, dist);
+    // Advance fleet center (apply speed debuff if present)
+    const effectiveSpeed = fleet.speed * (fleet.speedDebuff ?? 1.0);
+    const step = Math.min(effectiveSpeed * dt, dist);
     fleet.position.x += dirX * step;
     fleet.position.z += dirZ * step;
     fleet.position.y  = 0;

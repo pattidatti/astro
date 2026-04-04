@@ -148,16 +148,19 @@ async function boot() {
   const routeSystem = new RouteSystem(game.animationLoop, roamingFleetSystem);
   routeSystem.reconstructActiveShips();
 
-  new FleetMovementSystem(game.animationLoop);
+  const fleetMovementSystem = new FleetMovementSystem(game.animationLoop);
+  fleetMovementSystem.setGalaxy(game.galaxy);
 
   const supplySystem = new SupplySystem(game.animationLoop);
 
   const fleetCombatSystem = new FleetCombatSystem(
     game.animationLoop,
     (fleetId) => game.galaxy?.roamingFleetManager?.getFleetWorldPosition(fleetId) ?? null,
-    supplySystem
+    supplySystem,
+    (stationId) => game.galaxy?.enemyStationManager?.getStationWorldPosition(stationId) ?? null
   );
   fleetCombatSystem.reconstructEngagements();
+  fleetCombatSystem.reconstructSieges();
 
   // Track play time
   game.animationLoop.onUpdate((dt) => { gameState.stats.playTimeSeconds += dt; });

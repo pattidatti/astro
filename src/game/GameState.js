@@ -1166,20 +1166,30 @@ class GameState extends EventEmitter {
     ps.militaryBase.hp = Math.min(ps.militaryBase.maxHP, ps.militaryBase.hp + amount);
   }
 
-  /** Damage an enemy station (shield absorbs first, then hull). */
-  damageEnemyStation(stationId, amount) {
+  /** Damage an enemy station (shield absorbs first, then hull).
+   * @param {string} stationId
+   * @param {number} amount - total damage
+   * @param {number} shieldBypassFraction - fraction of damage (0–1) that bypasses shield and goes straight to hull
+   */
+  damageEnemyStation(stationId, amount, shieldBypassFraction = 0) {
     const st = this.enemyStations.find(s => s.id === stationId);
     if (!st || st.cleared) return 0;
-    let overflow = amount;
+
+    const bypassAmount = amount * shieldBypassFraction;   // goes directly to hull
+    const shieldedAmount = amount - bypassAmount;          // goes through shield first
+
+    let overflow = shieldedAmount;
     if (st.shieldHP > 0) {
       const absorbed = Math.min(st.shieldHP, overflow);
       st.shieldHP -= absorbed;
       overflow -= absorbed;
       this.emit('enemyStationDamaged', { stationId, shieldDamage: absorbed, hullDamage: 0 });
     }
-    if (overflow > 0) {
-      st.hp = Math.max(0, st.hp - overflow);
-      this.emit('enemyStationDamaged', { stationId, shieldDamage: 0, hullDamage: overflow });
+
+    const hullDamage = overflow + bypassAmount;
+    if (hullDamage > 0) {
+      st.hp = Math.max(0, st.hp - hullDamage);
+      this.emit('enemyStationDamaged', { stationId, shieldDamage: 0, hullDamage });
       if (st.hp <= 0) this.destroyEnemyStation(stationId);
     }
     return st.hp;
@@ -1206,6 +1216,30 @@ class GameState extends EventEmitter {
   startStationSiege(fleetId, stationId) {
     if (this.stationSieges.find(s => s.playerFleetId === fleetId && s.enemyStationId === stationId)) return;
     this.stationSieges.push({ id: `siege_${fleetId}_${stationId}`, playerFleetId: fleetId, enemyStationId: stationId, elapsed: 0 });
+    this.emit('stationSiegeStarted', { fleetId, stationId });
+  }
+
+  /** End a station siege. */
+  endStationSiege(siegeId, reason) {
+    const idx = this.stationSieges.findIndex(s => s.id === siegeId);
+    if (idx === -1) return;
+
+    const siege = this.stationSieges[idx];
+    this.stationSieges.splice(idx, 1);
+
+    const fleet = this.playerFleets.find(f => f.id === siege.playerFleetId);
+    if (fleet) {
+      delete fleet.stationTarget;
+      delete fleet.speedDebuff;
+      delete fleet.supplyRegenDebuff;
+      if (fleet.ships.length === 0) {
+        const fi = this.playerFleets.indexOf(fleet);
+        if (fi !== -1) this.playerFleets.splice(fi, 1);
+        this.emit('playerFleetDestroyed', { fleetId: fleet.id });
+      }
+    }
+
+    this.emit('stationSiegeEnded', { siegeId, reason, playerFleetId: siege.playerFleetId, enemyStationId: siege.enemyStationId });
   }
 
   /** Dispatch a player fleet to attack an enemy station. */

@@ -26,3 +26,13 @@ export const CRYSTAL_LASER_AMMO_MULT = 1.20; // tech: pure_crystal_lasers → +2
 // ─── Military base combat ───────────────────────────────────────────���───────
 export const MILITARY_BASE_HP     = 500;
 export const MILITARY_BASE_MAX_HP = 500;
+
+// ─── Station combat ──────────────────────────────────────────────────────────
+export const STATION_ENGAGE_RANGE     = 20;   // world units — siege starts when fleet within this distance
+export const STATION_DISENGAGE_RANGE  = 60;   // siege ends if fleet moves beyond this
+export const STATION_FIRE_INTERVAL    = 0.5;  // seconds between station VFX fire events per siege
+export const STATION_DPS = {
+  alert:    3,
+  skirmish: 8,
+  war:      15,
+};

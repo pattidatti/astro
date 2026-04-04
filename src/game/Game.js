@@ -22,6 +22,7 @@ import { PlayerFleetManager3D } from './world/PlayerFleetManager3D.js';
 import { FleetPanel } from './ui/FleetPanel.js';
 import { MilitaryPanel } from './ui/MilitaryPanel.js';
 import { PlayerFleetPanel } from './ui/PlayerFleetPanel.js';
+import { EnemyStationPanel } from './ui/EnemyStationPanel.js';
 import { MILITARY_SHIPS } from './data/militaryShips.js';
 
 // Pre-built lookups — avoids O(n) PLANETS.find() calls inside hot paths
@@ -281,6 +282,9 @@ export function createGame() {
   const _selectedPlayerFleets = new Set(); // Set<fleetId>
   const playerFleetPanel = new PlayerFleetPanel();
 
+  // --- Enemy station panel ---
+  const enemyStationPanel = new EnemyStationPanel();
+
   const _registerPlayerFleetClicks = () => {
     for (const target of playerFleetManager.getClickTargets()) {
       if (target.mesh.userData._playerFleetClickBound) continue;
@@ -395,6 +399,7 @@ export function createGame() {
         const st = gameState.enemyStations?.find(s => s.id === target.stationId);
         if (!st) return;
         AudioManager.play('PLANET_CLICK_3D');
+        enemyStationPanel.show(target.stationId);
         // Center camera on the enemy station
         if (target.planetId) {
           // Planet-anchored — track planet world position
@@ -412,6 +417,19 @@ export function createGame() {
     }
   };
   gameState.on('stateLoaded', _registerEnemyStationClicks);
+
+  // RMB on enemy station: dispatch fleet to attack
+  inputManager.onRightClickable((stationId) => {
+    if (!_selectedPlayerFleets.size) return;
+    const st = gameState.enemyStations?.find(s => s.id === stationId);
+    if (!st) return;
+    const stPos = galaxy.enemyStationManager?.getStationWorldPosition(stationId)
+      ?? galaxy.getPlanetWorldPosition(st.anchorPlanet);
+    for (const fleetId of _selectedPlayerFleets) {
+      gameState.dispatchFleetToStation(fleetId, stationId);
+      if (stPos) gameState.dispatchFleetWaypoint(fleetId, { x: stPos.x, y: 0, z: stPos.z });
+    }
+  });
 
   // Combat visual events — projectile cooldowns per defense type
   const _projectileCooldowns = { cannon: 0, satellite: 0, defenseShip: 0, shield: 0 };
@@ -675,6 +693,35 @@ export function createGame() {
     if (type === 'orbit') AudioManager.playSynth('CARRIER_HUM');
   });
 
+  // Station siege started → show panel
+  gameState.on('stationSiegeStarted', ({ stationId }) => {
+    enemyStationPanel.show(stationId);
+  });
+
+  // Station fire event → projectile VFX
+  gameState.on('stationFired', ({ stationId, targetFleetId, targetShipIdx }) => {
+    const stPos = galaxy.enemyStationManager?.getStationWorldPosition(stationId);
+    if (!stPos) return;
+    const fleet = gameState.playerFleets.find(f => f.id === targetFleetId);
+    if (!fleet) return;
+    const ship = fleet.ships[targetShipIdx];
+    if (!ship) return;
+    const toPos = new THREE.Vector3(
+      fleet.position.x + (ship.localPos?.x || 0), 0,
+      fleet.position.z + (ship.localPos?.z || 0)
+    );
+    const STATION_FIRE_COLORS = {
+      lava:       0xff3300,
+      ice:        0x88ccff,
+      industrial: 0xd4a843,
+      void:       0x8800ff,
+      generic:    0xff6600,
+    };
+    const stDef = gameState.enemyStations?.find(s => s.id === stationId);
+    const color = STATION_FIRE_COLORS[stDef?.type] ?? 0xff6600;
+    combatEffects.projectile(stPos, toPos, color);
+  });
+
   // --- Spawn flight: robot flies from panel to station ---
   const spawnFlight = new SpawnFlight(sceneManager.scene, camera, galaxy);
   spawnFlight.onArrival = (worldPos, planetId) => {
@@ -845,6 +892,7 @@ export function createGame() {
     minimap.update(time, cameraController);
     fleetPanel.update();
     playerFleetPanel.update();
+    enemyStationPanel.update();
     playerFleetManager.update(cameraController.isRTSMode);
     renderPipeline.tick(time);
 

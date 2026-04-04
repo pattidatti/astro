@@ -11,6 +11,9 @@ import {
   DREADNOUGHT_OFFSET,
   FIRE_VISUAL_INTERVAL,
   CRYSTAL_LASER_DPS_MULT,
+  STATION_DISENGAGE_RANGE,
+  STATION_FIRE_INTERVAL,
+  STATION_DPS,
 } from '../data/fleetCombatStats.js';
 import {
   TITAN_ULTIMATE_RADIUS,
@@ -35,9 +38,11 @@ export class FleetCombatSystem {
    * @param {object} animationLoop - Game animation loop.
    * @param {function} getEnemyWorldPosFn - (fleetId) => THREE.Vector3|null
    * @param {object|null} supplySystem - SupplySystem instance for DPS penalty lookups.
+   * @param {function|null} getStationWorldPosFn - (stationId) => THREE.Vector3|null
    */
-  constructor(animationLoop, getEnemyWorldPosFn, supplySystem = null) {
+  constructor(animationLoop, getEnemyWorldPosFn, supplySystem = null, getStationWorldPosFn = null) {
     this._getEnemyWorldPos = getEnemyWorldPosFn;
+    this._getStationWorldPos = getStationWorldPosFn ?? (() => null);
     this._supplySystem = supplySystem;
     this._aggroTimer = 0;
     this._fireTimers = new Map(); // shipKey → seconds since last VFX fire event
@@ -57,6 +62,7 @@ export class FleetCombatSystem {
     this._tickAggroScan(clampedDt);
     this._tickEngagements(clampedDt);
     this._tickDisengageCheck();
+    this._tickStationCombat(clampedDt);
   }
 
   // ─── Aggro scan ─────────────────────────────────────────────────────────────
@@ -69,6 +75,7 @@ export class FleetCombatSystem {
     for (const fleet of gameState.playerFleets) {
       if (fleet.state === 'engaged') continue;
       if (!fleet.ships.length) continue;
+      if (fleet.ships[0]?.type === 'scavenger') continue;
 
       const pPos = fleet.position;
 
@@ -329,6 +336,85 @@ export class FleetCombatSystem {
     }
   }
 
+  // ─── Station combat ───────────────────────────────────────────────────────
+
+  _tickStationCombat(dt) {
+    for (let i = gameState.stationSieges.length - 1; i >= 0; i--) {
+      const siege = gameState.stationSieges[i];
+      const fleet = gameState.playerFleets.find(f => f.id === siege.playerFleetId);
+      const station = gameState.enemyStations?.find(s => s.id === siege.enemyStationId);
+
+      // End siege if fleet gone, has no ships, or station is cleared
+      if (!fleet || !fleet.ships.length || !station || station.cleared) {
+        gameState.endStationSiege(siege.id, 'end');
+        continue;
+      }
+
+      // Check distance
+      const sPos = this._getStationWorldPos(siege.enemyStationId);
+      if (sPos) {
+        const dx = fleet.position.x - sPos.x;
+        const dz = fleet.position.z - sPos.z;
+        if (Math.sqrt(dx * dx + dz * dz) > STATION_DISENGAGE_RANGE) {
+          gameState.endStationSiege(siege.id, 'retreat');
+          continue;
+        }
+      }
+
+      // Player DPS → station (each alive non-scavenger ship)
+      const supplyMult = this._supplySystem?.getDPSMultiplier(fleet.id) ?? 1;
+      const techMult = gameState.unlockedTech.has('pure_crystal_lasers') ? CRYSTAL_LASER_DPS_MULT : 1;
+      let totalPlayerDps = 0;
+      for (const ship of fleet.ships) {
+        if (ship.hp <= 0 || ship.type === 'scavenger') continue;
+        totalPlayerDps += (MILITARY_SHIPS[ship.type]?.dps ?? 0) * supplyMult * techMult;
+      }
+      if (totalPlayerDps > 0) {
+        const bypassFraction = station.type === 'lava' ? 0.2 : 0;
+        gameState.damageEnemyStation(siege.enemyStationId, totalPlayerDps * dt, bypassFraction);
+      }
+
+      // Station DPS → player fleet (target alive ship with lowest HP)
+      const stDps = STATION_DPS[station.phase] ?? 0;
+      if (stDps > 0) {
+        const alive = fleet.ships.filter(s => s.hp > 0);
+        if (alive.length > 0) {
+          const target = alive.reduce((a, b) => a.hp < b.hp ? a : b);
+          target.hp = Math.max(0, target.hp - stDps * dt);
+
+          // VFX fire event (throttled)
+          const fireKey = siege.id;
+          const timer = (this._fireTimers.get(fireKey) ?? 0) + dt;
+          if (timer >= STATION_FIRE_INTERVAL) {
+            this._fireTimers.set(fireKey, 0);
+            const shipIdx = fleet.ships.indexOf(target);
+            gameState.emit('stationFired', {
+              siegeId: siege.id,
+              stationId: siege.enemyStationId,
+              targetFleetId: fleet.id,
+              targetShipIdx: shipIdx,
+            });
+          } else {
+            this._fireTimers.set(fireKey, timer);
+          }
+
+          // Remove dead ship
+          if (target.hp <= 0) {
+            target.hp = 0;
+            gameState.emit('playerShipDestroyed', { fleetId: fleet.id, ship: target });
+            fleet.ships = fleet.ships.filter(s => s.hp > 0);
+          }
+        }
+      }
+
+      // Type debuffs
+      if (station.type === 'ice') fleet.speedDebuff = 0.6;
+      if (station.type === 'void') fleet.supplyRegenDebuff = 0.5;
+
+      siege.elapsed += dt;
+    }
+  }
+
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   _pickTarget(aliveEnemies, mothership) {
@@ -427,6 +513,20 @@ export class FleetCombatSystem {
         playerFleetId: eng.playerFleetId,
         roamingFleetId: eng.roamingFleetId,
         restored: true,
+      });
+    }
+  }
+
+  /**
+   * Reconstruct active station sieges from save data.
+   * Re-emit events so UI can restore state.
+   */
+  reconstructSieges() {
+    for (const siege of gameState.stationSieges) {
+      gameState.emit('stationSiegeRestored', {
+        siegeId: siege.id,
+        playerFleetId: siege.playerFleetId,
+        enemyStationId: siege.enemyStationId,
       });
     }
   }

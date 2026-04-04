@@ -31,6 +31,7 @@ export class InputManager {
     this._playerFleetMeshes = [];
     this._onBoxSelectCallbacks = [];
     this._onWaypointCallbacks  = [];
+    this._onRightClickableCallbacks = [];
 
     // Reusable objects for waypoint and frustum
     this._waypointPlane    = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -104,6 +105,11 @@ export class InputManager {
     this._onWaypointCallbacks.push(fn);
   }
 
+  /** Register callback: fn(stationId) — called on RMB when hitting enemy station hitbox */
+  onRightClickable(fn) {
+    this._onRightClickableCallbacks.push(fn);
+  }
+
   _onPointerDown(e) {
     if (!this.cameraController.isRTSMode) return;
     if (e.button === 0) {
@@ -115,12 +121,22 @@ export class InputManager {
 
 
   _onPointerUp(e) {
-    // RTS right-click: emit waypoint (only if it was a click, not a drag-rotation)
+    // RTS right-click: check for station hitbox first, then emit waypoint (only if it was a click, not a drag-rotation)
     if (this.cameraController.isRTSMode && e.button === 2 && this.cameraController.wasClick()) {
       const rect = this.domElement.getBoundingClientRect();
       const ndcX = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
       const ndcY = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
       this.raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera);
+
+      // Check for enemy station hitbox first
+      const stationHits = this.raycaster.intersectObjects(this.clickables, false);
+      const stationHit = stationHits.find(h => h.object.userData.stationId);
+      if (stationHit) {
+        for (const fn of this._onRightClickableCallbacks) fn(stationHit.object.userData.stationId);
+        return;
+      }
+
+      // Otherwise, handle waypoint on Y=0 plane
       if (this.raycaster.ray.intersectPlane(this._waypointPlane, this._waypointHit)) {
         const wp = this._waypointHit.clone();
         for (const fn of this._onWaypointCallbacks) fn(wp);
@@ -136,7 +152,7 @@ export class InputManager {
       const wasDrag = Math.hypot(
         this._rtsBoxEnd.x - this._rtsBoxStart.x,
         this._rtsBoxEnd.y - this._rtsBoxStart.y
-      ) > 6;
+      ) > 5;
 
       if (wasDrag) {
         this._doBoxSelect();
