@@ -1,5 +1,5 @@
 import { PLANETS } from '../data/planets.js';
-import { HYPERLANES } from '../data/galaxyLayout.js';
+import { HYPERLANES, FREE_FLOATING_BASES } from '../data/galaxyLayout.js';
 import { gameState } from '../GameState.js';
 
 const SIZE = 160;
@@ -14,6 +14,7 @@ export class Minimap {
     this._visible = true;
     this._time = 0;
     this._cameraController = null;
+    this._galaxy = null;  // Set by Game.js
     this._mapZoom = 1.0; // 1 = full galaxy view
 
     // Create canvas wrapper (for absolute-positioned zoom buttons)
@@ -62,6 +63,10 @@ export class Minimap {
     for (const p of PLANETS) {
       this._planetMap[p.id] = p;
     }
+  }
+
+  setGalaxy(galaxy) {
+    this._galaxy = galaxy;
   }
 
   _getPlanetPos(planet, time) {
@@ -198,6 +203,41 @@ export class Minimap {
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, dotRadius, 0, Math.PI * 2);
         ctx.stroke();
+      }
+    }
+
+    // Draw enemy stations (red diamonds)
+    if (this._galaxy && gameState.enemyStations) {
+      for (const st of gameState.enemyStations) {
+        if (st.cleared) continue; // Skip destroyed stations
+
+        let pos = null;
+        if (st.anchorPlanet) {
+          // Planet-anchored: same position as planet (same orbit around sun)
+          const planetDef = this._planetMap[st.anchorPlanet];
+          if (planetDef) pos = this._getPlanetPos(planetDef, time);
+        } else {
+          // Free-floating: compute from FREE_FLOATING_BASES orbit
+          const base = FREE_FLOATING_BASES.find(b => b.id === st.id);
+          if (base) {
+            const angle = base.orbitAngle + base.orbitSpeed * time;
+            const r = base.orbitRadius;
+            const x = CENTER + Math.cos(angle) * r * s;
+            const y = CENTER + Math.sin(angle) * r * s;
+            pos = { x, y };
+          }
+        }
+
+        if (!pos) continue;
+
+        // Draw red diamond (rotated square)
+        const dia = 4;
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 50, 50, 0.8)';
+        ctx.translate(pos.x, pos.y);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-dia, -dia, dia * 2, dia * 2);
+        ctx.restore();
       }
     }
 

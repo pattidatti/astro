@@ -36,6 +36,7 @@ export class Galaxy {
 
     /** Set by Game.js after scene is available. */
     this.roamingFleetManager = null;
+    this.enemyStationManager = null;  // Set by Game.js after scene is available
     this._frameCount = 0;
   }
 
@@ -185,6 +186,35 @@ export class Galaxy {
     return this.systems[planetId]?.defenseManager ?? null;
   }
 
+  /** Get all enemy station click targets (planet-anchored + free-floating) */
+  getEnemyStationClickTargets() {
+    const targets = [];
+    // Planet-anchored stations
+    for (const id in this.systems) {
+      const sys = this.systems[id];
+      if (sys.enemyStationClickTarget) {
+        targets.push({
+          mesh: sys.enemyStationClickTarget,
+          stationId: sys.enemyStation?.stationId,
+          planetId: id,
+        });
+      }
+    }
+    // Free-floating stations
+    if (this.enemyStationManager) {
+      targets.push(...this.enemyStationManager.getClickTargets());
+    }
+    return targets;
+  }
+
+  /** Get world positions of all owned planet stations for Emergency Jump etc. */
+  getOwnedStationPositions() {
+    return gameState.ownedPlanets.map(planetId => ({
+      planetId,
+      worldPos: this.systems[planetId]?.stationWorldPosition ?? null,
+    }));
+  }
+
   _initRouteLanes() {
     this._routeLanes = new Map(); // routeId → RouteLane3D
 
@@ -283,6 +313,7 @@ export class Galaxy {
 
     // Update fleet visuals and threat indicators
     if (this.roamingFleetManager) this.roamingFleetManager.update(dt, time);
+    if (this.enemyStationManager) this.enemyStationManager.update(dt, time, camera);
     this._updateThreatIndicators(time);
 
     // Update route lanes

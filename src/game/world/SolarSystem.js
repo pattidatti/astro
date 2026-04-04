@@ -13,6 +13,7 @@ import { LensFlare } from '../effects/LensFlare.js';
 import { MiningBurst } from '../effects/MiningBurst.js';
 import { DefenseManager3D } from './DefenseManager3D.js';
 import { MilitaryBase3D } from '../objects/MilitaryBase3D.js';
+import { EnemyStation3D } from '../objects/EnemyStation3D.js';
 import { gameState } from '../GameState.js';
 
 /**
@@ -242,6 +243,18 @@ export class SolarSystem {
     gameState.on('planetFell',        this._onMilitaryBaseFell);
     gameState.on('stateLoaded',       this._onMilStateLoaded);
     this._restoreMilitaryBase();
+
+    // ── Enemy Station ──────────────────────────────────────────────────────
+    this.enemyStation = null;
+    this._onEnemyStationDestroyed = (destroyedStationId) => {
+      // Check if this system's station was destroyed
+      const st = gameState.enemyStations?.find(s => s.id === destroyedStationId && s.anchorPlanet === this.id);
+      if (st) this._removeEnemyStation();
+    };
+    this._onEnemyStateLoaded = () => this._restoreEnemyStation();
+    gameState.on('enemyStationDestroyed', this._onEnemyStationDestroyed);
+    gameState.on('stateLoaded',           this._onEnemyStateLoaded);
+    this._restoreEnemyStation();
   }
 
   _createOrbitLine(planetDef) {
@@ -336,6 +349,39 @@ export class SolarSystem {
     }
   }
 
+  // ── Enemy Station: spawn / remove / restore ──────────────────────────────
+  _spawnEnemyStation() {
+    if (this.enemyStation) return;
+    const st = gameState.enemyStations?.find(s => s.anchorPlanet === this.id && !s.cleared);
+    if (!st) return;
+    const def = {
+      id: st.id,
+      type: st.type,
+      anchorPlanet: st.anchorPlanet,
+      maxHP: st.maxHP,
+      shieldMaxHP: st.shieldMaxHP,
+      orbitRadius: 50,
+    };
+    this.enemyStation = new EnemyStation3D(def);
+    this.orbitGroup.add(this.enemyStation.group);
+  }
+
+  _removeEnemyStation() {
+    if (!this.enemyStation) return;
+    this.orbitGroup.remove(this.enemyStation.group);
+    this.enemyStation.dispose();
+    this.enemyStation = null;
+  }
+
+  _restoreEnemyStation() {
+    const st = gameState.enemyStations?.find(s => s.anchorPlanet === this.id && !s.cleared);
+    if (st && !this.enemyStation) {
+      this._spawnEnemyStation();
+    } else if (!st && this.enemyStation) {
+      this._removeEnemyStation();
+    }
+  }
+
   _createLabel(name) {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
@@ -393,6 +439,11 @@ export class SolarSystem {
   /** Click target for military base hitbox (null if not built) */
   get militaryBaseClickTarget() {
     return this.militaryBase?.hitboxMesh ?? null;
+  }
+
+  /** Click target for enemy station hitbox (null if not spawned) */
+  get enemyStationClickTarget() {
+    return this.enemyStation?.hitboxMesh ?? null;
   }
 
   /** World position of the military base (for camera tracking) */
@@ -601,6 +652,15 @@ export class SolarSystem {
         }
       }
     }
+
+    // Enemy station — visible when close enough
+    if (this.enemyStation) {
+      const esVisible = distance < 200;
+      this.enemyStation.group.visible = esVisible;
+      if (esVisible && dt !== undefined) {
+        this.enemyStation.update(time, dt, camera);
+      }
+    }
   }
 
   dispose() {
@@ -614,8 +674,11 @@ export class SolarSystem {
     gameState.off('militaryBaseBuilt',  this._onMilitaryBaseBuilt);
     gameState.off('planetFell',         this._onMilitaryBaseFell);
     gameState.off('stateLoaded',        this._onMilStateLoaded);
+    gameState.off('enemyStationDestroyed', this._onEnemyStationDestroyed);
+    gameState.off('stateLoaded',           this._onEnemyStateLoaded);
     if (this.colonyShip) this.colonyShip.dispose();
     if (this.militaryBase) this.militaryBase.dispose();
+    if (this.enemyStation) this.enemyStation.dispose();
     this.planet.dispose();
     this.station.dispose();
     this.defenseManager.dispose();

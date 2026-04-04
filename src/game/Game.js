@@ -17,6 +17,7 @@ import { CombatEffects } from './effects/CombatEffects.js';
 import { ClickFeedback } from './effects/ClickFeedback.js';
 import { Minimap } from './ui/Minimap.js';
 import { RoamingFleetManager3D } from './world/RoamingFleetManager3D.js';
+import { EnemyStationManager3D } from './world/EnemyStationManager3D.js';
 import { PlayerFleetManager3D } from './world/PlayerFleetManager3D.js';
 import { FleetPanel } from './ui/FleetPanel.js';
 import { MilitaryPanel } from './ui/MilitaryPanel.js';
@@ -264,6 +265,10 @@ export function createGame() {
   const fleetManager = new RoamingFleetManager3D(sceneManager.scene, galaxy);
   galaxy.roamingFleetManager = fleetManager;
 
+  // --- Enemy station visuals ---
+  const stationManager = new EnemyStationManager3D(sceneManager.scene);
+  galaxy.enemyStationManager = stationManager;
+
   // --- Fleet info panel ---
   const fleetPanel = new FleetPanel();
   let _selectedFleetId = null;
@@ -380,6 +385,33 @@ export function createGame() {
       if (ps?.militaryBase?.built) _registerMilitaryBaseClick(planetId);
     }
   });
+
+  // Register enemy station click targets
+  const _registerEnemyStationClicks = () => {
+    for (const target of galaxy.getEnemyStationClickTargets()) {
+      if (!target.mesh || target.mesh.userData._esClickBound) continue;
+      target.mesh.userData._esClickBound = true;
+      inputManager.addClickable(target.mesh, () => {
+        const st = gameState.enemyStations?.find(s => s.id === target.stationId);
+        if (!st) return;
+        AudioManager.play('PLANET_CLICK_3D');
+        // Center camera on the enemy station
+        if (target.planetId) {
+          // Planet-anchored — track planet world position
+          const sys = galaxy.getSystem(target.planetId);
+          if (sys) cameraController.trackObject(() => sys.planetWorldPosition, 80);
+        } else {
+          // Free-floating — track station world position directly
+          const mgr = galaxy.enemyStationManager;
+          const st3D = mgr?._activeStations?.get(target.stationId);
+          if (st3D) {
+            cameraController.trackObject(() => st3D.group.position, 80);
+          }
+        }
+      });
+    }
+  };
+  gameState.on('stateLoaded', _registerEnemyStationClicks);
 
   // Combat visual events — projectile cooldowns per defense type
   const _projectileCooldowns = { cannon: 0, satellite: 0, defenseShip: 0, shield: 0 };
@@ -729,6 +761,7 @@ export function createGame() {
       }
     },
   });
+  minimap.setGalaxy(galaxy);
 
   // Reusable vector to avoid per-frame allocation for god rays
   const _godRayUV = new THREE.Vector2();
