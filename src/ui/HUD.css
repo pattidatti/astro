@@ -40,6 +40,19 @@
   pointer-events: auto;
 }
 
+/* ── FPS COUNTER ── */
+#fps-counter {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: rgba(212, 168, 67, 0.55);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  z-index: 200;
+}
+
 /* ── TOP NAV BUTTONS (menu + research) ── */
 #top-nav {
   position: fixed;

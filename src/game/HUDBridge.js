@@ -30,12 +30,16 @@ export class HUDBridge {
     this._hoverBoxLastX = null;
     this._hoverBoxLastY = null;
     this._hoverBoxVisible = false; // guards classList.add/remove to avoid per-frame DOM touch
+    this._fpsFrames = 0;
+    this._fpsElapsed = 0;
+    this._fpsLast = 0;
 
     this.dom = {
       upgTooltip:          document.getElementById('upg-tooltip'),
       planetTooltip:       document.getElementById('planet-tooltip'),
       hoverTargetBox:      document.getElementById('hover-target-box'),
       toastContainer:      document.getElementById('toast-container'),
+      fpsCounter:          document.getElementById('fps-counter'),
     };
     this._hoveredAnyMesh = null;
     this._tmpVec = new THREE.Vector3();
@@ -271,6 +275,19 @@ export class HUDBridge {
   }
 
   update(_dt) {
+    // FPS counter
+    this._fpsFrames++;
+    this._fpsElapsed += _dt;
+    if (this._fpsElapsed >= 0.5) {
+      const fps = Math.round(this._fpsFrames / this._fpsElapsed);
+      this._fpsFrames = 0;
+      this._fpsElapsed = 0;
+      if (fps !== this._fpsLast) {
+        this._fpsLast = fps;
+        this.dom.fpsCounter.textContent = fps + ' FPS';
+      }
+    }
+
     const camera = this.game.camera;
     const cameraController = this.game.cameraController;
     const galaxy = this.game.galaxy;
