@@ -11,8 +11,9 @@ import {
   QUANTUM_FUEL_ENERGY_MULT,
   TITAN_ULTIMATE_COOLDOWN, TITAN_ULTIMATE_COST_ORE,
 } from './data/militaryStats.js';
+import { buildDefaultEnemyStations } from './data/enemyStations.js';
 
-const SAVE_VERSION = 5;
+const SAVE_VERSION = 6;
 
 /**
  * Compute max energy and ore supply capacity for a fleet based on ship count and tech.
@@ -163,6 +164,9 @@ class GameState extends EventEmitter {
     this.colonyShipsArriving = []; // [{ id, fromPlanetId, toPlanetId }] — in orbit at destination, waiting for base
     this.playerFleets = []; // [{ id, planetId, position, waypoint, state, ships, speed }]
     this.fleetEngagements = []; // [{ id, playerFleetId, roamingFleetId, elapsed }]
+    this.enemyStations = [];       // populated by migration / new game
+    this.stationSieges = [];       // active player fleet sieges on enemy stations
+    this.wreckageFields = [];      // runtime-only, not persisted
     this._militaryBasePosFns = {}; // planetId → () => THREE.Vector3 (runtime, not serialized)
     this.tutorialStep = 0;
     this.lastSaved = Date.now();
@@ -1162,6 +1166,54 @@ class GameState extends EventEmitter {
     ps.militaryBase.hp = Math.min(ps.militaryBase.maxHP, ps.militaryBase.hp + amount);
   }
 
+  /** Damage an enemy station (shield absorbs first, then hull). */
+  damageEnemyStation(stationId, amount) {
+    const st = this.enemyStations.find(s => s.id === stationId);
+    if (!st || st.cleared) return 0;
+    let overflow = amount;
+    if (st.shieldHP > 0) {
+      const absorbed = Math.min(st.shieldHP, overflow);
+      st.shieldHP -= absorbed;
+      overflow -= absorbed;
+      this.emit('enemyStationDamaged', { stationId, shieldDamage: absorbed, hullDamage: 0 });
+    }
+    if (overflow > 0) {
+      st.hp = Math.max(0, st.hp - overflow);
+      this.emit('enemyStationDamaged', { stationId, shieldDamage: 0, hullDamage: overflow });
+      if (st.hp <= 0) this.destroyEnemyStation(stationId);
+    }
+    return st.hp;
+  }
+
+  /** Destroy an enemy station and create wreckage. */
+  destroyEnemyStation(stationId) {
+    const st = this.enemyStations.find(s => s.id === stationId);
+    if (!st || st.cleared) return;
+    st.cleared = true;
+    st.hp = 0;
+    st.shieldHP = 0;
+    this.wreckageFields.push({
+      id: `wreck_${stationId}`,
+      stationId,
+      position: null, // populated by EnemyStation3D in Phase 2
+      nodes: [],      // populated by EnemyStation3D in Phase 2
+      elapsed: 0,
+    });
+    this.emit('enemyStationDestroyed', { stationId });
+  }
+
+  /** Start a player fleet siege on an enemy station. */
+  startStationSiege(fleetId, stationId) {
+    if (this.stationSieges.find(s => s.playerFleetId === fleetId && s.enemyStationId === stationId)) return;
+    this.stationSieges.push({ id: `siege_${fleetId}_${stationId}`, playerFleetId: fleetId, enemyStationId: stationId, elapsed: 0 });
+  }
+
+  /** Dispatch a player fleet to attack an enemy station. */
+  dispatchFleetToStation(fleetId, stationId) {
+    const fleet = this.playerFleets.find(f => f.id === fleetId);
+    if (fleet) fleet.stationTarget = stationId; // used by FleetMovementSystem in Phase 4
+  }
+
   // ─── Route management ─────────────────────────────────────────────────────
 
   addRoute(route) {
@@ -1553,6 +1605,8 @@ class GameState extends EventEmitter {
         })),
       })),
       fleetEngagements: JSON.parse(JSON.stringify(this.fleetEngagements)),
+      enemyStations: JSON.parse(JSON.stringify(this.enemyStations)),
+      stationSieges: JSON.parse(JSON.stringify(this.stationSieges)),
       activeAttacks: attacks,
       roamingFleets: JSON.parse(JSON.stringify(this.roamingFleets)),
       lastAttackTime: { ...this.lastAttackTime },
@@ -1583,6 +1637,9 @@ class GameState extends EventEmitter {
     this.colonyShipsArriving = data.colonyShipsArriving ?? [];
     this.playerFleets        = data.playerFleets ?? [];
     this.fleetEngagements    = data.fleetEngagements ?? [];
+    this.enemyStations       = data.enemyStations ?? null;   // null triggers v5→v6 migration below
+    this.stationSieges       = data.stationSieges ?? [];
+    this.wreckageFields      = [];                            // always reset on load
     // Re-init runtime-only per-ship fields stripped during serialization
     for (const fleet of this.playerFleets) {
       for (const ship of fleet.ships) {
@@ -1688,6 +1745,11 @@ class GameState extends EventEmitter {
         };
       }
       if (fleet.titanCooldown === undefined) fleet.titanCooldown = 0;
+    }
+
+    // v5→v6 migration: initialize enemy station data if not present
+    if (!this.enemyStations?.length) {
+      this.enemyStations = buildDefaultEnemyStations();
     }
 
     this.emit('stateLoaded');

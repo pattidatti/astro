@@ -35,3 +35,12 @@ export const CENTRAL_STAR = {
   color: '#ffdd44',
   size: 12,
 };
+
+export const FREE_FLOATING_BASES = [
+  { id: 'outpost_alpha', orbitRadius: 550,  orbitAngle: Math.PI * 0.3, orbitSpeed: 0.003, inclination: 0.05,
+    patrolLanes: [['crystara', 'glacius']] },
+  { id: 'outpost_beta',  orbitRadius: 950,  orbitAngle: Math.PI * 1.1, orbitSpeed: 0.002, inclination: 0.07,
+    patrolLanes: [['drakon', 'voidex']] },
+  { id: 'outpost_gamma', orbitRadius: 1250, orbitAngle: Math.PI * 1.7, orbitSpeed: 0.001, inclination: 0.04,
+    patrolLanes: [['xerion', 'drakon']] },
+];

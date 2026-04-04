@@ -88,6 +88,24 @@ export const MILITARY_SHIPS = {
     combatBehavior: 'dreadnought', // heavy hitter, holds position
     desc:         'Colossus-class dreadnought with AoE ultimate.',
   },
+  scavenger: {
+    name:         'Scavenger',
+    icon:         '♻',
+    tech:         'scavenger_vessels',
+    cost:         { ore: 400, energy: 600 },
+    buildTime:    30,
+    hp:           150,
+    speed:        10,
+    fleetCapCost: 1,
+    // Combat stats
+    dps:            1,
+    range:          0,
+    fireRate:       0,
+    combatBehavior: 'none',
+    tractorRange:   15,
+    holdCapacity:   { ore: 200, crystal: 100 },
+    desc:         'Solo scavenger that collects wreckage from destroyed enemy stations.',
+  },
 };
 
 export const SHIP_TYPES = Object.keys(MILITARY_SHIPS);

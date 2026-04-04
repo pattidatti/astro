@@ -533,6 +533,13 @@ export const TECH_NODES = [
     cost: 8000, free: false, requires: ['bomber_chassis'], tier: 3, branch: 'military',
   },
   {
+    id: 'scavenger_vessels',
+    name: 'SCAVENGER VESSELS',
+    icon: '♻',
+    desc: 'Deploy scavenger ships to collect wreckage from destroyed enemy stations.',
+    cost: 6000, free: false, requires: ['battleship_chassis'], tier: 3, branch: 'military',
+  },
+  {
     id: 'crystal_cores',
     name: 'CRYSTAL CORES',
     icon: '💎',
