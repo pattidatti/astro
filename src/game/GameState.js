@@ -703,12 +703,12 @@ class GameState extends EventEmitter {
     if (!ps || !ps.hasBase) return null;
     const upg = BASE_UPGRADES.find(u => u.id === upgradeId);
     if (!upg) return null;
-    const lv = ps.baseLevels[upg.effect] ?? 0;
-    if (lv >= upg.maxLevel) return null;
+    const level = ps.baseLevels[upg.effect] ?? 0;
+    if (level >= upg.maxLevel) return null;
 
     const cost = {
-      energy: upg.energyCost[lv],
-      ore:    upg.oreCost ? upg.oreCost[lv] : 0
+      energy: upg.energyCost[level],
+      ore:    upg.oreCost ? upg.oreCost[level] : 0
     };
     // Only clamp storage upgrades to ensure player can always increase capacity
     if (upg.effect === 'storage') {
@@ -725,14 +725,14 @@ class GameState extends EventEmitter {
 
     const ps = this.getPlanetState(planetId);
     const upg = BASE_UPGRADES.find(u => u.id === upgradeId);
-    const lv = ps.baseLevels[upg.effect];
+    const level = ps.baseLevels[upg.effect];
 
     if (cost.energy > 0) this.deductFromSilo(planetId, 'energy', cost.energy);
     if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
 
     // Apply storage capacity increase
     if (upg.effect === 'storage') {
-      const bonus = upg.capacityBonus[lv];
+      const bonus = upg.capacityBonus[level];
       ps.silos.ore.capacity    += bonus;
       ps.silos.energy.capacity += bonus;
       if (ps.silos.crystal.capacity > 0) ps.silos.crystal.capacity += bonus;
@@ -769,9 +769,9 @@ class GameState extends EventEmitter {
     const upg = ROBOT_UPGRADES.find(u => u.id === upgradeId);
     if (!upg) return null;
     const robot = ps.robots[upg.robotType];
-    const lv = robot[upg.effect] ?? 0;
-    if (lv >= upg.maxLevel) return null;
-    return { energy: upg.energyCost[lv] };
+    const level = robot[upg.effect] ?? 0;
+    if (level >= upg.maxLevel) return null;
+    return { energy: upg.energyCost[level] };
   }
 
   buyRobotUpgrade(planetId, upgradeId) {
@@ -1214,12 +1214,12 @@ class GameState extends EventEmitter {
     const def = DEFENSE_TYPES[defenseId];
     if (!def) return null;
 
-    const lv = ps.combat.defenses[defenseId] || 0;
-    if (lv >= def.maxLevel) return null;
+    const level = ps.combat.defenses[defenseId] || 0;
+    if (level >= def.maxLevel) return null;
 
     return {
-      energy: def.energyCost[lv],
-      ore:    def.oreCost ? def.oreCost[lv] : 0
+      energy: def.energyCost[level],
+      ore:    def.oreCost ? def.oreCost[level] : 0
     };
   }
 
@@ -1238,18 +1238,18 @@ class GameState extends EventEmitter {
     if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
 
     const ps = this.getPlanetState(planetId);
-    const lv = ps.combat.defenses[defenseId] || 0;
-    ps.combat.defenses[defenseId] = lv + 1;
+    const level = ps.combat.defenses[defenseId] || 0;
+    ps.combat.defenses[defenseId] = level + 1;
 
     // Shield: update max HP and current HP
     if (defenseId === 'shield') {
       const def = DEFENSE_TYPES[defenseId];
-      const newLevel = lv + 1;
+      const newLevel = level + 1;
       ps.combat.shieldMaxHP = def.shieldHP[newLevel - 1];
       ps.combat.shieldHP = ps.combat.shieldMaxHP;
     }
 
-    this.emit('defenseBuilt', { planetId, defenseId, level: lv + 1 });
+    this.emit('defenseBuilt', { planetId, defenseId, level: level + 1 });
     return true;
   }
 
@@ -1262,12 +1262,12 @@ class GameState extends EventEmitter {
     const upg = DEFENSE_UPGRADES.find(u => u.id === upgradeId);
     if (!upg) return null;
 
-    const lv = ps.combat.defenseLevels[upgradeId] || 0;
-    if (lv >= upg.maxLevel) return null;
+    const level = ps.combat.defenseLevels[upgradeId] || 0;
+    if (level >= upg.maxLevel) return null;
 
     const cost = {
-      energy: upg.energyCost[lv],
-      ore:    upg.oreCost ? upg.oreCost[lv] : 0
+      energy: upg.energyCost[level],
+      ore:    upg.oreCost ? upg.oreCost[level] : 0
     };
     // Only clamp storage upgrades to ensure player can always increase capacity
     if (upg.effect === 'storage') {
@@ -1290,10 +1290,10 @@ class GameState extends EventEmitter {
     if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
 
     const ps = this.getPlanetState(planetId);
-    const lv = ps.combat.defenseLevels[upgradeId] || 0;
-    ps.combat.defenseLevels[upgradeId] = lv + 1;
+    const level = ps.combat.defenseLevels[upgradeId] || 0;
+    ps.combat.defenseLevels[upgradeId] = level + 1;
 
-    this.emit('defenseUpgraded', { planetId, upgradeId, level: lv + 1 });
+    this.emit('defenseUpgraded', { planetId, upgradeId, level: level + 1 });
     return true;
   }
 

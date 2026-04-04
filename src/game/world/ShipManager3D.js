@@ -298,7 +298,7 @@ export class ShipManager3D {
 
     this._trailGeo.attributes.position.needsUpdate = true;
     this._trailGeo.attributes.color.needsUpdate = true;
-    this._trailGeo.setDrawRange(0, currentUsedTrails);
+    this._trailGeo.setDrawRange(0, cargoCount * 15 * 2);
   }
 
   getColonyShipPosition(shipId) {

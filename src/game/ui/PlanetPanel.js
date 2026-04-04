@@ -347,11 +347,11 @@ export class PlanetPanel {
       const techId = BASE_TECH_MAP[upg.id];
       if (techId && !gameState.isTechUnlocked(techId)) continue;
       
-      const lv = ps.baseLevels[upg.effect] ?? 0;
-      const maxed = lv >= upg.maxLevel;
-      const cost = maxed ? null : { 
-        energy: upg.energyCost?.[lv] || 0,
-        ore:    upg.oreCost?.[lv] || 0 
+      const level = ps.baseLevels[upg.effect] ?? 0;
+      const maxed = level >= upg.maxLevel;
+      const cost = maxed ? null : {
+        energy: upg.energyCost?.[level] || 0,
+        ore:    upg.oreCost?.[level] || 0
       };
       
       const canEnergy = !cost || cost.energy <= 0 || gameState.siloHas(this._planetId, 'energy', cost.energy);
@@ -371,7 +371,7 @@ export class PlanetPanel {
       btn.innerHTML = `
         <span class="base-upg-icon">${upg.icon}</span>
         <span class="base-upg-name">${upg.name}</span>
-        <span class="base-upg-level">${maxed ? 'MAX' : `LV ${lv}/${upg.maxLevel}`}</span>
+        <span class="base-upg-level">${maxed ? 'MAX' : `LV ${level}/${upg.maxLevel}`}</span>
         ${costStr ? `<span class="base-upg-cost">${costStr}</span>` : ''}
       `;
 
@@ -397,14 +397,14 @@ export class PlanetPanel {
       btn.addEventListener('mouseenter', () => {
         let effectLine = '';
         if (!maxed) {
-          if (upg.effect === 'storage') effectLine = `→ +${fmt(upg.capacityBonus[lv])} capacity`;
-          else if (upg.effect === 'passiveEnergy') effectLine = `→ ${upg.passiveRate[lv]} energy/s passive`;
+          if (upg.effect === 'storage') effectLine = `→ +${fmt(upg.capacityBonus[level])} capacity`;
+          else if (upg.effect === 'passiveEnergy') effectLine = `→ ${upg.passiveRate[level]} energy/s passive`;
           else if (upg.effect === 'shipSpeed') effectLine = `→ +20% ship speed`;
           else if (upg.effect === 'shipSlots') effectLine = `→ +1 docking slot`;
         }
         this._showTooltip(btn, `
           <div class="utt-name">${upg.name}</div>
-          <div class="utt-level">${maxed ? 'MAXED OUT' : `LV ${lv} / ${upg.maxLevel}`}</div>
+          <div class="utt-level">${maxed ? 'MAXED OUT' : `LV ${level} / ${upg.maxLevel}`}</div>
           <div class="utt-desc">${upg.desc}</div>
           ${!maxed ? `
             <div class="utt-cost">
@@ -1006,9 +1006,9 @@ export class PlanetPanel {
 
     for (const upg of relevantUpgrades) {
       const robot = ps.robots[upg.robotType];
-      const lv = robot[upg.effect] ?? 0;
-      const maxed = lv >= upg.maxLevel;
-      const cost = maxed ? null : { energy: upg.energyCost[lv] };
+      const level = robot[upg.effect] ?? 0;
+      const maxed = level >= upg.maxLevel;
+      const cost = maxed ? null : { energy: upg.energyCost[level] };
       const canAfford = cost && gameState.siloHas(this._planetId, 'energy', cost.energy);
 
       const isSpeed = upg.effect === 'speedLevel';
@@ -1020,17 +1020,17 @@ export class PlanetPanel {
       row.className = 'robot-upg-row';
       row.innerHTML = `
         <span class="robot-upg-name">${upg.name}<span class="upg-effect-tag">${effectTag}</span></span>
-        <span class="robot-upg-level">${maxed ? 'MAX' : `${lv}/${upg.maxLevel}`}</span>
+        <span class="robot-upg-level">${maxed ? 'MAX' : `${level}/${upg.maxLevel}`}</span>
       `;
 
       row.addEventListener('mouseenter', () => {
-        const curMult = getMult(lv);
-        const nextMult = !maxed ? getMult(lv + 1) : null;
+        const curMult = getMult(level);
+        const nextMult = !maxed ? getMult(level + 1) : null;
         this._showTooltip(row, `
           <div class="utt-name">${upg.name}</div>
-          <div class="utt-level">${maxed ? 'MAXED OUT' : `LV ${lv} / ${upg.maxLevel}`}</div>
+          <div class="utt-level">${maxed ? 'MAXED OUT' : `LV ${level} / ${upg.maxLevel}`}</div>
           <div class="utt-desc">${isSpeed ? 'Increases movement speed' : 'Increases cargo capacity'} (+${pctPerLevel}% per level)</div>
-          <div class="utt-cost">${lv > 0 ? `Current: ×${curMult.toFixed(1)}` : 'No bonus yet'}${!maxed ? `  →  Next: ×${nextMult.toFixed(1)}` : ''}</div>
+          <div class="utt-cost">${level > 0 ? `Current: ×${curMult.toFixed(1)}` : 'No bonus yet'}${!maxed ? `  →  Next: ×${nextMult.toFixed(1)}` : ''}</div>
         `);
       });
       row.addEventListener('mouseleave', () => this._hideTooltip());
