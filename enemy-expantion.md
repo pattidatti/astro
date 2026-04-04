@@ -291,3 +291,314 @@ wreckageFields: [
 - [ ] **Phase 4 — Station Combat**: `FleetCombatSystem._tickStationCombat()` + `reconstructSieges()` + **scavenger ekskludert fra aggro-scan** (`fleet.ships[0]?.type === 'scavenger'`); `FleetMovementSystem` stasjon som stationary angrepswaypoint + `setGalaxy()` + Emergency Jump `_execEmergencyJump(fleet, targetPlanetId)`; `InputManager` **5px drag-threshold** for klikk vs box-select; `EnemyStationPanel.js`; stasjonsdestuksjon → wreckage spawn
 - [ ] **Phase 5 — Scavenger & Wreckage**: `WreckageField3D.js` (debris nodes, resource pools, **dt-accumulated `elapsed` ≥ 600s cleanup**); scavenger tractor beam + hold (**hold lagret i playerFleets[], fullt hold = stopper innsamling**) + delivery flow; auto-resupply ved `Station3D` (**20/s — eksisterende `RESUPPLY_RATE`-konstant**); `RouteLane3D.setBlocked()`; `HUDBridge` + `CombatHUD` notifikasjoner
 - [ ] **Phase 6 — Emergency Jump & Polish**: `PlayerFleetPanel` Emergency Jump-knapp + **dropdown-destinasjonsvelger** (sortert etter 3D-avstand) + 300s **fill-bar** (følger Titan-mønster); **full GLSL radial blur shader** i `RenderPipeline.js` (`WarpDistortionEffect`, uniform: uCenter/uStrength/uProgress); audio pass (hums, sirens, crash, warp pop); `HUD.css` nye stiler
+
+---
+
+## 12. Detaljert Implementasjonsplan
+
+---
+
+### Fase 1 — Data & State
+
+#### Mål
+Legge til alt data-fundament og persistens-infrastruktur som de påfølgende fasene avhenger av. Ingen gameplay-logikk, ingen 3D — kun data, typer og serialisering.
+
+#### Filer som endres
+
+- **`src/game/GameState.js`**
+  - Bump `SAVE_VERSION = 5` → `6`
+  - I `_initFresh()`: legg til `this.enemyStations = [];`, `this.stationSieges = [];`, `this.wreckageFields = [];` (`wreckageFields` er runtime-only — serialiseres **ikke**)
+  - I `serialize()`: legg til `enemyStations: JSON.parse(JSON.stringify(this.enemyStations))` og `stationSieges: JSON.parse(JSON.stringify(this.stationSieges))`
+  - I `deserialize()`: `this.enemyStations = data.enemyStations ?? null;` og `this.stationSieges = data.stationSieges ?? []`; reset `this.wreckageFields = []` alltid
+  - **v5→v6 migrasjonsblokk** (etter eksisterende v4→v5-blokk): `if (!this.enemyStations?.length) { this.enemyStations = buildDefaultEnemyStations(); }` — importert fra `enemyStations.js`
+  - Nye metoder: `damageEnemyStation(stationId, amount)` (shield-absorb først, emit `'enemyStationDamaged'`), `destroyEnemyStation(stationId)` (sett `cleared = true`, emit `'enemyStationDestroyed'`, push til `wreckageFields`), `startStationSiege(fleetId, stationId)`, `dispatchFleetToStation(fleetId, stationId)`
+
+- **`src/game/data/galaxyLayout.js`**
+  - Legg til ny export på bunnen: `export const FREE_FLOATING_BASES = [...]` med de 3 objektene fra Section 2 (`id`, `orbitRadius`, `orbitAngle`, `orbitSpeed`, `inclination`, `patrolLanes`)
+
+- **`src/game/data/militaryShips.js`**
+  - Legg til `scavenger`-oppføring etter `titan`: `combatBehavior: 'none'`, `tractorRange: 15`, `holdCapacity: { ore: 200, crystal: 100 }`, `tech: 'scavenger_vessels'`, kost `{ ore: 400, energy: 600 }`
+  - `SHIP_TYPES` genereres automatisk — ingen endring nødvendig
+
+- **`src/game/data/techTree.js`** (militærbranchen, etter `battleship_chassis`-noden, tier 3)
+  - Legg til: `{ id: 'scavenger_vessels', name: 'SCAVENGER VESSELS', icon: '♻', desc: 'Deploy scavenger ships to collect wreckage from destroyed enemy stations.', cost: 6000, requires: ['battleship_chassis'], tier: 3, branch: 'military' }`
+
+#### Nye filer
+
+- **`src/game/data/enemyStations.js`**
+  - `ENEMY_STATION_DEFS` — array med 7 stasjonsdefinisjonsobjekter: `id`, `type` (`'lava'|'ice'|'industrial'|'void'|'generic'`), `anchorPlanet` (planetnavn eller `null`), `maxHP`, `shieldMaxHP`, `orbitRadius` (50 for planet-anchored)
+  - `buildDefaultEnemyStations()` — returnerer 7 runtime-stasjonsobjekter fra definisjonene: full HP, `phase: 'dormant'`, `lastSpawnTime: 0`, `scoutIds: []`, `cleared: false`
+
+#### Integrasjonspunkter
+Ingen avhengigheter utover eksisterende imports. `buildDefaultEnemyStations()` importeres kun av `GameState.js`.
+
+#### Verifisering
+1. Nytt spill → DevTools: `gameState.enemyStations` har 7 objekter med `phase: 'dormant'`
+2. Lagre + reload → `saveVersion: 6` i localStorage, `enemyStations` serialisert
+3. Last inn v5-lagret spill → migrasjonsblokk fyller inn 7 stasjoner automatisk
+4. `SHIP_TYPES` inkluderer `'scavenger'`
+5. `TECH_BY_ID['scavenger_vessels']` eksisterer og krever `battleship_chassis`
+
+---
+
+### Fase 2 — 3D Visuals
+
+#### Mål
+Synlige fiendtlige stasjoner i 3D-scenen — inkludert HP-bar, shield-dome, LOD-integrasjon, minimap-diamonds og snitch-stisvisualisering. Ingen gameplay-logikk; stasjonene er statisk Dormant-fase.
+
+#### Filer som endres
+
+- **`src/game/world/SolarSystem.js`**
+  - Konstruktør (etter `_restoreMilitaryBase()`): legg til `this.enemyStation = null;`; registrer lyttere: `'enemyStationSpawned'` → `_spawnEnemyStation()`, `'stateLoaded'` → `_restoreEnemyStation()`, `'enemyStationDestroyed'` → `_removeEnemyStation()`
+  - `_spawnEnemyStation()` — sjekker om planet-ID matcher en `anchorPlanet` i `gameState.enemyStations`; oppretter `new EnemyStation3D(def)`, legger til i `orbitGroup` ved radius 50 (utenfor asteroid-beltet på 25–40)
+  - `_removeEnemyStation()` — fjern fra `orbitGroup`, kall `dispose()`
+  - I `updateLOD()`: legg til `if (this.enemyStation && distance < 200) this.enemyStation.update(time, dt, camera);` — følger mønsteret for `militaryBase.update()`
+  - Legg til getter: `get enemyStationClickTarget() { return this.enemyStation?.hitboxMesh ?? null; }`
+
+- **`src/game/world/Galaxy.js`**
+  - I `update()`: legg til `this.enemyStationManager?.update(dt, time);`
+  - Ny metode `getEnemyStationClickTargets()` — henter fra `EnemyStationManager3D` (free-floating) + itererer `this.systems` for `sys.enemyStationClickTarget` (planet-anchored)
+  - Ny metode `getOwnedStationPositions()` — returnerer `gameState.ownedPlanets.map(id => ({ planetId: id, worldPos: this.getPlanetWorldPosition(id) }))` — brukes av Emergency Jump (Fase 6)
+
+- **`src/game/ui/Minimap.js`**
+  - I `update()` (etter planet-tegning): iterer `gameState.enemyStations`; konverter planet/orbital-posisjon til canvas-koordinater via `CENTER + worldX / 0.05 * s`; tegn rød diamant (`ctx.save()`, `ctx.rotate(Math.PI/4)`, `ctx.fillRect(mx-4, my-4, 8, 8)`, `ctx.restore()`) og pulserende ring (`strokeStyle: 'rgba(255,50,50,0.6)'`, radius: `6 + Math.sin(time * 4) * 2`); grå/dim for `cleared`-stasjoner
+  - Legg til `setGalaxy(galaxy)` for å hente planet-posisjoner
+
+#### Nye filer
+
+- **`src/game/objects/EnemyStation3D.js`** (~220 linjer)
+  - Konstruktør tar `stationDef` med `type`-felt
+  - Geometri: sentral `CylinderGeometry` (hull), `TorusGeometry` ringdetaljer, type-spesifikk fargepalett (lava: rød/oransje, ice: blå/hvit, void: lilla, industrial: grå/rav, generic: mørk metall)
+  - HP-bar: **identisk mønster** som `Mothership3D._createHPBar()` (linje 309–333): `_hpBg` + `_hpFg` PlaneGeometry-par med `depthTest: false`; `setHP(current, max)` skalerer og forskyver `_hpFg.scale.x` + `_hpFg.position.x`; fargeterskler `> 0.5` rød → `> 0.25` oransje → gul
+  - Shield dome: `SphereGeometry(5.0, 24, 16)`, `wireframe: true`, `AdditiveBlending`, `opacity: 0`; `setShield(hp, max)` justerer opacity `0.08 + frac * 0.12`
+  - Fase-emissiv: `setPhase(phase)` justerer `emissiveIntensity` + farge (dormant: blå, alert: gul, skirmish: oransje, war: pulserende rød 2s-syklus)
+  - `faceCamera(camera)` — kopierer camera-kvaternion til HP-bar-meshes per frame
+  - `update(time, dt, camera)`, `dispose()`
+  - Invisible `hitboxMesh`: `SphereGeometry(3, 8, 8)`, `MeshBasicMaterial({ visible: false })`, `userData.type = 'enemyStation'`, `userData.stationId`
+
+- **`src/game/world/EnemyStationManager3D.js`** (~150 linjer)
+  - Håndterer de 3 free-floating stasjonene (planet-anchored håndteres av `SolarSystem`)
+  - Pool av 3 `EnemyStation3D`-instanser; `_activeStations: Map<stationId, EnemyStation3D>`
+  - Lytter til `'stateLoaded'` + `'enemyStationDestroyed'`
+  - `update(dt, time)`: oppdaterer orbital posisjon for free-floating via `FREE_FLOATING_BASES[i].orbitRadius/Speed/Angle`
+  - `getClickTargets()` → `[{ mesh: station3D.hitboxMesh, stationId }]`
+  - Instansieres i `Game.js`, settes som `galaxy.enemyStationManager`
+
+- **`src/game/world/SnitchPath3D.js`** (~80 linjer)
+  - `LineSegments` (2 punkter) fra snitching scout til målstasjon
+  - `LineBasicMaterial({ color: 0xff2200, transparent: true, opacity: 0.7, depthWrite: false })`
+  - `update(fromPos, toPos)` — oppdaterer position-attributtet + `needsUpdate = true`
+  - Opprettes/fjernes av `EnemyStationSystem` (Fase 3) ved `isSnitching`-endringer
+
+#### Integrasjonspunkter
+- `SolarSystem` henter stasjonsdefinisjon fra `gameState.enemyStations` (hydrated i Fase 1)
+- `EnemyStationManager3D` instansieres i `Game.js` etter `Galaxy`, settes som `galaxy.enemyStationManager`
+- `Galaxy.getEnemyStationClickTargets()` registreres i `Game.js` tilsvarende eksisterende `getStationClickTargets()` (linje 198 i `Game.js`)
+
+#### Verifisering
+1. Start spill → 4 planet-anchored stasjoner synlige i orbit (radius ~50); 3 free-floating i galaxy-view
+2. HP-bar rendres over stasjonene, shield-dome synlig
+3. Minimap: 7 røde diamanter med pulserende ring
+4. Klikk på stasjon-hitbox → logg i DevTools (click-handler treffer, panel ikke implementert ennå)
+5. Ingen console-feil, ingen Three.js warnings om manglende dispose
+
+---
+
+### Fase 3 — State Machine & Eskalering
+
+#### Mål
+Implementere den fullstendige 4-fase state-maskinen, awakening-triggers, snitch-mekanikk og distress-flare. Dette er kjernelogikken som driver all fiendtlig aktivitet fra stasjonene.
+
+#### Filer som endres
+
+- **`src/game/systems/RoamingFleetSystem.js`**
+  - I fleet-opprettelse: legg til `isSnitching: false`, `snitchTarget: null`, `snitchMode: 'hyperlane' | 'freespace'` på fleet-objektet
+  - Ny privat metode `_tickSnitchBehavior(dt)` — kalt som 5. subtick i `_tick()`
+  - Inne i `_tickSnitchBehavior`: for hvert ikke-snitchende scout-fleet, sjekk om en player-fleet er innen 30 enheter (matcher `ENGAGE_RADIUS` fra `fleetCombatStats.js`) → sett `isSnitching = true`, beregn `snitchTarget` (nærmeste stasjon) og `snitchMode`
+  - Flytt snitchende scouts mot mål (speed: 0.03 vs spillerflåtens ~0.05+ — reell catch-window); hyperlane-modus navigerer langs lane-grafen, freespace-modus bruker direkte retningsvektor
+  - På ankomst: `gameState.emit('stationAlerted', { stationId: fleet.snitchTarget })`; clear snitch-state
+  - Eksponér `spawnStationScout(stationId, lane)` som public metode (wrapper rundt intern `_spawnScout()`)
+
+- **`src/game/Game.js`**
+  - Import og instansier `EnemyStationSystem` **etter** `CombatSystem` og **før** `RouteSystem` (boot-rekkefølge fra Section 10)
+  - Registrer click-targets: `for (const t of galaxy.getEnemyStationClickTargets()) { ... }`
+  - Lytt til `'stationAwakened'`, `'stationAlerted'` → `HUDBridge`-toast med kamera-navigasjon
+  - Lytt til `'enemyStationDestroyed'` → `combatEffects.explosion(pos, 4.0, 0xff4400)` + kamera-shake
+
+#### Nye filer
+
+- **`src/game/systems/EnemyStationSystem.js`** (~250 linjer)
+  - Konstruktør tar `animationLoop`, `roamingFleetSystem`, `galaxy`
+  - `animationLoop.onUpdate(dt => this._tick(dt))`
+  - `_tick(dt)` kaller:
+    1. `_tickAwakeningChecks()` — `ownedPlanets.length === 3`: våkne 2 nærmeste dormant-stasjoner by world-distance til nykolonisert planet; proximity 50 enheter mellom player-flåter og dormant-stasjoner
+    2. `_tickPhaseTransitions()` — sjekk betingelser per stasjon (scout snitcher → Alert, direkte skade → War, etc.)
+    3. `_tickScoutSpawning(dt)` — Alert/Skirmish/War: kall `roamingFleetSystem.spawnStationScout()`, begrens av `MAX_ROAMING_FLEETS = 4`
+    4. `_tickInvasionSpawning(dt)` — War: sjekk `stationInvasionCount < 2` OG `dt.now() - station.lastSpawnTime > 180000`; trigger invasjon via eksisterende `ThreatSystem`-mekanikk
+    5. `_tickDistressFlare()` — ved HP < 15% og `!station.distressFlareFired`: sett `distressFlareFired = true`, emit `'distressFlare'`; snitche-scout mot nærmeste nabostasjon; **maks 1 ledd** (stasjon alertet via distress flare sender ikke sin egen)
+  - `reconstructStations()` — re-emit `'enemyStationRestored'` for alle stasjoner (kalles fra boot etter load, tilsvarende `reconstructEngagements()`)
+  - Events emittet: `'stationAwakened'`, `'stationAlerted'`, `'stationPhaseChanged'`, `'distressFlare'`
+
+#### Integrasjonspunkter
+- Proximity-sjekk bruker `galaxy.getPlanetWorldPosition()` for planet-anchored; beregnet orbital-posisjon for free-floating
+- `SnitchPath3D`-objekter opprettes/fjernes ved `isSnitching`-endring; kan håndteres i `RoamingFleetManager3D.update()` eller lytter i `Game.js`
+
+#### Verifisering
+1. DevTools: `gameState.ownedPlanets` manuelt til 3 planeter → 2 nærmeste dormant-stasjoner bytter til `phase: 'alert'`
+2. Flytt player-fleet innen 50 enheter av dormant stasjon → den våkner
+3. Alert-stasjon spawner scout-flåter i `RoamingFleetSystem`
+4. Drep snitchende scout midt i reisen → `stationAlerted` emitttes **ikke**
+5. Reduser stasjon HP til < 15% → distress flare visuell + snitch-scout spawner mot nabostation, men chain-reaksjon er max 1 ledd
+
+---
+
+### Fase 4 — Station Combat
+
+#### Mål
+La player-flåter angripe og ødelegge fiendtlige stasjoner — siege-engasjement, type-spesifikke debuffs, wreckage-spawn ved destruction, og UI-panel for valgt stasjon.
+
+#### Filer som endres
+
+- **`src/game/systems/FleetCombatSystem.js`**
+  - I `_tick(dt)`: legg til `this._tickStationCombat(dt)` som 4. subtick
+  - `_tickStationCombat(dt)`: iterer `gameState.stationSieges`; appliser player DPS mot stasjonens shield → HP; appliser stasjonens DPS mot nærmeste player-skip; type-debuffs: lava (ignorer 20% av shield-absorb), ice (sett `fleet.speedDebuff = 0.6`), void (reduser supply-regen); fjern siege ved fleet-destruksjon eller `cleared`
+  - I `_tickAggroScan()`: tidlig `continue` for fleet der `fleet.ships[0]?.type === 'scavenger'` — ekskluder fra aggro-scan
+  - Ny metode `reconstructSieges()` — re-emit `'stationSiegeRestored'` for alle `gameState.stationSieges`; kalles fra `main.js` etter load tilsvarende `reconstructEngagements()` (linje 423)
+
+- **`src/game/systems/FleetMovementSystem.js`**
+  - Legg til `setGalaxy(galaxy)` — lagrer `this._galaxy = galaxy`
+  - Legg til `_execEmergencyJump(fleet, targetPlanetId)`: `worldPos = this._galaxy.getOwnedStationPositions().find(s => s.planetId === targetPlanetId)?.worldPos`; sett `fleet.position = { x: worldPos.x, y: 0, z: worldPos.z }`; reset `fleet.state = 'orbiting'`; emit `'emergencyJumpExecuted'`
+  - I `_moveFleet()`: multipliser `fleet.speed` med `fleet.speedDebuff ?? 1.0` for ice-stasjonens debuff
+
+- **`src/game/Game.js`**
+  - Etter `FleetMovementSystem`-instansiering: kall `fleetMovementSystem.setGalaxy(galaxy)`
+  - Right-click på enemy station hitbox med selected fleets → `gameState.dispatchFleetToStation(fleetId, stationId)` → sett waypoint til stasjonsposisjon og `fleet.attackTarget`
+  - Lytt til `'stationSiegeStarted'` → `EnemyStationPanel.show(stationId)`
+
+#### Nye filer
+
+- **`src/game/ui/EnemyStationPanel.js`** (~180 linjer)
+  - Kopierer strukturen fra `PlayerFleetPanel.js` (inline HTML, `_render()`, `show(stationId)`, `hide()`, `update(dt)`)
+  - Innhold: HP-bar + shield-bar, fase-indikator (DORMANT/ALERT/SKIRMISH/WAR) med fargekoding, stasjonstype + type-spesifikk debuff-beskrivelse, "CLEARED"-badge ved `cleared: true`
+  - Lytter til `'enemyStationDamaged'` → `_updateBarsOnly()` (ingen full re-render for performance)
+  - Posisjonering: venstre side (høyreklikk-panel; `PlanetPanel` er høyre side)
+
+#### Integrasjonspunkter
+- `FleetCombatSystem._tickStationCombat()` trenger stasjonsposisjon: injiser via konstruktør som `getEnemyStationWorldPosFn` (tilsvarende eksisterende `getEnemyWorldPosFn`-mønster)
+- `CombatEffects.laser()` brukes for stasjonens angrep: `combatEffects.laser(stationWorldPos, targetShipPos, 0x8800ff)` for void-type etc.
+
+#### Verifisering
+1. Fleet innen 20 enheter av stasjon → siege startes, HP-bar synker i `EnemyStationPanel`
+2. Lava-stasjon ignorerer 20% av shield-absorpsjon (verifiser med logging)
+3. Scavenger-fleet trigges ikke inn i aggro — sjekk `fleet.ships[0].type === 'scavenger'` skip
+4. Ødelegg stasjon fullstendig → `cleared: true` i `gameState`, wreckage-data pushet til `wreckageFields`
+5. `EnemyStationPanel` HP og shield-barer synkroniserer korrekt med GameState
+
+---
+
+### Fase 5 — Scavenger & Wreckage
+
+#### Mål
+Wreckage-visualisering, scavenger-skipets tractor beam + hold-mekanikk, delivery-flow, auto-resupply ved friendly stasjoner, og visuell blokkering av ruter.
+
+#### Filer som endres
+
+- **`src/game/systems/FleetCombatSystem.js`**
+  - Legg til `_tickScavengerBeams(dt)` — 5. subtick: for scavenger-fleet i `'orbiting'`-state, sjekk `wreckageFields` innen `tractorRange` (15 enheter); trekk ressurser fra noder, fyll `fleet.hold`; stopp når holdet er fullt (`fleet.hold.ore >= holdCapacity.ore && fleet.hold.crystal >= holdCapacity.crystal`); emit `'scavengerCollecting'`
+
+- **`src/game/systems/SupplySystem.js`**
+  - Legg til auto-resupply for fleet som orbiter ved friendly `Station3D` eller military base: rate 20/s for ore og energy fra planetens silo; bruk eksisterende `RESUPPLY_RATE`-konstant; emit `'fleetResupplied'`
+
+- **`src/game/world/RouteLane3D.js`**
+  - Legg til metode `setBlocked(bool)`:
+    - `true`: `this._lineMat.color.setHex(0xff3300)`, opacity → 0.25; `this._particleMat.uniforms.uColor.value.set(0.8, 0.1, 0.05)`
+    - `false`: tilbakestill til original farge og opacity
+  - I `update()`: respekter `_blocked`-flag ved opacity-beregning (override normal aktiv/inaktiv logikk)
+  - `Galaxy.update()` kaller `lane.setBlocked(roamingFleetSystem.isLaneBlocked(...))` for hver rute
+
+- **`src/game/ui/HUDBridge.js`** / **`src/game/ui/CombatHUD.js`**
+  - `CombatHUD`: legg til "THREAT DETECTED"-banner ved entry i sektor med ikke-dormant stasjon; "WAR ZONE" ved War-fase
+  - `HUDBridge`: toast for `'stationAwakened'` (klikk-navigasjon til stasjon), `'enemyStationDestroyed'`, `'snitchDetected'` ("⚠ SCOUT FLEEING")
+
+#### Nye filer
+
+- **`src/game/world/WreckageField3D.js`** (~180 linjer)
+  - Konstruktør tar `wreckageField`-objekt fra `gameState.wreckageFields`
+  - 3–5 `Mesh`-noder: `BoxGeometry` + `SphereGeometry` (lave poly, tilfeldig rotert), mørk hull-farge, lavt oransje/rødt `emissive`
+  - `tractorBeam(fromPos, toNodePos)` — kaller `combatEffects.laser(from, to, 0xffaa00)` for amber tractor-beam (gjenbruk pooled laser, kall per frame for persistent-utseende)
+  - Floating resource-tekst: `THREE.Sprite` med `CanvasTexture` som drifter oppover og fades ut (tilsvarende `ClickFeedback.js`-mønsteret)
+  - `update(dt)` — akkumulerer `elapsed += dt`; fjern og `dispose()` ved `elapsed >= 600` sekunder
+  - Opprettes av `EnemyStationManager3D` på `'enemyStationDestroyed'`-event
+
+#### Integrasjonspunkter
+- `wreckageFields` er runtime-only: ikke serialisert; wreckage re-spawner ikke etter page-load (dokumentert design-beslutning)
+- Scavenger hold-delivery: right-click på owned planet med scavenger selected → `gameState.dispatchFleetToStation()` med `deliverHold: true`; på ankomst depositer `fleet.hold` til planetens silo; `fleet.hold = { ore: 0, crystal: 0 }`
+
+#### Verifisering
+1. Ødelegg stasjon → wreckage-noder spawner visuelt
+2. Scavenger innen 15 enheter → tractor beams vises, `fleet.hold.ore` øker
+3. Full hold → innsamling stopper automatisk
+4. High-click owned planet med scavenger → scavenger flyr dit, silo fylles opp
+5. Wreckage forsvinner etter 600 sekunder (akselerér med `dt`-multiplikator i DevTools)
+6. Blokkert lane → `RouteLane3D` rød-tint
+
+---
+
+### Fase 6 — Emergency Jump & Polish
+
+#### Mål
+Emergency Jump-knapp med GLSL warp-shader, audio-pass for alle nye hendelser, og CSS-polish. Avslutter featuren til spillbar standard.
+
+#### Filer som endres
+
+- **`src/game/ui/PlayerFleetPanel.js`**
+  - I `_render()` (etter `titanHTML`, ca. linje 124): legg til `emergencyJumpHTML` — identisk mønster med `pfp-jump-btn`, `pfp-jump-fill`, `pfp-jump-label` IDs; 300s cooldown (`EMERGENCY_JUMP_COOLDOWN` fra `militaryStats.js`); knapp er disabled hvis `fleet.supply.energy.amount < fleet.supply.energy.max * 0.4`
+  - Knappen åpner inline dropdown-liste ved klikk: `galaxy.getOwnedStationPositions()` sortert etter 3D-avstand fra fleet; vis planetnavn + avstand; klikk → `this._onJump(fleetId, planetId)`
+  - `_updateJumpButton()` — analog til `_updateTitanButton()` (linje 206–237); fill-bar + label per frame; re-bind click ved ready-state overgang via `dataset.bound`-flag
+  - I `update()`: legg til `this._updateJumpButton()`
+
+- **`src/game/engine/RenderPipeline.js`**
+  - Ny metode `addWarpDistortionEffect(WarpDistortionShader)` — **identisk mønster** som `addGodRayPass()` (linje 61–86): dispose passes → rebuild composer → insert `ShaderPass(WarpDistortionShader)` etter bloom, før colorGrade
+  - Ny metode `triggerWarpDistortion(screenUV)`: sett `uCenter` uniform, start `_warpProgress = 0`, sett `uEnabled = 1`
+  - I `tick(time)`: inkrementer `_warpProgress`; sett `uStrength = Math.max(0, 1 - _warpProgress / 0.4)` og `uProgress`; nullstill `uEnabled` ved fullført
+
+- **`src/game/audio/AudioManager.js`**
+  - Legg til synth-lyder: `'WARP_POP'` (kort toneburst, 80ms), `'STATION_HUM'` (loopet lavfrekvent drone), `'STATION_ALARM'` (skarpt signal ved Alert-fase), `'STATION_CRASH'` (metallisk boom ved destruction)
+
+- **`src/ui/HUD.css`**
+  - Nye stiler: `.pfp-jump-btn`, `.pfp-jump-btn--cooldown`, `#pfp-jump-fill`, `#pfp-jump-label` — kopiér klassestruktur fra Titan-knapp-stilene
+  - `EnemyStationPanel`-containerstil (venstre side, bredde 340px, glassmorphism)
+  - `.station-phase-badge` med fargekoding per fase
+
+#### Nye filer
+
+- **`src/game/shaders/effects/WarpDistortionShader.js`** (~80 linjer)
+  - Modellert etter `GodRayShader.js`: eksporter objekt med `name`, `uniforms`, `vertexShader`, `fragmentShader`
+  - Uniforms: `tDiffuse`, `uCenter: Vector2(0.5, 0.5)`, `uStrength: float(0)`, `uProgress: float(0)`, `uEnabled: float(0)`
+  - Fragment shader: radial blur — sample `tDiffuse` langs N=12 retninger fra `uCenter` med offset skalert av `uStrength * exp(-dist² * 8.0) * (1 - uProgress)`; tidlig return ved `uEnabled < 0.01` (følger GodRayShader-mønsteret, linje 38–41)
+  - Håndter `logarithmicDepthBuffer` (legg til `#ifdef USE_LOGDEPTHBUF`-guard tilsvarende `RouteLane3D`-particle-shaderen)
+
+#### Integrasjonspunkter
+- `FleetMovementSystem._execEmergencyJump()` (Fase 4) emitterer `'emergencyJumpExecuted'` → trigger warp-visual i `Game.js`
+- `EMERGENCY_JUMP_COOLDOWN = 300` og `EMERGENCY_JUMP_ENERGY_COST_PCT = 0.4` legges til `militaryStats.js`
+- Energikostnad-validering i `gameState.dispatchEmergencyJump()` (ny metode) — blokkerer jump om `fleet.supply.energy.amount < energyMax * 0.4`
+
+#### Verifisering
+1. Fleet supply > 40% → Emergency Jump-knapp aktiv; klikk → dropdown med planeter sortert etter avstand
+2. Velg destinasjon → fleet teleporterer øyeblikkelig, WarpDistortionShader aktiveres 0.4s
+3. 300s fill-bar teller ned identisk med Titan-mønsteret
+4. Fleet supply < 40% → knapp disabled (grå)
+5. `AudioManager.playSynth('WARP_POP')` kalles én gang per jump
+6. Alle 7 stasjoner cleared → `gameState.enemyStations.every(s => s.cleared) === true` → ingen nye stasjons-triggede invasjoner
+
+---
+
+### Sekvensierte avhengigheter
+
+| Fase | Krever |
+|------|--------|
+| 2 | Fase 1 (`gameState.enemyStations` eksisterer) |
+| 3 | Fase 2 (`EnemyStation3D.setPhase()` for visuelle overganger) |
+| 4 | Fase 1 + 2 (serialiserte `stationSieges` + `hitboxMesh` for click) |
+| 5 | Fase 4 (`enemyStationDestroyed`-event + wreckage-data) |
+| 6 | Fase 4 (`_execEmergencyJump()` i `FleetMovementSystem`) |
