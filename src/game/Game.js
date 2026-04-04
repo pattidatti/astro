@@ -20,6 +20,7 @@ import { RoamingFleetManager3D } from './world/RoamingFleetManager3D.js';
 import { PlayerFleetManager3D } from './world/PlayerFleetManager3D.js';
 import { FleetPanel } from './ui/FleetPanel.js';
 import { MilitaryPanel } from './ui/MilitaryPanel.js';
+import { PlayerFleetPanel } from './ui/PlayerFleetPanel.js';
 import { MILITARY_SHIPS } from './data/militaryShips.js';
 
 export function createGame() {
@@ -262,17 +263,27 @@ export function createGame() {
   // --- Player fleet visuals + RTS selection ---
   const playerFleetManager = new PlayerFleetManager3D(sceneManager.scene);
   const _selectedPlayerFleets = new Set(); // Set<fleetId>
+  const playerFleetPanel = new PlayerFleetPanel();
 
   const _registerPlayerFleetClicks = () => {
     for (const target of playerFleetManager.getClickTargets()) {
       if (target.mesh.userData._playerFleetClickBound) continue;
       target.mesh.userData._playerFleetClickBound = true;
       inputManager.addClickable(target.mesh, () => {
-        // Toggle selection of this fleet
+        // Toggle selection of this fleet and show/hide info panel
         if (_selectedPlayerFleets.has(target.fleetId)) {
           _selectedPlayerFleets.delete(target.fleetId);
+          if (playerFleetPanel._fleetId === target.fleetId) playerFleetPanel.hide();
         } else {
           _selectedPlayerFleets.add(target.fleetId);
+          AudioManager.play('PLANET_CLICK_3D');
+          playerFleetPanel.show(target.fleetId, {
+            onClose: () => _selectedPlayerFleets.delete(target.fleetId),
+            onTitan: (fId) => {
+              const ok = gameState.useTitanUltimate(fId);
+              if (!ok) AudioManager.play('UI_CLICK_DENIED');
+            },
+          });
         }
       });
     }
@@ -553,6 +564,58 @@ export function createGame() {
     }
   });
 
+  // Titan Ultimate VFX + sound
+  gameState.on('fleetTitanUltimate', ({ position }) => {
+    const pos = new THREE.Vector3(position.x, position.y || 0, position.z);
+    combatEffects.fireTitanUltimate(pos);
+    AudioManager.playSynth('TITAN_ULTIMATE');
+    cameraController.shake(0.12, 0.6);
+  });
+
+  // Enemy ship destroyed in fleet combat → explosion + sound
+  gameState.on('fleetEnemyDestroyed', ({ fleetId }) => {
+    AudioManager.playSynth('FLEET_EXPLOSION');
+    const eng = gameState.fleetEngagements.find(
+      e => e.roamingFleetId === fleetId || e.playerFleetId === fleetId
+    );
+    if (eng) {
+      const ePos = galaxy.roamingFleetManager?.getFleetWorldPosition(eng.roamingFleetId);
+      if (ePos) {
+        const jitter = new THREE.Vector3(
+          (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 6
+        );
+        combatEffects.explosion(ePos.clone().add(jitter), 0.8, 0xff4400);
+      }
+    }
+  });
+
+  // Carrier supply beam — amber for supply, throttled per fleet
+  const _supplyBeamTimers = new Map();
+  gameState.on('carrierSupplyBeam', ({ fleetId, type }) => {
+    const now = performance.now() * 0.001;
+    if ((now - (_supplyBeamTimers.get(fleetId) || 0)) < 0.5) return;
+    _supplyBeamTimers.set(fleetId, now);
+
+    const fleet = gameState.playerFleets.find(f => f.id === fleetId);
+    if (!fleet) return;
+    const carrier = fleet.ships.find(s => s.hp > 0 && MILITARY_SHIPS[s.type]?.combatBehavior === 'support');
+    if (!carrier) return;
+    const targets = fleet.ships.filter(s => s !== carrier && s.hp > 0);
+    if (!targets.length) return;
+    const target = targets[Math.floor(Math.random() * targets.length)];
+
+    const fromPos = new THREE.Vector3(
+      fleet.position.x + (carrier.localPos?.x || 0), fleet.position.y || 0,
+      fleet.position.z + (carrier.localPos?.z || 0)
+    );
+    const toPos = new THREE.Vector3(
+      fleet.position.x + (target.localPos?.x || 0), fleet.position.y || 0,
+      fleet.position.z + (target.localPos?.z || 0)
+    );
+    combatEffects.supplyBeam(fromPos, toPos);
+    if (type === 'orbit') AudioManager.playSynth('CARRIER_HUM');
+  });
+
   // --- Spawn flight: robot flies from panel to station ---
   const spawnFlight = new SpawnFlight(sceneManager.scene, camera, galaxy);
   spawnFlight.onArrival = (worldPos, planetId) => {
@@ -721,6 +784,7 @@ export function createGame() {
     spawnFlight.update(dt);
     minimap.update(time, cameraController);
     fleetPanel.update();
+    playerFleetPanel.update();
     playerFleetManager.update(cameraController.isRTSMode);
     renderPipeline.tick(time);
 

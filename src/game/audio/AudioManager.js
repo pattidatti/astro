@@ -128,6 +128,79 @@ const AudioManager = {
       }
     }));
   },
+
+  /**
+   * Play a procedurally synthesized sound effect using the Web Audio API.
+   * Bypasses the buffer map — no audio files needed.
+   * @param {'FLEET_EXPLOSION'|'TITAN_ULTIMATE'|'CARRIER_HUM'} name
+   */
+  playSynth(name) {
+    if (!this._unlocked || this._muted || !this._ctx) return;
+    const ctx = this._ctx;
+    switch (name) {
+      case 'FLEET_EXPLOSION':  this._synthFleetExplosion(ctx); break;
+      case 'TITAN_ULTIMATE':   this._synthTitanUltimate(ctx);  break;
+      case 'CARRIER_HUM':      this._synthCarrierHum(ctx);     break;
+    }
+  },
+
+  /** Heavy bass explosion — dual sawtooth sweep, 0.8s decay. */
+  _synthFleetExplosion(ctx) {
+    const out = ctx.createGain();
+    out.connect(this._sfxGain);
+    [50, 80].forEach((startFreq) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(startFreq, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(startFreq * 0.1, ctx.currentTime + 0.6);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.5, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+      osc.connect(g);
+      g.connect(out);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.8);
+    });
+  },
+
+  /** Deep sub-bass boom — dual 30/60 Hz sine, 3-stage 2.0s envelope. */
+  _synthTitanUltimate(ctx) {
+    const out = ctx.createGain();
+    out.connect(this._sfxGain);
+    [30, 60].forEach((freq) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(0.7, ctx.currentTime + 0.05);
+      g.gain.setValueAtTime(0.7, ctx.currentTime + 0.15);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.0);
+      osc.connect(g);
+      g.connect(out);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 2.0);
+    });
+  },
+
+  /** Brief harmonic tone — 200/400 Hz blend, 0.6s fade in/out. */
+  _synthCarrierHum(ctx) {
+    const out = ctx.createGain();
+    out.connect(this._sfxGain);
+    [200, 400].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(i === 0 ? 0.4 : 0.2, ctx.currentTime + 0.3);
+      g.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.6);
+      osc.connect(g);
+      g.connect(out);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.6);
+    });
+  },
 };
 
 export { AudioManager };

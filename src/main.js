@@ -15,6 +15,7 @@ import { CombatSystem } from './game/systems/CombatSystem.js';
 import { RoamingFleetSystem } from './game/systems/RoamingFleetSystem.js';
 import { FleetMovementSystem } from './game/systems/FleetMovementSystem.js';
 import { FleetCombatSystem } from './game/systems/FleetCombatSystem.js';
+import { SupplySystem } from './game/systems/SupplySystem.js';
 import { Tutorial } from './game/tutorial/Tutorial.js';
 
 async function openPauseMenu() {
@@ -120,9 +121,12 @@ async function boot() {
 
   new FleetMovementSystem(game.animationLoop);
 
+  const supplySystem = new SupplySystem(game.animationLoop);
+
   const fleetCombatSystem = new FleetCombatSystem(
     game.animationLoop,
-    (fleetId) => game.galaxy?.roamingFleetManager?.getFleetWorldPosition(fleetId) ?? null
+    (fleetId) => game.galaxy?.roamingFleetManager?.getFleetWorldPosition(fleetId) ?? null,
+    supplySystem
   );
   fleetCombatSystem.reconstructEngagements();
 

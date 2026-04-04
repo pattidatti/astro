@@ -5,9 +5,27 @@ import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP,
 import { ENEMY_TYPES } from './data/enemies.js';
 import { TECH_NODES, TECH_BY_ID, FREE_TECH_IDS, getMaxColonyShipsInFlight } from './data/techTree.js';
 import { MILITARY_SHIPS } from './data/militaryShips.js';
-import { MILITARY_BASE_HP, MILITARY_BASE_MAX_HP } from './data/fleetCombatStats.js';
+import { MILITARY_BASE_HP, MILITARY_BASE_MAX_HP, CRYSTAL_LASER_AMMO_MULT } from './data/fleetCombatStats.js';
+import {
+  SUPPLY_ENERGY_PER_SHIP_BASE, SUPPLY_ORE_PER_SHIP_BASE,
+  QUANTUM_FUEL_ENERGY_MULT,
+  TITAN_ULTIMATE_COOLDOWN, TITAN_ULTIMATE_COST_ORE,
+} from './data/militaryStats.js';
 
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
+
+/**
+ * Compute max energy and ore supply capacity for a fleet based on ship count and tech.
+ * Called both on fleet creation and during v5 save migration.
+ */
+function computeFleetSupplyMax(ships, unlockedTech) {
+  const count = Math.max(1, ships.length);
+  const hasQuantumFuel   = unlockedTech?.has('quantum_fuel') ?? false;
+  const hasCrystalLasers = unlockedTech?.has('pure_crystal_lasers') ?? false;
+  const energyMax = Math.round(count * SUPPLY_ENERGY_PER_SHIP_BASE * (hasQuantumFuel ? QUANTUM_FUEL_ENERGY_MULT : 1.0));
+  const oreMax    = Math.round(count * SUPPLY_ORE_PER_SHIP_BASE    * (hasCrystalLasers ? CRYSTAL_LASER_AMMO_MULT : 1.0));
+  return { energyMax, oreMax };
+}
 
 const COLONY_SHIP_BASE_BUILD_COST = 5000;  // ore
 const COLONY_SHIP_COST_SCALE = 1.5;        // exponential multiplier per planet colonized
@@ -845,6 +863,19 @@ class GameState extends EventEmitter {
     });
     fleet.speed = Math.min(...fleet.ships.map(s => MILITARY_SHIPS[s.type]?.speed ?? 10));
 
+    // Update supply max when fleet composition changes
+    const { energyMax, oreMax } = computeFleetSupplyMax(fleet.ships, this.unlockedTech);
+    if (!fleet.supply) {
+      fleet.supply = {
+        ore:    { amount: oreMax,    max: oreMax    },
+        energy: { amount: energyMax, max: energyMax },
+      };
+    } else {
+      fleet.supply.ore.max    = oreMax;
+      fleet.supply.energy.max = energyMax;
+    }
+    if (fleet.titanCooldown === undefined) fleet.titanCooldown = 0;
+
     this.emit('playerFleetChanged', { fleetId: fleet.id });
   }
 
@@ -875,6 +906,43 @@ class GameState extends EventEmitter {
     fleet.waypoint = { x: waypoint.x, y: 0, z: waypoint.z };
     fleet.state    = 'moving';
     this.emit('playerFleetDispatched', { fleetId, waypoint: fleet.waypoint });
+    return true;
+  }
+
+  /**
+   * Add delta (positive = gain, negative = spend) to a fleet supply resource.
+   * Clamps to [0, max]. Emits 'fleetSupplyChanged'.
+   * @param {string} fleetId
+   * @param {'ore'|'energy'} resource
+   * @param {number} delta
+   * @returns {number} new amount
+   */
+  updateFleetSupply(fleetId, resource, delta) {
+    const fleet = this.playerFleets.find(f => f.id === fleetId);
+    if (!fleet?.supply?.[resource]) return 0;
+    const s = fleet.supply[resource];
+    s.amount = Math.max(0, Math.min(s.max, s.amount + delta));
+    this.emit('fleetSupplyChanged', { fleetId, resource, amount: s.amount, max: s.max });
+    return s.amount;
+  }
+
+  /**
+   * Activate the Titan AoE Ultimate for a fleet.
+   * Requires: alive Titan ship, titanCooldown === 0, sufficient ore supply.
+   * @param {string} fleetId
+   * @returns {boolean} true if activated
+   */
+  useTitanUltimate(fleetId) {
+    const fleet = this.playerFleets.find(f => f.id === fleetId);
+    if (!fleet) return false;
+    if (fleet.titanCooldown > 0) return false;
+    if (!fleet.ships.some(s => s.hp > 0 && s.type === 'titan')) return false;
+    if (!fleet.supply || fleet.supply.ore.amount < TITAN_ULTIMATE_COST_ORE) return false;
+
+    fleet.supply.ore.amount -= TITAN_ULTIMATE_COST_ORE;
+    fleet.titanCooldown = TITAN_ULTIMATE_COOLDOWN;
+    this.emit('fleetTitanUltimate', { fleetId, position: { ...fleet.position } });
+    this.emit('fleetSupplyChanged', { fleetId, resource: 'ore', amount: fleet.supply.ore.amount, max: fleet.supply.ore.max });
     return true;
   }
 
@@ -1345,6 +1413,8 @@ class GameState extends EventEmitter {
       colonyShipsArriving: JSON.parse(JSON.stringify(this.colonyShipsArriving)),
       playerFleets: this.playerFleets.map(f => ({
         ...f,
+        supply: f.supply ? JSON.parse(JSON.stringify(f.supply)) : null,
+        titanCooldown: f.titanCooldown ?? 0,
         ships: f.ships.map(s => ({
           type: s.type, hp: s.hp, maxHP: s.maxHP, fleetCapCost: s.fleetCapCost,
           // localPos and vel are runtime-only — not saved
@@ -1472,6 +1542,20 @@ class GameState extends EventEmitter {
       if (this.routes.length > 0 || this.ownedPlanets.length > 1) {
         this.unlockedTech.add('cargo_ships');
       }
+    }
+
+    // v4→v5 migration: initialize supply and titanCooldown on all fleets.
+    // Must be placed after unlockedTech is populated above so computeFleetSupplyMax
+    // can apply tech bonuses (quantum_fuel, pure_crystal_lasers) correctly.
+    for (const fleet of this.playerFleets) {
+      if (!fleet.supply) {
+        const { energyMax, oreMax } = computeFleetSupplyMax(fleet.ships, this.unlockedTech);
+        fleet.supply = {
+          ore:    { amount: oreMax,    max: oreMax    },
+          energy: { amount: energyMax, max: energyMax },
+        };
+      }
+      if (fleet.titanCooldown === undefined) fleet.titanCooldown = 0;
     }
 
     this.emit('stateLoaded');

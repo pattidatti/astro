@@ -12,6 +12,11 @@ import {
   FIRE_VISUAL_INTERVAL,
   CRYSTAL_LASER_DPS_MULT,
 } from '../data/fleetCombatStats.js';
+import {
+  TITAN_ULTIMATE_RADIUS,
+  TITAN_ULTIMATE_LIGHT_HP_THRESHOLD,
+  TITAN_ULTIMATE_HEAVY_DAMAGE,
+} from '../data/militaryStats.js';
 
 /**
  * FleetCombatSystem — resolves open-space combat between player fleets
@@ -29,12 +34,19 @@ export class FleetCombatSystem {
   /**
    * @param {object} animationLoop - Game animation loop.
    * @param {function} getEnemyWorldPosFn - (fleetId) => THREE.Vector3|null
+   * @param {object|null} supplySystem - SupplySystem instance for DPS penalty lookups.
    */
-  constructor(animationLoop, getEnemyWorldPosFn) {
+  constructor(animationLoop, getEnemyWorldPosFn, supplySystem = null) {
     this._getEnemyWorldPos = getEnemyWorldPosFn;
+    this._supplySystem = supplySystem;
     this._aggroTimer = 0;
     this._fireTimers = new Map(); // shipKey → seconds since last VFX fire event
     animationLoop.onUpdate((dt) => this._tick(dt));
+
+    // Listen for Titan Ultimate activation
+    gameState.on('fleetTitanUltimate', ({ fleetId, position }) => {
+      this._applyTitanAoE(fleetId, position);
+    });
   }
 
   // ─── Main tick ──────────────────────────────────────────────────────────────
@@ -132,7 +144,9 @@ export class FleetCombatSystem {
   }
 
   _tickPlayerShipsFire(eng, playerFleet, roamingFleet, aliveEnemies, dt) {
-    const dpsMult = gameState.isTechUnlocked('pure_crystal_lasers') ? CRYSTAL_LASER_DPS_MULT : 1.0;
+    const techMult   = gameState.isTechUnlocked('pure_crystal_lasers') ? CRYSTAL_LASER_DPS_MULT : 1.0;
+    const supplyMult = this._supplySystem ? this._supplySystem.getDPSMultiplier(playerFleet.id) : 1.0;
+    const dpsMult    = techMult * supplyMult;
 
     for (let si = 0; si < playerFleet.ships.length; si++) {
       const ship = playerFleet.ships[si];
@@ -361,6 +375,44 @@ export class FleetCombatSystem {
       gameState.emit('fleetShipFired', { engagementId, fleetId, shipIndex, targetId: target.id || 'mothership' });
     } else {
       this._fireTimers.set(key, timer);
+    }
+  }
+
+  /**
+   * Apply Titan AoE Ultimate damage to all roaming fleets within TITAN_ULTIMATE_RADIUS.
+   * Instantly kills light enemies (maxHP ≤ TITAN_ULTIMATE_LIGHT_HP_THRESHOLD),
+   * deals TITAN_ULTIMATE_HEAVY_DAMAGE to heavier units.
+   */
+  _applyTitanAoE(fleetId, position) {
+    const r2 = TITAN_ULTIMATE_RADIUS * TITAN_ULTIMATE_RADIUS;
+
+    for (const roamingFleet of gameState.roamingFleets) {
+      const ePos = this._getEnemyWorldPos(roamingFleet.id);
+      if (!ePos) continue;
+
+      const dx = position.x - ePos.x;
+      const dz = position.z - ePos.z;
+      if (dx * dx + dz * dz > r2) continue;
+
+      // Find existing engagement (if any) so _applyDamageToEnemy has a real ID
+      const eng = gameState.fleetEngagements.find(
+        e => e.playerFleetId === fleetId && e.roamingFleetId === roamingFleet.id
+      ) ?? { id: 'titan_aoe' };
+
+      // Damage all alive enemies
+      for (const enemy of roamingFleet.enemies) {
+        if (enemy.hp <= 0) continue;
+        if (enemy.maxHP <= TITAN_ULTIMATE_LIGHT_HP_THRESHOLD) {
+          this._applyDamageToEnemy(enemy, enemy.hp + 1, roamingFleet, eng);
+        } else {
+          this._applyDamageToEnemy(enemy, TITAN_ULTIMATE_HEAVY_DAMAGE, roamingFleet, eng);
+        }
+      }
+
+      // Damage mothership
+      if (roamingFleet.mothership && roamingFleet.mothership.hp > 0) {
+        this._applyDamageToEnemy(roamingFleet.mothership, TITAN_ULTIMATE_HEAVY_DAMAGE, roamingFleet, eng);
+      }
     }
   }
 

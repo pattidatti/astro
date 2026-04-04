@@ -4,11 +4,14 @@ const MAX_LASERS = 8;
 const MAX_EXPLOSIONS = 6;
 const MAX_SHIELD_HITS = 4;
 const MAX_PROJECTILES = 20;
+const MAX_TITAN_EFFECTS = 3;
 
 const LASER_LIFETIME = 0.12;
 const EXPLOSION_LIFETIME = 0.6;
 const SHIELD_HIT_LIFETIME = 0.4;
 const PROJECTILE_SPEED = 120;
+const TITAN_EFFECT_LIFETIME = 1.2;
+const TITAN_SHOCKWAVE_LIFETIME = 1.0;
 
 /**
  * Pooled combat visual effects: laser beams, explosions, shield impacts, warp flashes.
@@ -20,6 +23,7 @@ export class CombatEffects {
     this._activeExplosions = [];
     this._activeShieldHits = [];
     this._activeProjectiles = [];
+    this._activeTitanEffects = [];
   }
 
   /**
@@ -251,6 +255,60 @@ export class CombatEffects {
   }
 
   /**
+   * Spawn an amber supply beam — Carrier restoring ore supply to the fleet.
+   */
+  supplyBeam(fromPos, toPos) {
+    this.laser(fromPos, toPos, 0xffaa33);
+  }
+
+  /**
+   * Titan AoE Ultimate — large expanding violet sphere + shockwave ring + point light burst.
+   * @param {THREE.Vector3} pos  World-space center of the blast.
+   */
+  fireTitanUltimate(pos) {
+    const COLOR = 0xaa33ff;
+
+    // Expanding sphere (scale 1→20 over TITAN_EFFECT_LIFETIME)
+    const sphereGeo = new THREE.SphereGeometry(1, 16, 16);
+    const sphereMat = new THREE.MeshBasicMaterial({
+      color: COLOR,
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+    sphere.position.copy(pos);
+    this._scene.add(sphere);
+
+    // Outer shockwave ring (scale 1→30, opacity 0→1→0 over TITAN_SHOCKWAVE_LIFETIME)
+    const ringGeo = new THREE.RingGeometry(0.8, 1.4, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: COLOR,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.copy(pos);
+    ring.rotation.x = Math.PI / 2;
+    this._scene.add(ring);
+
+    // Point light burst
+    const light = new THREE.PointLight(COLOR, 8, 60);
+    light.position.copy(pos);
+    this._scene.add(light);
+
+    this._activeTitanEffects.push({ sphere, ring, light, sphereGeo, sphereMat, ringGeo, ringMat, age: 0 });
+
+    while (this._activeTitanEffects.length > MAX_TITAN_EFFECTS) {
+      this._disposeTitanEffect(this._activeTitanEffects.shift());
+    }
+  }
+
+  /**
    * Per-frame update all active effects.
    */
   update(dt) {
@@ -331,6 +389,33 @@ export class CombatEffects {
       e.mat.opacity = (1 - t) * 0.5;
       e.mesh.scale.setScalar(1 + t * 0.5);
     }
+
+    // Titan Ultimate effects
+    for (let i = this._activeTitanEffects.length - 1; i >= 0; i--) {
+      const e = this._activeTitanEffects[i];
+      e.age += dt;
+      if (e.age >= TITAN_EFFECT_LIFETIME) {
+        this._disposeTitanEffect(e);
+        this._activeTitanEffects.splice(i, 1);
+        continue;
+      }
+      const t = e.age / TITAN_EFFECT_LIFETIME;
+      // Sphere: scale 1→20, fade out
+      e.sphere.scale.setScalar(1 + t * 19);
+      e.sphereMat.opacity = (1 - t) * 0.7;
+      // Ring: scale 1→30, opacity arc up then down
+      const ringT = e.age / TITAN_SHOCKWAVE_LIFETIME;
+      if (ringT <= 1.0) {
+        e.ring.scale.setScalar(1 + ringT * 29);
+        e.ringMat.opacity = ringT < 0.3
+          ? ringT / 0.3
+          : (1 - (ringT - 0.3) / 0.7);
+      } else {
+        e.ringMat.opacity = 0;
+      }
+      // Light: fade out
+      e.light.intensity = (1 - t) * 8;
+    }
   }
 
   _disposeProjectile(p) {
@@ -361,5 +446,11 @@ export class CombatEffects {
     this._scene.remove(e.mesh);
     e.geo.dispose();
     e.mat.dispose();
+  }
+
+  _disposeTitanEffect(e) {
+    if (e.sphere) { this._scene.remove(e.sphere); e.sphereGeo.dispose(); e.sphereMat.dispose(); }
+    if (e.ring)   { this._scene.remove(e.ring);   e.ringGeo.dispose();   e.ringMat.dispose();   }
+    if (e.light)  this._scene.remove(e.light);
   }
 }
