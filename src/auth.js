@@ -60,6 +60,9 @@ export async function handleAuthRedirect() {
   if (!auth) return null;
   
   console.log('[Auth] Checking for redirect result...');
+  console.log('[Auth] URL location:', window.location.href);
+  console.log('[Auth] URL params check:', window.location.hash.includes('access_token') || window.location.search.includes('code'));
+  
   isRedirecting = true;
   
   try {
