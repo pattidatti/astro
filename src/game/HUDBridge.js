@@ -29,6 +29,7 @@ export class HUDBridge {
     this._militaryPanelActive = false; // true while military base panel is shown
     this._hoverBoxLastX = null;
     this._hoverBoxLastY = null;
+    this._hoverBoxVisible = false; // guards classList.add/remove to avoid per-frame DOM touch
 
     this.dom = {
       upgTooltip:          document.getElementById('upg-tooltip'),
@@ -287,9 +288,15 @@ export class HUDBridge {
         this._hoverBoxLastX = hx;
         this._hoverBoxLastY = hy;
       }
-      this.dom.hoverTargetBox.classList.add('visible');
+      if (!this._hoverBoxVisible) {
+        this.dom.hoverTargetBox.classList.add('visible');
+        this._hoverBoxVisible = true;
+      }
     } else {
-      this.dom.hoverTargetBox.classList.remove('visible');
+      if (this._hoverBoxVisible) {
+        this.dom.hoverTargetBox.classList.remove('visible');
+        this._hoverBoxVisible = false;
+      }
     }
 
     // Check camera distance to focused planet to decide panel visibility

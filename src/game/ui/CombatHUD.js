@@ -2,6 +2,7 @@ import { gameState } from '../GameState.js';
 import { PLANETS } from '../data/planets.js';
 
 const ALERT_DURATION = 4000; // ms
+const PLANET_MAP = new Map(PLANETS.map(p => [p.id, p]));
 
 /**
  * Combat HUD overlay — alert banners, threat indicators.
@@ -11,6 +12,9 @@ export class CombatHUD {
   constructor() {
     this._alertEl = null;
     this._alertTimeout = null;
+    this._lastSummaryAttackCount = -1;
+    this._lastSummaryAliveTotal = -1;
+    this._lastSummaryHpTotal = -1;
     this._createDOM();
     this._setupEvents();
   }
@@ -31,7 +35,7 @@ export class CombatHUD {
 
   _setupEvents() {
     gameState.on('attackStarted', ({ attack, planetId, type }) => {
-      const planet = PLANETS.find(p => p.id === planetId);
+      const planet = PLANET_MAP.get(planetId);
       const name = planet?.name || planetId;
       if (type === 'invasion') {
         this.showAlert(`⚠ INVASION INCOMING — ${name}`, 'invasion');
@@ -41,7 +45,7 @@ export class CombatHUD {
     });
 
     gameState.on('attackEnded', ({ planetId, reason }) => {
-      const planet = PLANETS.find(p => p.id === planetId);
+      const planet = PLANET_MAP.get(planetId);
       const name = planet?.name || planetId;
       if (reason === 'victory') {
         this.showAlert(`✓ THREAT NEUTRALIZED — ${name}`, 'victory');
@@ -49,7 +53,7 @@ export class CombatHUD {
     });
 
     gameState.on('planetFell', (planetId) => {
-      const planet = PLANETS.find(p => p.id === planetId);
+      const planet = PLANET_MAP.get(planetId);
       const name = planet?.name || planetId;
       this.showAlert(`✖ STATION DESTROYED — ${name}`, 'fall');
     });
@@ -80,7 +84,7 @@ export class CombatHUD {
     });
 
     gameState.on('militaryBaseDestroyed', ({ planetId }) => {
-      const planet = PLANETS.find(p => p.id === planetId);
+      const planet = PLANET_MAP.get(planetId);
       const name = planet?.name || planetId;
       this.showAlert(`✖ MILITARY BASE DESTROYED — ${name}`, 'fall');
     });
@@ -105,14 +109,34 @@ export class CombatHUD {
   updateSummary() {
     const attacks = gameState.activeAttacks;
     if (attacks.length === 0) {
-      this._summaryEl.classList.remove('visible');
+      if (this._lastSummaryAttackCount !== 0) {
+        this._summaryEl.classList.remove('visible');
+        this._lastSummaryAttackCount = 0;
+      }
       return;
     }
+
+    // Compute integer fingerprint — skip innerHTML rebuild if nothing changed
+    let aliveTotal = 0;
+    let hpTotal = 0;
+    for (const attack of attacks) {
+      aliveTotal += attack.enemies.filter(e => e.hp > 0).length;
+      const ps = gameState.getPlanetState(attack.planetId);
+      hpTotal += ps ? Math.round(ps.combat.stationHP) : 0;
+    }
+    if (
+      attacks.length === this._lastSummaryAttackCount &&
+      aliveTotal === this._lastSummaryAliveTotal &&
+      hpTotal === this._lastSummaryHpTotal
+    ) return;
+    this._lastSummaryAttackCount = attacks.length;
+    this._lastSummaryAliveTotal = aliveTotal;
+    this._lastSummaryHpTotal = hpTotal;
 
     // Show summary of all active attacks
     let html = '';
     for (const attack of attacks) {
-      const planet = PLANETS.find(p => p.id === attack.planetId);
+      const planet = PLANET_MAP.get(attack.planetId);
       const name = planet?.name || attack.planetId;
       const aliveCount = attack.enemies.filter(e => e.hp > 0).length;
       const ps = gameState.getPlanetState(attack.planetId);

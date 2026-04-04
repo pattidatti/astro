@@ -1,5 +1,7 @@
 import { gameState, colonyLaunchEnergyCost, colonyTravelDuration, getColonyShipBuildCost } from '../GameState.js';
 import { PLANETS } from '../data/planets.js';
+
+const PLANET_MAP = new Map(PLANETS.map(p => [p.id, p]));
 import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult } from '../data/upgrades.js';
 import { createRoute, calcTravelDuration, SHIPPABLE_RESOURCES } from '../data/routes.js';
 import { DefensePanel } from './DefensePanel.js';
@@ -58,6 +60,9 @@ export class PlanetPanel {
     this._siloEls = null;      // cached DOM refs per resource
     this._siloBuiltForPlanet = null;
     this._siloBuiltCapacity = {}; // resource → capacity when DOM was last built
+    this._siloTimer = 0;       // accumulates dt to rate-limit silo DOM updates
+    this._siloCache = {};      // per-resource last-rendered key for dirty-check
+    this._routesFp = '';       // fingerprint to skip redundant _renderRoutes() rebuilds
 
     this._colonyPopupEl = document.getElementById('colony-ship-popup');
     this._colonyPopupVisible = false;
@@ -109,15 +114,20 @@ export class PlanetPanel {
     const rerenderRoutes = () => { if (this._visible) this._renderRoutes(); };
     gameState.on('shipLaunched', rerenderRoutes);
     gameState.on('shipArrived', rerenderRoutes);
-    gameState.on('productionTick', () => {
+    gameState.on('productionTick', (dt) => {
       if (!this._visible) return;
-      this._renderSilos();
+      // Rate-limit silo DOM updates — productionTick fires every frame, 10 updates/sec is plenty
+      this._siloTimer += dt;
+      if (this._siloTimer >= 0.1) {
+        this._siloTimer = 0;
+        this._renderSilos();
+      }
       this._updateColonyShipProgress();
       const now = performance.now();
       if (now - this._renderTimer > 1000) {
         this._renderTimer = now;
         const ps = gameState.getPlanetState(this._planetId);
-        const def = PLANETS.find(p => p.id === this._planetId);
+        const def = PLANET_MAP.get(this._planetId);
         if (ps && def) {
           this._renderBase(ps, def);
           this._renderHire(ps, def);
@@ -159,6 +169,9 @@ export class PlanetPanel {
   show(planetId) {
     this._planetId = planetId;
     this._visible = true;
+    this._siloTimer = 0;
+    this._siloCache = {};
+    this._routesFp = '';
     this._activateTab('left', this._leftTab);
     this._activateTab('right', this._rightTab);
     this._renderAll();
@@ -196,7 +209,7 @@ export class PlanetPanel {
 
   _renderAll() {
     const ps = gameState.getPlanetState(this._planetId);
-    const def = PLANETS.find(p => p.id === this._planetId);
+    const def = PLANET_MAP.get(this._planetId);
     if (!def) return;
 
     // Update header
@@ -250,7 +263,7 @@ export class PlanetPanel {
           if (energyCost > 0) costStr += (costStr ? '  ' : '') + `⚡ ${fmt(energyCost)} ENERGY`;
 
           for (const srcId of sourcePlanets) {
-            const srcDef = PLANETS.find(p => p.id === srcId);
+            const srcDef = PLANET_MAP.get(srcId);
             const canAfford = (oreCost <= 0 || gameState.siloHas(srcId, 'ore', oreCost)) &&
               (energyCost <= 0 || gameState.siloHas(srcId, 'energy', energyCost));
             const btn = document.createElement('button');
@@ -449,7 +462,7 @@ export class PlanetPanel {
   _computeRate(planetId, resource) {
     const ps = gameState.getPlanetState(planetId);
     if (!ps) return 0;
-    const def = PLANETS.find(p => p.id === planetId);
+    const def = PLANET_MAP.get(planetId);
     if (!def) return 0;
 
     if (resource === 'ore') {
@@ -562,6 +575,11 @@ export class PlanetPanel {
       const rate = this._computeRate(this._planetId, resource);
       const rateStr = rate > 0 ? `+${rate >= 10 ? fmt(rate) : rate.toFixed(1)}/s` : '';
 
+      // Skip DOM writes if visual state is identical to last render
+      const cacheKey = `${Math.floor(pct)}:${full ? 1 : 0}:${warning ? 1 : 0}:${drained ? 1 : 0}:${rateStr}`;
+      if (this._siloCache[resource] === cacheKey) continue;
+      this._siloCache[resource] = cacheKey;
+
       refs.track.className = `silo-track${drained ? ' silo-track--drain' : ''}`;
       refs.fill.className = `silo-fill ${resource}${full ? ' full' : ''}${warning ? ' warning' : ''}`;
       refs.fill.style.width = pct.toFixed(1) + '%';
@@ -582,10 +600,25 @@ export class PlanetPanel {
     const ps = gameState.getPlanetState(this._planetId);
     const myRoutes = gameState.routes.filter(r => r.fromPlanet === this._planetId);
 
+    // O(1) per-route lookup — avoids O(routes × ships) find() calls
+    const shipByRoute = new Map(
+      gameState.activeShips
+        .filter(s => s.routeId != null)
+        .map(s => [s.routeId, s])
+    );
+
+    // Dirty check — skip rebuild if route list and transit ETAs are unchanged
+    const fp = myRoutes.map(r => {
+      const ship = shipByRoute.get(r.id);
+      return `${r.id}:${r.active ? 1 : 0}:${ship ? Math.floor((1 - ship.t) * ship.duration) : -1}`;
+    }).join('|');
+    if (fp === this._routesFp) return;
+    this._routesFp = fp;
+
     el.innerHTML = `<div class="panel-section-title">SHIP ROUTES</div>`;
 
     for (const route of myRoutes) {
-      const toDef = PLANETS.find(p => p.id === route.toPlanet);
+      const toDef = PLANET_MAP.get(route.toPlanet);
 
       // Compute display % from current silo capacity
       const silo = ps?.silos?.[route.resource];
@@ -597,7 +630,7 @@ export class PlanetPanel {
       const travelStr = `~${Math.floor(travelSec / 60)}m ${Math.floor(travelSec % 60)}s`;
 
       // In-transit ship
-      const inTransitShip = gameState.activeShips.find(s => s.routeId === route.id);
+      const inTransitShip = shipByRoute.get(route.id);
       const etaStr = inTransitShip
         ? (() => {
           const rem = Math.max(0, (1 - inTransitShip.t) * inTransitShip.duration);
@@ -686,7 +719,7 @@ export class PlanetPanel {
       <div class="rf-label">DESTINATION</div>
       <select class="route-select" id="rf-to">
         ${ownedExcludingSelf.map(id => {
-      const def = PLANETS.find(p => p.id === id);
+      const def = PLANET_MAP.get(id);
       return `<option value="${id}">${def?.name || id}</option>`;
     }).join('')}
       </select>
@@ -1116,7 +1149,7 @@ export class PlanetPanel {
     const popup = this._colonyPopupEl;
     if (!popup) return;
 
-    const fromDef = PLANETS.find(p => p.id === planetId);
+    const fromDef = PLANET_MAP.get(planetId);
     if (!fromDef) return;
     const fromRadius = fromDef.orbit.radius;
     const ship = gameState.colonyShipsInOrbit.find(s => s.fromPlanetId === planetId);

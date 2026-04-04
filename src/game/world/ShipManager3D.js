@@ -199,6 +199,9 @@ export class ShipManager3D {
     const trailPos = this._trailGeo.attributes.position.array;
     const trailCol = this._trailGeo.attributes.color.array;
 
+    // O(n) lookup map — avoids O(n²) activeShips.find() inside the per-ship loop
+    const shipLookup = new Map(gameState.activeShips.map(s => [s.id, s]));
+
     for (const [shipId, entry] of this._active) {
       // COLONY SHIP LOGIC
       if (entry.data.isColony) {
@@ -232,7 +235,7 @@ export class ShipManager3D {
       }
 
       // CARGO SHIP LOGIC (Instanced)
-      const shipData = gameState.activeShips.find(s => s.id === shipId);
+      const shipData = shipLookup.get(shipId);
       if (!shipData) {
         entry.ship3d.deactivate();
         this._pool.push(entry.ship3d);
