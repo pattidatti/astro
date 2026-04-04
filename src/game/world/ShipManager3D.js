@@ -36,6 +36,7 @@ export class ShipManager3D {
     scene.add(this._cargoMesh);
 
     this._hitMap = []; // instanceId -> shipId
+    this._prevCargoCount = -1; // tracks last frame's count to minimize trail zero-fill
 
     // Connect InputManager to Instanced Meshes
     if (this._inputManager) {
@@ -275,12 +276,15 @@ export class ShipManager3D {
       }
     }
 
-    // Collapse unused trail segments
-    const totalMaxTrails = MAX_SHIPS * 15 * 2;
-    const currentUsedTrails = cargoCount * 15 * 2;
-    for (let i = currentUsedTrails; i < totalMaxTrails; i++) {
+    // Zero-fill only the newly-vacated tail when ship count drops
+    if (cargoCount < this._prevCargoCount) {
+      const start = cargoCount * 15 * 2;
+      const end   = this._prevCargoCount * 15 * 2;
+      for (let i = start; i < end; i++) {
         trailPos[i * 3] = 0; trailPos[i * 3 + 1] = 0; trailPos[i * 3 + 2] = 0;
+      }
     }
+    this._prevCargoCount = cargoCount;
 
     // Mark updates
     this._bodyMesh.count = cargoCount;

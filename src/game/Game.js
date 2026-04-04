@@ -23,6 +23,14 @@ import { MilitaryPanel } from './ui/MilitaryPanel.js';
 import { PlayerFleetPanel } from './ui/PlayerFleetPanel.js';
 import { MILITARY_SHIPS } from './data/militaryShips.js';
 
+// Pre-built lookups — avoids O(n) PLANETS.find() calls inside hot paths
+const PLANET_MAP = new Map(PLANETS.map(p => [p.id, p]));
+const RES_ICONS  = { ore: '⬡', energy: '⚡', crystal: '◈' };
+
+// Pre-allocated vectors for per-frame projections
+const _shipNDC       = new THREE.Vector3();
+const _waypointNDC   = new THREE.Vector3();
+
 export function createGame() {
   const container = document.getElementById('game-container');
 
@@ -110,7 +118,8 @@ export function createGame() {
   });
 
   // --- Ship tooltip ---
-  let _selectedShipId = null;
+  let _selectedShipId   = null;
+  let _selectedShipData = null; // cached reference — updated on select, cleared on deselect
   const _shipTooltipEl = document.createElement('div');
   _shipTooltipEl.id = 'ship-tooltip';
   _shipTooltipEl.style.display = 'none';
@@ -144,7 +153,8 @@ export function createGame() {
   };
 
   const _deselectShip = () => {
-    _selectedShipId = null;
+    _selectedShipId   = null;
+    _selectedShipData = null;
     _shipTooltipEl.style.display = 'none';
     _lockOnTooltip.hide();
     _lockOnSource = null;
@@ -153,7 +163,8 @@ export function createGame() {
   gameState.on('cargoShipClicked', ({ shipId }) => {
     const ship = gameState.activeShips.find(s => s.id === shipId);
     if (!ship) return;
-    _selectedShipId = shipId;
+    _selectedShipId   = shipId;
+    _selectedShipData = ship; // cache reference — properties (t, duration) stay live
     cameraController.trackObject(() => shipManager.getShipPosition(shipId), 15);
   });
 
@@ -791,10 +802,10 @@ export function createGame() {
     // Waypoint crosshair: project 3D position to screen and update label
     if (_rtsWaypoint3D && cameraController.isRTSMode) {
       _rtsWaypointLabel.textContent = 'WAYPOINT';
-      const ndc = _rtsWaypoint3D.clone().project(camera);
-      const sx = (ndc.x *  0.5 + 0.5) * window.innerWidth;
-      const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
-      if (ndc.z < 1.0) {
+      _waypointNDC.copy(_rtsWaypoint3D).project(camera);
+      const sx = (_waypointNDC.x *  0.5 + 0.5) * window.innerWidth;
+      const sy = (-_waypointNDC.y * 0.5 + 0.5) * window.innerHeight;
+      if (_waypointNDC.z < 1.0) {
         _rtsWaypointLabel.style.display = 'block';
         _rtsWaypointLabel.style.left = sx + 'px';
         _rtsWaypointLabel.style.top  = (sy - 6) + 'px';
@@ -815,23 +826,22 @@ export function createGame() {
 
     // Ship tooltip: update position and ETA each frame
     if (_selectedShipId !== null) {
-      const ship = gameState.activeShips.find(s => s.id === _selectedShipId);
+      const ship = _selectedShipData;
       if (ship) {
         const pos = shipManager.getShipPosition(ship.id);
         if (pos) {
-          const ndc = pos.clone().project(camera);
-          const sx = (ndc.x * 0.5 + 0.5) * window.innerWidth;
-          const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+          _shipNDC.copy(pos).project(camera);
+          const sx = (_shipNDC.x * 0.5 + 0.5) * window.innerWidth;
+          const sy = (-_shipNDC.y * 0.5 + 0.5) * window.innerHeight;
           const remaining = Math.max(0, (1 - ship.t) * ship.duration);
-          const fromDef = PLANETS.find(p => p.id === ship.fromPlanet);
-          const toDef   = PLANETS.find(p => p.id === ship.toPlanet);
-          const resIcons = { ore: '⬡', energy: '⚡', crystal: '◈' };
+          const fromDef = PLANET_MAP.get(ship.fromPlanet);
+          const toDef   = PLANET_MAP.get(ship.toPlanet);
           _shipTooltipEl.style.display = 'block';
           _shipTooltipEl.style.left = (sx + 18) + 'px';
           _shipTooltipEl.style.top  = (sy - 20) + 'px';
           _shipTooltipEl.innerHTML = `
             <div class="ship-tt-title">CARGO SHIP</div>
-            <div class="ship-tt-cargo">${resIcons[ship.resource] || '⬡'} ${Math.floor(ship.amount)} ${ship.resource.toUpperCase()}</div>
+            <div class="ship-tt-cargo">${RES_ICONS[ship.resource] || '⬡'} ${Math.floor(ship.amount)} ${ship.resource.toUpperCase()}</div>
             <div class="ship-tt-route">${fromDef?.name || ship.fromPlanet} → ${toDef?.name || ship.toPlanet}</div>
             <div class="ship-tt-eta">ETA: ${_fmtEta(remaining)}</div>
           `;

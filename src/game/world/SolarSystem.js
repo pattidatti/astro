@@ -522,9 +522,7 @@ export class SolarSystem {
       const flareFade = THREE.MathUtils.smoothstep(450, 390, distance);
       this.lensFlare.group.visible = flareFade > 0;
       if (flareFade > 0 && camera) {
-        this.lensFlare.group.traverse(child => {
-          if (child.isSprite) child.material.opacity = flareFade;
-        });
+        for (const s of this.lensFlare.sprites) s.material.opacity = flareFade;
         this.lensFlare.update(camera, time);
       }
     }

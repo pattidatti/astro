@@ -28,6 +28,12 @@ export class LensFlare {
       this.rings.push(sprite);
       this.group.add(sprite);
     }
+
+    // Flat array for direct iteration — avoids group.traverse() overhead
+    this.sprites = [this.centralSprite, ...this.rings];
+
+    // Scratch vector for update() — avoids per-call allocation
+    this._scratchPos = new THREE.Vector3();
   }
 
   _createGlowSprite(color, size, opacity) {
@@ -80,8 +86,8 @@ export class LensFlare {
     this.centralSprite.scale.setScalar(8 * pulse * this.intensity);
 
     // Flare rings float relative to camera direction
-    const dir = new THREE.Vector3();
-    dir.subVectors(this.group.getWorldPosition(new THREE.Vector3()), camera.position).normalize();
+    this.group.getWorldPosition(this._scratchPos);
+    const dir = this._scratchPos.sub(camera.position).normalize();
     for (let i = 0; i < this.rings.length; i++) {
       const s = 0.7 + Math.sin(time * 0.8 + i * 1.5) * 0.3;
       this.rings[i].scale.setScalar((3 - i) * s * this.intensity);

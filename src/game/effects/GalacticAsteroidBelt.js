@@ -99,6 +99,8 @@ export class GalacticAsteroidBelt {
   }
 
   update(dt) {
+    if (!this.mesh.visible) return;
+
     const dummy = this._dummy;
     const _quat = this._quat;
     const count = this._orbitAngles.length;
