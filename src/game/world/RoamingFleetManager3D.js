@@ -47,10 +47,11 @@ export class RoamingFleetManager3D {
     // O(1) fleet lookup — avoids O(n) find() inside the per-fleet loop
     const fleetLookup = new Map(gameState.roamingFleets.map(f => [f.id, f]));
 
-    // Build full avoidance position list once per frame (not per fleet)
+    // Build full avoidance position list once per frame (not per fleet).
+    // Do NOT filter nulls here — the index must stay aligned with _allPlanetIds
+    // so per-fleet filtering by planet ID works correctly.
     const allAvoidPositions = this._allPlanetIds
-      .map(id => this._galaxy.getPlanetWorldPosition(id))
-      .filter(Boolean);
+      .map(id => this._galaxy.getPlanetWorldPosition(id));
 
     for (const [fleetId, fleet3D] of this._active) {
       const fleet = fleetLookup.get(fleetId);
@@ -61,10 +62,11 @@ export class RoamingFleetManager3D {
       const fromPos = this._galaxy.getPlanetWorldPosition(fleet.fromPlanet);
       const toPos   = this._galaxy.getPlanetWorldPosition(fleet.toPlanet);
 
-      // Exclude source and destination planets from avoidance (by index)
+      // Exclude source/destination planets and null positions in one pass
       const avoidPositions = allAvoidPositions.filter(
-        (_, i) => this._allPlanetIds[i] !== fleet.fromPlanet &&
-                  this._allPlanetIds[i] !== fleet.toPlanet
+        (pos, i) => pos !== null &&
+                    this._allPlanetIds[i] !== fleet.fromPlanet &&
+                    this._allPlanetIds[i] !== fleet.toPlanet
       );
 
       fleet3D.update(fromPos, toPos, fleet, avoidPositions);
