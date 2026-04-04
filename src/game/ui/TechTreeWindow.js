@@ -177,8 +177,8 @@ export class TechTreeWindow {
       <span class="tech-node-lock">🔒</span>
       <div class="tech-node-name">${node.name}</div>
       ${node.free
-        ? '<div class="tech-node-cost tech-node-free">FREE</div>'
-        : `<div class="tech-node-cost">⚡ ${fmt(node.cost)}</div>`}
+        ? '<div class="tech-node-icon">FREE</div>'
+        : `<div class="tech-node-cost">⚡ ${fmt(gameState.getTechCost(node.id).energy)}</div>`}
       <div class="tech-node-badge"></div>
     `;
 
@@ -190,7 +190,7 @@ export class TechTreeWindow {
         tipHtml += `<br><span style="color:var(--dune-text-dim);font-size: 12px">Requires: ${reqNames}</span>`;
       }
       if (!node.free) {
-        tipHtml += `<br><span style="color:#4af0ff">⚡ ${fmt(node.cost)} energy</span>`;
+        tipHtml += `<br><span style="color:#4af0ff">⚡ ${fmt(gameState.getTechCost(node.id).energy)} energy</span>`;
       }
       this._showTooltip(card, tipHtml);
     });
@@ -223,7 +223,8 @@ export class TechTreeWindow {
       // Update cost display (reflects whether we can afford)
       const costEl = card.querySelector('.tech-node-cost');
       if (costEl && !node.free) {
-        const canAfford = gameState.siloHas(gameState.focusedPlanet, 'energy', node.cost);
+        const cost = gameState.getTechCost(node.id);
+        const canAfford = gameState.siloHas(gameState.focusedPlanet, 'energy', cost.energy);
         costEl.classList.toggle('tech-node-cost--cant', state === 'available' && !canAfford);
         costEl.classList.toggle('tech-node-cost--can',  state === 'available' && canAfford);
       }

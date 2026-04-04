@@ -1,5 +1,5 @@
 import { hasLocalSave, getAllLocalSaves, deleteLocalSave } from '../storage.js';
-import { getCurrentUser, isGoogleUser, upgradeToGoogle, getAuthError, clearAuthError, isRedirectInProgress } from '../auth.js';
+import { getCurrentUser, isGoogleUser, signInWithGoogle, signOut, getAuthError, clearAuthError, isRedirectInProgress } from '../auth.js';
 import { loadFromFirestore, getAllCloudSaves } from '../db.js';
 import { isFirebaseConfigured } from '../firebase.js';
 import { AudioManager } from '../game/audio/AudioManager.js';
@@ -53,6 +53,8 @@ export class LandingScreen {
     document.addEventListener('keydown', this._onKeyDown);
     const hud = document.getElementById('hud-overlay');
     if (hud) hud.style.display = 'none';
+
+    this._attachListeners();
   }
 
   _buildDOM() {
@@ -90,8 +92,8 @@ export class LandingScreen {
             <span class="landing-btn-sub">View your progress</span>
           </button>
           <button class="landing-btn" id="btn-login">
-            LOGIN WITH GOOGLE
-            <span class="landing-btn-sub">Link account for cloud saves</span>
+            SIGN IN WITH GOOGLE
+            <span class="landing-btn-sub">Sync progress to the cloud</span>
           </button>
         </nav>
         <div id="landing-subpanel"></div>
@@ -122,12 +124,19 @@ export class LandingScreen {
       }
     }
 
-    // Login button — hide if already Google user
+    // Login button — change to Sign Out if already Google user
+    const btnLogin = document.getElementById('btn-login');
+    const loginSub = btnLogin.querySelector('.landing-btn-sub');
+
+    btnLogin.disabled = false; // Ensure button is clickable
+
     if (isGoogleUser()) {
-      document.getElementById('btn-login').style.display = 'none';
+      btnLogin.innerHTML = `SIGN OUT <span class="landing-btn-sub">Switch to Offline Mode</span>`;
     } else if (isRedirectInProgress()) {
-      const loginSub = document.querySelector('#btn-login .landing-btn-sub');
-      if (loginSub) loginSub.textContent = 'Finalizing Google login...';
+      if (loginSub) loginSub.textContent = 'Finalizing Google sign-in...';
+      else btnLogin.innerHTML = `SIGN IN <span class="landing-btn-sub">Finalizing Google sign-in...</span>`;
+    } else {
+      btnLogin.innerHTML = `SIGN IN WITH GOOGLE <span class="landing-btn-sub">Sync progress to the cloud</span>`;
     }
 
     // Check for auth errors from a previous redirect
@@ -154,7 +163,6 @@ export class LandingScreen {
     }
 
     this._updateFooter();
-    this._attachListeners();
   }
 
   _attachListeners() {
@@ -163,7 +171,14 @@ export class LandingScreen {
     document.getElementById('btn-slots').addEventListener('click', () => { menuClick(); this._showSaveSlotsPanel(); });
     document.getElementById('btn-settings').addEventListener('click', () => { menuClick(); this._showSettingsPanel(); });
     document.getElementById('btn-stats').addEventListener('click', () => { menuClick(); this._showStatisticsPanel(); });
-    document.getElementById('btn-login').addEventListener('click', () => { menuClick(); this._handleLogin(); });
+    document.getElementById('btn-login').addEventListener('click', () => { 
+      menuClick(); 
+      if (isGoogleUser()) {
+        this._handleSignOut();
+      } else {
+        this._handleLogin(); 
+      }
+    });
   }
 
   show() {
@@ -296,22 +311,48 @@ export class LandingScreen {
   async _handleLogin() {
     const btn = document.getElementById('btn-login');
     btn.disabled = true;
-    btn.querySelector('.landing-btn-sub').textContent = 'Redirecting to Google...';
+    const subText = btn.querySelector('.landing-btn-sub');
+    const originalSub = subText.textContent;
+    subText.textContent = 'Contacting Google...';
 
-    // This will trigger a page reload/redirect
-    await upgradeToGoogle();
+    // This may trigger a redirect (page reload) or return a user (popup)
+    const user = await signInWithGoogle();
     
-    // If we're still here, either the redirect didn't happen yet or failed immediately
+    if (user) {
+      console.log('[Landing] Google sign-in successful, updating UI.');
+      this.init(); // Refresh UI to show Sign Out state
+      return;
+    }
+
     const err = getAuthError();
     if (err) {
       btn.disabled = false;
-      btn.querySelector('.landing-btn-sub').textContent = 'Link account for cloud saves';
+      subText.textContent = originalSub;
       const footerRight = document.getElementById('footer-right');
       if (footerRight) {
         footerRight.textContent = err.toUpperCase();
         footerRight.classList.add('landing-footer-error');
       }
+    } else if (isRedirectInProgress()) {
+      subText.textContent = 'Finalizing Google sign-in...';
+    } else {
+      btn.disabled = false;
+      subText.textContent = originalSub;
     }
+  }
+
+  async _handleSignOut() {
+    const btn = document.getElementById('btn-login');
+    btn.disabled = true;
+    btn.querySelector('.landing-btn-sub').textContent = 'Signing out...';
+    
+    await signOut();
+    console.log('[Landing] Signed out, refreshing UI.');
+    this.init();
+    
+    // Reset state to ensure we are definitely Offline
+    btn.disabled = false;
+    btn.innerHTML = `SIGN IN WITH GOOGLE <span class="landing-btn-sub">Sync progress to the cloud</span>`;
   }
 
   _showSettingsPanel() {

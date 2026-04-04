@@ -367,7 +367,12 @@ export class PlanetPanel {
           e.stopPropagation();
           AudioManager.play('UI_CLICK');
           const ok = gameState.buyBaseUpgrade(this._planetId, upg.id);
-          if (ok) flashButton(btn, 'base-upg-btn--success', cost.energy > 0 ? `-${fmt(cost.energy)} ⚡` : '');
+          if (ok) {
+            let fStr = '';
+            if (cost.ore > 0) fStr += `-${fmt(cost.ore)} ⬡ `;
+            if (cost.energy > 0) fStr += `-${fmt(cost.energy)} ⚡`;
+            flashButton(btn, 'base-upg-btn--success', fStr);
+          }
         });
       } else if (!maxed) {
         btn.addEventListener('pointerdown', (e) => {

@@ -118,8 +118,9 @@ export class DefensePanel {
       const level = combat.defenses[id] || 0;
       const maxed = level >= def.maxLevel;
       
-      const energyCost = maxed ? 0 : (def.energyCost?.[level] || 0);
-      const oreCost    = maxed ? 0 : (def.oreCost?.[level]    || 0);
+      const cost = gameState.getDefenseCost(planetId, id);
+      const energyCost = cost?.energy || 0;
+      const oreCost    = cost?.ore    || 0;
       
       const canEnergy = maxed || energyCost <= 0 || gameState.siloHas(planetId, 'energy', energyCost);
       const canOre    = maxed || oreCost <= 0    || gameState.siloHas(planetId, 'ore',    oreCost);
@@ -166,8 +167,9 @@ export class DefensePanel {
       const level = combat.defenseLevels[upg.id] || 0;
       const maxed = level >= upg.maxLevel;
       
-      const energyCost = maxed ? 0 : (upg.energyCost?.[level] || 0);
-      const oreCost    = maxed ? 0 : (upg.oreCost?.[level]    || 0);
+      const cost = gameState.getDefenseUpgradeCost(planetId, upg.id);
+      const energyCost = cost?.energy || 0;
+      const oreCost    = cost?.ore    || 0;
 
       const canEnergy = maxed || energyCost <= 0 || gameState.siloHas(planetId, 'energy', energyCost);
       const canOre    = maxed || oreCost <= 0    || gameState.siloHas(planetId, 'ore',    oreCost);

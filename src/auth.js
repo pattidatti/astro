@@ -1,4 +1,11 @@
-import { signInAnonymously, GoogleAuthProvider, linkWithRedirect, getRedirectResult, onAuthStateChanged, signInWithRedirect } from 'firebase/auth';
+import { 
+  signOut as firebaseSignOut,
+  GoogleAuthProvider, 
+  getRedirectResult, 
+  onAuthStateChanged, 
+  signInWithRedirect,
+  signInWithPopup
+} from 'firebase/auth';
 import { auth, isFirebaseConfigured } from './firebase.js';
 
 let authError = null;
@@ -29,21 +36,13 @@ export function onAuthReady(callback) {
   });
 }
 
-export async function signInAnon() {
-  if (!auth) return null;
-  try {
-    console.log('[Auth] Attempting anonymous sign-in...');
-    const result = await signInAnonymously(auth);
-    console.log('[Auth] Anonymous sign-in success:', result.user.uid);
-    return result.user;
-  } catch (e) {
-    console.warn('[Auth] Anonymous sign-in failed:', e);
-    return null;
-  }
-}
-
 export function getCurrentUser() {
   return auth ? auth.currentUser : null;
+}
+
+export function signOut() {
+  if (!auth) return;
+  return firebaseSignOut(auth);
 }
 
 export function isGoogleUser() {
@@ -59,9 +58,13 @@ export function isGoogleUser() {
 export async function handleAuthRedirect() {
   if (!auth) return null;
   
+  const hasRedirectParams = window.location.hash.includes('access_token') || 
+                            window.location.search.includes('code') || 
+                            window.location.search.includes('state');
+
   console.log('[Auth] Checking for redirect result...');
   console.log('[Auth] URL location:', window.location.href);
-  console.log('[Auth] URL params check:', window.location.hash.includes('access_token') || window.location.search.includes('code'));
+  console.log('[Auth] URL params detected:', hasRedirectParams);
   
   isRedirecting = true;
   
@@ -72,19 +75,9 @@ export async function handleAuthRedirect() {
       isRedirecting = false;
       return result.user;
     }
-    console.log('[Auth] No redirect result found.');
+    console.log(hasRedirectParams ? '[Auth] Redirect result was null despite URL params.' : '[Auth] No redirect result found (standard load).');
   } catch (e) {
-    console.error('[Auth] Redirect error:', e.code, e.message);
-    
-    // If account already exists, we must sign in directly instead of linking
-    if (e.code === 'auth/credential-already-in-use') {
-      console.log('[Auth] Conflict: Account already exists. Switching to direct sign-in redirect...');
-      const provider = new GoogleAuthProvider();
-      // Keep isRedirecting = true because page will reload
-      await signInWithRedirect(auth, provider);
-      return null;
-    }
-    
+    console.error('[Auth] Redirect error:', e.code);
     authError = mapAuthError(e);
   }
   
@@ -92,20 +85,37 @@ export async function handleAuthRedirect() {
   return null;
 }
 
-export async function upgradeToGoogle() {
-  if (!auth || !auth.currentUser) return null;
+/**
+ * Simple Google sign-in. No linking involved anymore.
+ */
+export async function signInWithGoogle() {
+  if (!auth) return null;
   const provider = new GoogleAuthProvider();
   clearAuthError();
   
-  console.log('[Auth] Starting Google link redirect...');
-  isRedirecting = true;
+  console.log('[Auth] Attempting Google sign-in via Popup...');
   
   try {
-    // Start redirect flow to link account
-    await linkWithRedirect(auth.currentUser, provider);
+    const result = await signInWithPopup(auth, provider);
+    console.log('[Auth] Popup sign-in success!', result.user.email);
+    return result.user;
   } catch (e) {
-    console.error('[Auth] Redirect trigger failed:', e);
-    isRedirecting = false;
+    console.warn(`[Auth] Popup failed with code: ${e.code}`, e);
+    
+    // Fallback on most blockers or technical failures to Redirect
+    if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
+      console.log(`[Auth] Popup issue (${e.code}), falling back to Redirect...`);
+      isRedirecting = true;
+      try {
+        await signInWithRedirect(auth, provider);
+      } catch (re) {
+        console.error('[Auth] Redirect trigger failed:', re.code);
+        isRedirecting = false;
+        authError = mapAuthError(re);
+      }
+      return null;
+    }
+    
     authError = mapAuthError(e);
     return null;
   }

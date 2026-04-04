@@ -50,6 +50,12 @@ export function colonyLaunchEnergyCost(distance) {
   return Math.ceil(COLONY_LAUNCH_BASE_COST + distance * COLONY_LAUNCH_DIST_MULT);
 }
 
+/** Clamped energy cost to launch a colony ship from a specific planet */
+export function getClampedColonyLaunchCost(distance, planetCapacity) {
+  const cost = colonyLaunchEnergyCost(distance);
+  return Math.min(cost, planetCapacity);
+}
+
 /** Travel duration in seconds based on orbit-radius distance */
 export function colonyTravelDuration(distance) {
   return distance * 0.15;
@@ -280,6 +286,32 @@ class GameState extends EventEmitter {
     return silo && silo.capacity > 0 && silo.amount < silo.capacity;
   }
 
+  // ─── Cost clamping safeguard ──────────────────────────────────────────────
+
+  /**
+   * Clamps a cost object so that no resource cost exceeds the planet's silo capacity.
+   * Prevents "soft-locks" on storage upgrades and colonization.
+   */
+  _clampCost(planetId, cost) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps || !cost) return cost;
+
+    const clamped = { ...cost };
+    if (clamped.energy !== undefined) {
+      clamped.energy = Math.min(clamped.energy, ps.silos.energy.capacity || 500);
+    }
+    if (clamped.ore !== undefined) {
+      clamped.ore = Math.min(clamped.ore, ps.silos.ore.capacity || 500);
+    }
+    if (clamped.crystal !== undefined) {
+      // Only clamp crystal if the planet actually has a crystal silo
+      if (ps.silos.crystal && ps.silos.crystal.capacity > 0) {
+        clamped.crystal = Math.min(clamped.crystal, ps.silos.crystal.capacity);
+      }
+    }
+    return clamped;
+  }
+
   // ─── Tech tree ────────────────────────────────────────────────────────────
 
   /** Returns true if the given tech node is unlocked. */
@@ -288,15 +320,34 @@ class GameState extends EventEmitter {
   }
 
   /**
+   * Get the cost of a tech node, clamped to the focused planet's capacity.
+   */
+  getTechCost(nodeId, planetId = this.focusedPlanet) {
+    const node = TECH_BY_ID[nodeId];
+    if (!node || node.free) return { energy: 0 };
+    
+    // Only clamp storage tags or critical early infrastructure
+    const isProgression = nodeId.includes('storage') || 
+                          ['colony_ship', 'military_base', 'cargo_ships', 'base_shipspeed', 'base_passive'].includes(nodeId);
+    
+    if (isProgression) {
+      return this._clampCost(planetId, { energy: node.cost });
+    }
+    return { energy: node.cost };
+  }
+
+  /**
    * Returns true if the node can be unlocked right now:
    *   - all prerequisites are unlocked
-   *   - focused planet's energy silo has enough
+   *   - focused planet's energy silo has enough (after clamping)
    */
   canUnlockTech(nodeId) {
     const node = TECH_BY_ID[nodeId];
     if (!node || node.free || this.isTechUnlocked(nodeId)) return false;
     if (node.requires.some(r => !this.isTechUnlocked(r))) return false;
-    return this.siloHas(this.focusedPlanet, 'energy', node.cost);
+    
+    const cost = this.getTechCost(nodeId);
+    return this.siloHas(this.focusedPlanet, 'energy', cost.energy);
   }
 
   /**
@@ -305,8 +356,8 @@ class GameState extends EventEmitter {
    */
   unlockTech(nodeId) {
     if (!this.canUnlockTech(nodeId)) return false;
-    const node = TECH_BY_ID[nodeId];
-    this.deductFromSilo(this.focusedPlanet, 'energy', node.cost);
+    const cost = this.getTechCost(nodeId);
+    this.deductFromSilo(this.focusedPlanet, 'energy', cost.energy);
     this.unlockedTech.add(nodeId);
     this._applyTechEffects(nodeId);
     this._newTechAvailable = false;
@@ -498,6 +549,12 @@ class GameState extends EventEmitter {
 
   // ─── Colony ship system ───────────────────────────────────────────────────
 
+  /** Get the current cost to build a colony ship, clamped to planet capacity. */
+  getColonyShipCost(planetId) {
+    const raw = getColonyShipBuildCost(this.stats.planetsColonized);
+    return this._clampCost(planetId, raw);
+  }
+
   /** Queue a colony ship build on the given planet. Cost scales with planets colonized. */
   queueColonyShipBuild(planetId) {
     if (!this.ownedPlanets.includes(planetId)) return false;
@@ -506,11 +563,13 @@ class GameState extends EventEmitter {
     // Max 1 colony ship per planet (building or in orbit)
     if (ps.colonyShipBuildQueue.length > 0) return false;
     if (this.colonyShipsInOrbit.some(s => s.fromPlanetId === planetId)) return false;
-    const { ore = 0, energy = 0 } = getColonyShipBuildCost(this.stats.planetsColonized);
-    if (ore > 0 && !this.siloHas(planetId, 'ore', ore)) return false;
-    if (energy > 0 && !this.siloHas(planetId, 'energy', energy)) return false;
-    if (ore > 0) this.deductFromSilo(planetId, 'ore', ore);
-    if (energy > 0) this.deductFromSilo(planetId, 'energy', energy);
+    
+    const cost = this.getColonyShipCost(planetId);
+    if (cost.ore > 0 && !this.siloHas(planetId, 'ore', cost.ore)) return false;
+    if (cost.energy > 0 && !this.siloHas(planetId, 'energy', cost.energy)) return false;
+
+    if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
+    if (cost.energy > 0) this.deductFromSilo(planetId, 'energy', cost.energy);
     ps.colonyShipBuildQueue.push({ progress: 0 });
     this.emit('colonyShipQueued', planetId);
     return true;
@@ -547,9 +606,13 @@ class GameState extends EventEmitter {
     if (inFlight >= maxInFlight) return false;
 
     const { fromPlanetId } = this.colonyShipsInOrbit[shipIdx];
-    const energyCost = colonyLaunchEnergyCost(distance);
-    if (!this.siloHas(fromPlanetId, 'energy', energyCost)) return false;
-    this.deductFromSilo(fromPlanetId, 'energy', energyCost);
+
+    // Use clamped launch cost
+    const energyCost = Math.floor(50 + distance * 0.3);
+    const cost = this._clampCost(fromPlanetId, { energy: energyCost });
+
+    if (!this.siloHas(fromPlanetId, 'energy', cost.energy)) return false;
+    this.deductFromSilo(fromPlanetId, 'energy', cost.energy);
 
     const duration = colonyTravelDuration(distance);
     this.colonyShipsInOrbit.splice(shipIdx, 1);
@@ -620,10 +683,14 @@ class GameState extends EventEmitter {
     const costMult = this.getTechColonyCostMult();
     const oreCost    = Math.floor((def.baseCost.ore    || 0) * costMult);
     const energyCost = Math.floor((def.baseCost.energy || 0) * costMult);
-    if (oreCost > 0 && !this.siloHas(planetId, 'ore', oreCost)) return false;
-    if (energyCost > 0 && !this.siloHas(planetId, 'energy', energyCost)) return false;
-    if (oreCost > 0) this.deductFromSilo(planetId, 'ore', oreCost);
-    if (energyCost > 0) this.deductFromSilo(planetId, 'energy', energyCost);
+    
+    // Clamp to current capacity to prevent soft-locks
+    const cost = this._clampCost(planetId, { ore: oreCost, energy: energyCost });
+
+    if (cost.ore > 0 && !this.siloHas(planetId, 'ore', cost.ore)) return false;
+    if (cost.energy > 0 && !this.siloHas(planetId, 'energy', cost.energy)) return false;
+    if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
+    if (cost.energy > 0) this.deductFromSilo(planetId, 'energy', cost.energy);
     ps.hasBase = true;
     this.emit('baseBuilt', planetId);
     return true;
@@ -636,11 +703,18 @@ class GameState extends EventEmitter {
     if (!ps || !ps.hasBase) return null;
     const upg = BASE_UPGRADES.find(u => u.id === upgradeId);
     if (!upg) return null;
+    const lv = ps.baseLevels[upg.effect] ?? 0;
     if (lv >= upg.maxLevel) return null;
-    return {
+
+    const cost = {
       energy: upg.energyCost[lv],
       ore:    upg.oreCost ? upg.oreCost[lv] : 0
     };
+    // Only clamp storage upgrades to ensure player can always increase capacity
+    if (upg.effect === 'storage') {
+      return this._clampCost(planetId, cost);
+    }
+    return cost;
   }
 
   buyBaseUpgrade(planetId, upgradeId) {
@@ -1132,31 +1206,44 @@ class GameState extends EventEmitter {
   // ─── Defense management ────────────────────────────────────────────────────
 
   /**
+   * Get the cost to build a defense on a planet, clamped to silo capacity.
+   */
+  getDefenseCost(planetId, defenseId) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps) return null;
+    const def = DEFENSE_TYPES[defenseId];
+    if (!def) return null;
+
+    const lv = ps.combat.defenses[defenseId] || 0;
+    if (lv >= def.maxLevel) return null;
+
+    return {
+      energy: def.energyCost[lv],
+      ore:    def.oreCost ? def.oreCost[lv] : 0
+    };
+  }
+
+  /**
    * Purchase or upgrade a defense on a planet.
    * Returns false if conditions not met.
    */
   buyDefense(planetId, defenseId) {
+    const cost = this.getDefenseCost(planetId, defenseId);
+    if (!cost) return false;
+
+    if (cost.energy > 0 && !this.siloHas(planetId, 'energy', cost.energy)) return false;
+    if (cost.ore > 0 && !this.siloHas(planetId, 'ore', cost.ore)) return false;
+
+    if (cost.energy > 0) this.deductFromSilo(planetId, 'energy', cost.energy);
+    if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
+
     const ps = this.getPlanetState(planetId);
-    if (!ps || !ps.hasBase) return false;
-    const def = DEFENSE_TYPES[defenseId];
-    if (!def) return false;
-
     const lv = ps.combat.defenses[defenseId] || 0;
-    if (lv >= def.maxLevel) return false;
-
-    const energyCost = def.energyCost[lv];
-    const oreCost = def.oreCost ? def.oreCost[lv] : 0;
-
-    if (energyCost > 0 && !this.siloHas(planetId, 'energy', energyCost)) return false;
-    if (oreCost > 0 && !this.siloHas(planetId, 'ore', oreCost)) return false;
-
-    if (energyCost > 0) this.deductFromSilo(planetId, 'energy', energyCost);
-    if (oreCost > 0) this.deductFromSilo(planetId, 'ore', oreCost);
-
     ps.combat.defenses[defenseId] = lv + 1;
 
     // Shield: update max HP and current HP
     if (defenseId === 'shield') {
+      const def = DEFENSE_TYPES[defenseId];
       const newLevel = lv + 1;
       ps.combat.shieldMaxHP = def.shieldHP[newLevel - 1];
       ps.combat.shieldHP = ps.combat.shieldMaxHP;
@@ -1167,30 +1254,43 @@ class GameState extends EventEmitter {
   }
 
   /**
+   * Get the cost of a defense upgrade, clamped to silo capacity.
+   */
+  getDefenseUpgradeCost(planetId, upgradeId) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps) return null;
+    const upg = DEFENSE_UPGRADES.find(u => u.id === upgradeId);
+    if (!upg) return null;
+
+    const lv = ps.combat.defenseLevels[upgradeId] || 0;
+    if (lv >= upg.maxLevel) return null;
+
+    const cost = {
+      energy: upg.energyCost[lv],
+      ore:    upg.oreCost ? upg.oreCost[lv] : 0
+    };
+    // Only clamp storage upgrades to ensure player can always increase capacity
+    if (upg.effect === 'storage') {
+      return this._clampCost(planetId, cost);
+    }
+    return cost;
+  }
+
+  /**
    * Purchase a defense upgrade (from the defense upgrade tree).
    */
   buyDefenseUpgrade(planetId, upgradeId) {
+    const cost = this.getDefenseUpgradeCost(planetId, upgradeId);
+    if (!cost) return false;
+
+    if (cost.energy > 0 && !this.siloHas(planetId, 'energy', cost.energy)) return false;
+    if (cost.ore > 0 && !this.siloHas(planetId, 'ore', cost.ore)) return false;
+
+    if (cost.energy > 0) this.deductFromSilo(planetId, 'energy', cost.energy);
+    if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
+
     const ps = this.getPlanetState(planetId);
-    if (!ps || !ps.hasBase) return false;
-    const upg = DEFENSE_UPGRADES.find(u => u.id === upgradeId);
-    if (!upg) return false;
-
-    // Must have the defense type built first
-    const defLevel = ps.combat.defenses[upg.defenseType] || 0;
-    if (defLevel <= 0) return false;
-
     const lv = ps.combat.defenseLevels[upgradeId] || 0;
-    if (lv >= upg.maxLevel) return false;
-
-    const energyCost = upg.energyCost[lv];
-    const oreCost = upg.oreCost ? upg.oreCost[lv] : 0;
-
-    if (energyCost > 0 && !this.siloHas(planetId, 'energy', energyCost)) return false;
-    if (oreCost > 0 && !this.siloHas(planetId, 'ore', oreCost)) return false;
-
-    if (energyCost > 0) this.deductFromSilo(planetId, 'energy', energyCost);
-    if (oreCost > 0) this.deductFromSilo(planetId, 'ore', oreCost);
-
     ps.combat.defenseLevels[upgradeId] = lv + 1;
 
     this.emit('defenseUpgraded', { planetId, upgradeId, level: lv + 1 });
