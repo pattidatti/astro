@@ -117,9 +117,19 @@ export class DefensePanel {
       if (!gameState.isTechUnlocked(DEFENSE_TECH_MAP[id])) continue;
       const level = combat.defenses[id] || 0;
       const maxed = level >= def.maxLevel;
-      const cost = maxed ? null : def.energyCost[level];
-      const canAfford = cost !== null && gameState.siloHas(planetId, 'energy', cost);
-      const costClass = (canAfford || maxed) ? '' : 'cant';
+      
+      const energyCost = maxed ? 0 : (def.energyCost?.[level] || 0);
+      const oreCost    = maxed ? 0 : (def.oreCost?.[level]    || 0);
+      
+      const canEnergy = maxed || energyCost <= 0 || gameState.siloHas(planetId, 'energy', energyCost);
+      const canOre    = maxed || oreCost <= 0    || gameState.siloHas(planetId, 'ore',    oreCost);
+      const canAfford = canEnergy && canOre;
+
+      let costStr = '';
+      if (!maxed) {
+        if (oreCost > 0)    costStr += `<span class="${canOre ? '' : 'cant'}">⬡${fmt(oreCost)}</span>`;
+        if (energyCost > 0) costStr += (costStr ? ' ' : '') + `<span class="${canEnergy ? '' : 'cant'}">⚡${fmt(energyCost)}</span>`;
+      }
 
       html += `
         <button class="hire-btn${maxed ? ' maxed' : ''}"
@@ -128,7 +138,7 @@ export class DefensePanel {
           <span class="hire-btn-icon">${def.icon}</span>
           <span class="hire-btn-name">${def.name}</span>
           <span class="hire-btn-count">${level > 0 ? 'LV.' + level : '—'}</span>
-          <span class="hire-btn-cost ${costClass}">${maxed ? '✓ MAX' : (level === 0 ? 'BUILD' : 'UPGRADE') + ' ⚡' + fmt(cost)}</span>
+          <span class="hire-btn-cost">${maxed ? '✓ MAX' : costStr}</span>
         </button>
       `;
     }
@@ -155,8 +165,19 @@ export class DefensePanel {
 
       const level = combat.defenseLevels[upg.id] || 0;
       const maxed = level >= upg.maxLevel;
-      const cost = maxed ? null : upg.energyCost[level];
-      const canAfford = cost !== null && gameState.siloHas(planetId, 'energy', cost);
+      
+      const energyCost = maxed ? 0 : (upg.energyCost?.[level] || 0);
+      const oreCost    = maxed ? 0 : (upg.oreCost?.[level]    || 0);
+
+      const canEnergy = maxed || energyCost <= 0 || gameState.siloHas(planetId, 'energy', energyCost);
+      const canOre    = maxed || oreCost <= 0    || gameState.siloHas(planetId, 'ore',    oreCost);
+      const canAfford = canEnergy && canOre;
+
+      let costStr = '';
+      if (!maxed) {
+        if (oreCost > 0)    costStr += `<span class="${canOre ? '' : 'cant'}">⬡${fmt(oreCost)}</span>`;
+        if (energyCost > 0) costStr += (costStr ? ' ' : '') + `<span class="${canEnergy ? '' : 'cant'}">⚡${fmt(energyCost)}</span>`;
+      }
 
       rows += `
         <div class="defense-upg-row">
@@ -165,7 +186,7 @@ export class DefensePanel {
           ${!maxed ? `
             <button class="defense-upg-btn${canAfford ? '' : ' cant-afford'}"
                     data-upgrade-id="${upg.id}" ${canAfford ? '' : 'disabled'}>
-              ⚡${fmt(cost)}
+              ${costStr}
             </button>
           ` : '<span class="defense-maxed-sm">MAX</span>'}
         </div>

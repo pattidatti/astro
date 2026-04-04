@@ -8,6 +8,7 @@ export const BASE_UPGRADES = [
     effect: 'storage',
     maxLevel: 5,
     energyCost: [100, 300, 1000, 5000, 20000],
+    oreCost:    [50, 200, 800, 4000, 15000],
     capacityBonus: [500, 1500, 5000, 20000, 100000], // additional capacity per level
   },
   {
@@ -27,6 +28,7 @@ export const BASE_UPGRADES = [
     effect: 'shipSlots',
     maxLevel: 5,
     energyCost: [500, 1500, 5000, 15000, 50000],
+    oreCost:    [300, 1000, 4000, 12000, 40000],
   },
   {
     id: 'base_passive',

@@ -636,22 +636,25 @@ class GameState extends EventEmitter {
     if (!ps || !ps.hasBase) return null;
     const upg = BASE_UPGRADES.find(u => u.id === upgradeId);
     if (!upg) return null;
-    const lv = ps.baseLevels[upg.effect] ?? 0;
     if (lv >= upg.maxLevel) return null;
-    return { energy: upg.energyCost[lv] };
+    return {
+      energy: upg.energyCost[lv],
+      ore:    upg.oreCost ? upg.oreCost[lv] : 0
+    };
   }
 
   buyBaseUpgrade(planetId, upgradeId) {
     const cost = this.baseUpgradeCost(planetId, upgradeId);
     if (!cost) return false;
-    if (!this.siloHas(planetId, 'energy', cost.energy)) return false;
+    if (cost.energy > 0 && !this.siloHas(planetId, 'energy', cost.energy)) return false;
+    if (cost.ore > 0 && !this.siloHas(planetId, 'ore', cost.ore)) return false;
 
     const ps = this.getPlanetState(planetId);
     const upg = BASE_UPGRADES.find(u => u.id === upgradeId);
     const lv = ps.baseLevels[upg.effect];
 
-    this.deductFromSilo(planetId, 'energy', cost.energy);
-    ps.baseLevels[upg.effect] = lv + 1;
+    if (cost.energy > 0) this.deductFromSilo(planetId, 'energy', cost.energy);
+    if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
 
     // Apply storage capacity increase
     if (upg.effect === 'storage') {
@@ -877,6 +880,25 @@ class GameState extends EventEmitter {
     if (fleet.titanCooldown === undefined) fleet.titanCooldown = 0;
 
     this.emit('playerFleetChanged', { fleetId: fleet.id });
+  }
+
+  /**
+   * Deduct ore for station repairs.
+   * rate: 1 ore per 5 HP repaired.
+   */
+  repairStation(planetId, hpAmount) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps || hpAmount <= 0) return 0;
+    
+    const oreCost = Math.ceil(hpAmount / 5);
+    const actualOre = Math.min(oreCost, ps.silos.ore.amount);
+    const actualHP = actualOre * 5;
+
+    if (actualOre > 0) {
+      this.deductFromSilo(planetId, 'ore', actualOre);
+      ps.combat.stationHP = Math.min(ps.combat.stationMaxHP, ps.combat.stationHP + actualHP);
+    }
+    return actualHP;
   }
 
   /**
@@ -1116,26 +1138,31 @@ class GameState extends EventEmitter {
   buyDefense(planetId, defenseId) {
     const ps = this.getPlanetState(planetId);
     if (!ps || !ps.hasBase) return false;
-    const defType = DEFENSE_TYPES[defenseId];
-    if (!defType) return false;
+    const def = DEFENSE_TYPES[defenseId];
+    if (!def) return false;
 
-    const currentLevel = ps.combat.defenses[defenseId] || 0;
-    if (currentLevel >= defType.maxLevel) return false;
+    const lv = ps.combat.defenses[defenseId] || 0;
+    if (lv >= def.maxLevel) return false;
 
-    const cost = defType.energyCost[currentLevel];
-    if (!this.siloHas(planetId, 'energy', cost)) return false;
+    const energyCost = def.energyCost[lv];
+    const oreCost = def.oreCost ? def.oreCost[lv] : 0;
 
-    this.deductFromSilo(planetId, 'energy', cost);
-    ps.combat.defenses[defenseId] = currentLevel + 1;
+    if (energyCost > 0 && !this.siloHas(planetId, 'energy', energyCost)) return false;
+    if (oreCost > 0 && !this.siloHas(planetId, 'ore', oreCost)) return false;
+
+    if (energyCost > 0) this.deductFromSilo(planetId, 'energy', energyCost);
+    if (oreCost > 0) this.deductFromSilo(planetId, 'ore', oreCost);
+
+    ps.combat.defenses[defenseId] = lv + 1;
 
     // Shield: update max HP and current HP
     if (defenseId === 'shield') {
-      const newLevel = currentLevel + 1;
-      ps.combat.shieldMaxHP = defType.shieldHP[newLevel - 1];
+      const newLevel = lv + 1;
+      ps.combat.shieldMaxHP = def.shieldHP[newLevel - 1];
       ps.combat.shieldHP = ps.combat.shieldMaxHP;
     }
 
-    this.emit('defenseBuilt', { planetId, defenseId, level: currentLevel + 1 });
+    this.emit('defenseBuilt', { planetId, defenseId, level: lv + 1 });
     return true;
   }
 
@@ -1152,16 +1179,21 @@ class GameState extends EventEmitter {
     const defLevel = ps.combat.defenses[upg.defenseType] || 0;
     if (defLevel <= 0) return false;
 
-    const currentLevel = ps.combat.defenseLevels[upgradeId] || 0;
-    if (currentLevel >= upg.maxLevel) return false;
+    const lv = ps.combat.defenseLevels[upgradeId] || 0;
+    if (lv >= upg.maxLevel) return false;
 
-    const cost = upg.energyCost[currentLevel];
-    if (!this.siloHas(planetId, 'energy', cost)) return false;
+    const energyCost = upg.energyCost[lv];
+    const oreCost = upg.oreCost ? upg.oreCost[lv] : 0;
 
-    this.deductFromSilo(planetId, 'energy', cost);
-    ps.combat.defenseLevels[upgradeId] = currentLevel + 1;
+    if (energyCost > 0 && !this.siloHas(planetId, 'energy', energyCost)) return false;
+    if (oreCost > 0 && !this.siloHas(planetId, 'ore', oreCost)) return false;
 
-    this.emit('defenseUpgraded', { planetId, upgradeId, level: currentLevel + 1 });
+    if (energyCost > 0) this.deductFromSilo(planetId, 'energy', energyCost);
+    if (oreCost > 0) this.deductFromSilo(planetId, 'ore', oreCost);
+
+    ps.combat.defenseLevels[upgradeId] = lv + 1;
+
+    this.emit('defenseUpgraded', { planetId, upgradeId, level: lv + 1 });
     return true;
   }
 

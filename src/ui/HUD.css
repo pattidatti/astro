@@ -1903,6 +1903,7 @@
   margin-top: auto;
 }
 .tech-node-cost--cant { color: var(--dune-red) !important; }
+.tech-node-cost--can  { color: var(--dune-green) !important; }
 .tech-node-free { color: rgba(138,170,90,0.9) !important; font-size: 12px; }
 .tech-node-badge {
   position: absolute;

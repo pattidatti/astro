@@ -18,7 +18,7 @@ export const TECH_NODES = [
     name: 'MINER BOT',
     icon: '⛏',
     desc: 'Mines ore from planetary deposits.',
-    cost: 500, free: false, requires: ['energy_bot'], tier: 1, branch: 'robots',
+    cost: 150, free: false, requires: ['energy_bot'], tier: 1, branch: 'robots',
   },
   {
     id: 'builder_bot',

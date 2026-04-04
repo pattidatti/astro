@@ -14,6 +14,7 @@ export const DEFENSE_TYPES = {
     fireRate: [1.5, 1.6, 1.8, 2.0, 2.3],  // shots per second
     range: 'planet',  // fires at any enemy near the planet
     energyCost: [50, 150, 500, 2000, 8000],
+    oreCost:    [30, 100, 400, 1500, 6000],
   },
   satellite: {
     id: 'satellite',
@@ -25,6 +26,7 @@ export const DEFENSE_TYPES = {
     fireRate: [2.0, 2.3, 2.6, 3.0, 3.5],
     range: 'orbit',
     energyCost: [80, 250, 800, 3000, 12000],
+    oreCost:    [50, 180, 600, 2500, 10000],
   },
   defenseShip: {
     id: 'defenseShip',
@@ -36,6 +38,7 @@ export const DEFENSE_TYPES = {
     fireRate: [1.0, 1.2, 1.5],
     range: 'hyperlane',  // can also patrol hyperlanes
     energyCost: [200, 1000, 5000],
+    oreCost:    [150, 800, 4000],
   },
   shield: {
     id: 'shield',
@@ -48,6 +51,7 @@ export const DEFENSE_TYPES = {
     regenRate:   [2, 4, 7, 11, 16],       // shield HP regenerated per second
     energyDrain: [1, 2, 3, 5, 8],         // energy consumed per second while active
     energyCost:  [150, 500, 2000, 8000, 30000],
+    oreCost:     [100, 400, 1500, 6000, 22000],
   },
 };
 
@@ -67,6 +71,7 @@ export const DEFENSE_UPGRADES = [
     maxLevel: 5,
     mult: 0.2,  // +20% per level
     energyCost: [100, 400, 1500, 5000, 20000],
+    oreCost:    [80, 350, 1200, 4000, 16000],
   },
   {
     id: 'cannon_firerate',
@@ -78,6 +83,7 @@ export const DEFENSE_UPGRADES = [
     maxLevel: 5,
     mult: 0.15,
     energyCost: [120, 450, 1800, 6000, 24000],
+    oreCost:    [100, 400, 1500, 5000, 20000],
   },
   // Satellite upgrades
   {
@@ -90,6 +96,7 @@ export const DEFENSE_UPGRADES = [
     maxLevel: 5,
     mult: 0.2,
     energyCost: [150, 600, 2200, 7000, 28000],
+    oreCost:    [120, 500, 1800, 6000, 24000],
   },
   {
     id: 'sat_firerate',
@@ -101,6 +108,7 @@ export const DEFENSE_UPGRADES = [
     maxLevel: 5,
     mult: 0.15,
     energyCost: [180, 700, 2500, 8000, 32000],
+    oreCost:    [150, 600, 2000, 7000, 28000],
   },
   // Defense ship upgrades
   {
@@ -113,6 +121,7 @@ export const DEFENSE_UPGRADES = [
     maxLevel: 3,
     mult: 0.25,
     energyCost: [300, 2000, 10000],
+    oreCost:    [250, 1500, 8000],
   },
   {
     id: 'ship_armor',
@@ -124,6 +133,7 @@ export const DEFENSE_UPGRADES = [
     maxLevel: 3,
     mult: 0.2,
     energyCost: [350, 2500, 12000],
+    oreCost:    [300, 2000, 10000],
   },
   // Shield upgrades
   {
@@ -136,6 +146,7 @@ export const DEFENSE_UPGRADES = [
     maxLevel: 5,
     mult: 0.25,
     energyCost: [200, 800, 3000, 10000, 40000],
+    oreCost:    [150, 600, 2500, 8000, 32000],
   },
   {
     id: 'shield_regen',
@@ -147,6 +158,7 @@ export const DEFENSE_UPGRADES = [
     maxLevel: 5,
     mult: 0.2,
     energyCost: [250, 1000, 4000, 12000, 48000],
+    oreCost:    [200, 850, 3200, 10000, 40000],
   },
 ];
 

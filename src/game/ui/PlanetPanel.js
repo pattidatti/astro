@@ -333,19 +333,33 @@ export class PlanetPanel {
     for (const upg of BASE_UPGRADES) {
       const techId = BASE_TECH_MAP[upg.id];
       if (techId && !gameState.isTechUnlocked(techId)) continue;
+      
       const lv = ps.baseLevels[upg.effect] ?? 0;
       const maxed = lv >= upg.maxLevel;
-      const cost = maxed ? null : { energy: upg.energyCost[lv] };
-      const canAfford = cost && gameState.siloHas(this._planetId, 'energy', cost.energy);
+      const cost = maxed ? null : { 
+        energy: upg.energyCost?.[lv] || 0,
+        ore:    upg.oreCost?.[lv] || 0 
+      };
+      
+      const canEnergy = !cost || cost.energy <= 0 || gameState.siloHas(this._planetId, 'energy', cost.energy);
+      const canOre    = !cost || cost.ore <= 0    || gameState.siloHas(this._planetId, 'ore',    cost.ore);
+      const canAfford = canEnergy && canOre;
 
       const btn = document.createElement('button');
       btn.className = 'base-upg-btn' + (maxed ? ' maxed' : '');
       btn.disabled = maxed || !canAfford;
+
+      let costStr = '';
+      if (!maxed) {
+        if (cost.ore > 0)    costStr += `<span class="${canOre ? '' : 'cant'}">⬡ ${fmt(cost.ore)}</span>`;
+        if (cost.energy > 0) costStr += (costStr ? ' ' : '') + `<span class="${canEnergy ? '' : 'cant'}">⚡ ${fmt(cost.energy)}</span>`;
+      }
+
       btn.innerHTML = `
         <span class="base-upg-icon">${upg.icon}</span>
         <span class="base-upg-name">${upg.name}</span>
         <span class="base-upg-level">${maxed ? 'MAX' : `LV ${lv}/${upg.maxLevel}`}</span>
-        ${!maxed ? `<span class="base-upg-cost ${canAfford ? '' : 'cant'}">⚡ ${fmt(upg.energyCost[lv])}</span>` : ''}
+        ${costStr ? `<span class="base-upg-cost">${costStr}</span>` : ''}
       `;
 
       if (!maxed && canAfford) {
@@ -353,7 +367,7 @@ export class PlanetPanel {
           e.stopPropagation();
           AudioManager.play('UI_CLICK');
           const ok = gameState.buyBaseUpgrade(this._planetId, upg.id);
-          if (ok) flashButton(btn, 'base-upg-btn--success', `-${fmt(upg.energyCost[lv])} ⚡`);
+          if (ok) flashButton(btn, 'base-upg-btn--success', cost.energy > 0 ? `-${fmt(cost.energy)} ⚡` : '');
         });
       } else if (!maxed) {
         btn.addEventListener('pointerdown', (e) => {
@@ -374,7 +388,13 @@ export class PlanetPanel {
           <div class="utt-name">${upg.name}</div>
           <div class="utt-level">${maxed ? 'MAXED OUT' : `LV ${lv} / ${upg.maxLevel}`}</div>
           <div class="utt-desc">${upg.desc}</div>
-          ${!maxed ? `<div class="utt-cost">⚡ ${fmt(upg.energyCost[lv])}  ${effectLine}</div>` : ''}
+          ${!maxed ? `
+            <div class="utt-cost">
+              ${cost.ore > 0 ? `⬡ ${fmt(cost.ore)}  ` : ''}
+              ${cost.energy > 0 ? `⚡ ${fmt(cost.energy)}  ` : ''}
+              ${effectLine}
+            </div>
+          ` : ''}
         `);
       });
       btn.addEventListener('mouseleave', () => this._hideTooltip());
@@ -487,7 +507,7 @@ export class PlanetPanel {
 
         const label = document.createElement('span');
         label.className = 'silo-label';
-        label.textContent = RESOURCE_LABELS[resource];
+        label.textContent = (RESOURCE_ICONS[resource] || '') + ' ' + RESOURCE_LABELS[resource];
 
         const track = document.createElement('div');
         track.className = 'silo-track';

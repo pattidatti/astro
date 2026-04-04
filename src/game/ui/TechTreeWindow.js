@@ -42,6 +42,12 @@ export class TechTreeWindow {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 
+      if (e.key === 'Escape' && this._visible) {
+        this.hide();
+        e.stopImmediatePropagation();
+        return;
+      }
+
       if (e.key === 'T' || e.key === 't') {
         this.toggle();
         return;
@@ -219,6 +225,7 @@ export class TechTreeWindow {
       if (costEl && !node.free) {
         const canAfford = gameState.siloHas(gameState.focusedPlanet, 'energy', node.cost);
         costEl.classList.toggle('tech-node-cost--cant', state === 'available' && !canAfford);
+        costEl.classList.toggle('tech-node-cost--can',  state === 'available' && canAfford);
       }
     }
   }
