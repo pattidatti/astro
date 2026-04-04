@@ -244,6 +244,13 @@ export class CombatEffects {
   }
 
   /**
+   * Spawn a green healing laser beam between a carrier and its target.
+   */
+  healBeam(fromPos, toPos) {
+    this.laser(fromPos, toPos, 0x44ff88);
+  }
+
+  /**
    * Per-frame update all active effects.
    */
   update(dt) {

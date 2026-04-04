@@ -61,6 +61,29 @@ export class CombatHUD {
     gameState.on('patrolSpawned', () => {
       // Subtle notification, no alert banner
     });
+
+    // ── Fleet combat alerts ──
+    gameState.on('fleetEngaged', ({ restored }) => {
+      if (!restored) {
+        this.showAlert('⚔ FLEET ENGAGED — COMBAT INITIATED', 'raid');
+      }
+    });
+
+    gameState.on('fleetDisengaged', ({ reason }) => {
+      if (reason === 'victory') {
+        this.showAlert('✓ ENEMY FLEET DESTROYED', 'victory');
+      } else if (reason === 'destroyed') {
+        this.showAlert('✖ FLEET LOST', 'fall');
+      } else if (reason === 'retreat') {
+        this.showAlert('⟵ FLEET RETREATING', 'raid');
+      }
+    });
+
+    gameState.on('militaryBaseDestroyed', ({ planetId }) => {
+      const planet = PLANETS.find(p => p.id === planetId);
+      const name = planet?.name || planetId;
+      this.showAlert(`✖ MILITARY BASE DESTROYED — ${name}`, 'fall');
+    });
   }
 
   /**

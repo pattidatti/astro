@@ -68,6 +68,10 @@ export class ThreatSystem {
     const template = templates[Math.floor(Math.random() * templates.length)];
     const enemies = this._createEnemiesFromComposition(template.composition, threatLevel);
 
+    // Military base priority: invasions/raids target military base first if it exists
+    const ps = gameState.getPlanetState(planetId);
+    const hasMilBase = ps?.militaryBase?.built && ps.militaryBase.hp > 0;
+
     const attack = {
       id: `raid_${_nextAttackId++}`,
       type: 'raid',
@@ -77,6 +81,7 @@ export class ThreatSystem {
       wave: 0,
       elapsed: 0,
       template: null,
+      targetMilitaryBase: hasMilBase,
     };
 
     gameState.activeAttacks.push(attack);
@@ -103,6 +108,10 @@ export class ThreatSystem {
     const firstWave = template.waves[0] || [];
     const enemies = this._createEnemiesFromComposition(firstWave, threatLevel);
 
+    // Military base priority: invasions target military base first if it exists
+    const ps = gameState.getPlanetState(planetId);
+    const hasMilBase = ps?.militaryBase?.built && ps.militaryBase.hp > 0;
+
     const attack = {
       id: `invasion_${_nextAttackId++}`,
       type: 'invasion',
@@ -116,6 +125,7 @@ export class ThreatSystem {
         waves: template.waves,
         spawnInterval: mothershipDef.spawnInterval,
       },
+      targetMilitaryBase: hasMilBase,
     };
 
     gameState.activeAttacks.push(attack);
@@ -193,6 +203,9 @@ export class ThreatSystem {
 
     if (enemies.length === 0 && !mothership) return;
 
+    // Military base priority: fleet attacks target military base first if it exists
+    const hasMilBase = ps?.militaryBase?.built && ps.militaryBase.hp > 0;
+
     const attack = {
       id: `fleet_attack_${_nextAttackId++}`,
       type: attackType,
@@ -203,6 +216,7 @@ export class ThreatSystem {
       waveTimer: 0,
       elapsed: 0,
       template,
+      targetMilitaryBase: hasMilBase,
     };
 
     gameState.activeAttacks.push(attack);

@@ -20,6 +20,7 @@ import { RoamingFleetManager3D } from './world/RoamingFleetManager3D.js';
 import { PlayerFleetManager3D } from './world/PlayerFleetManager3D.js';
 import { FleetPanel } from './ui/FleetPanel.js';
 import { MilitaryPanel } from './ui/MilitaryPanel.js';
+import { MILITARY_SHIPS } from './data/militaryShips.js';
 
 export function createGame() {
   const container = document.getElementById('game-container');
@@ -476,6 +477,79 @@ export function createGame() {
     if (sys?.station && ps) {
       sys.station.setDamageState(ps.combat.stationHP / ps.combat.stationMaxHP);
       sys.station.setShieldState(ps.combat.shieldHP, ps.combat.shieldMaxHP);
+    }
+  });
+
+  // --- Fleet combat VFX ---
+  gameState.on('fleetShipFired', ({ fleetId, shipIndex, targetId }) => {
+    const fleet = gameState.playerFleets.find(f => f.id === fleetId);
+    if (!fleet) return;
+    const ship = fleet.ships[shipIndex];
+    if (!ship) return;
+
+    // Compute world position of the firing ship
+    const fromPos = new THREE.Vector3(
+      fleet.position.x + (ship.localPos?.x || 0),
+      fleet.position.y || 0,
+      fleet.position.z + (ship.localPos?.z || 0)
+    );
+
+    // Find the engagement to get enemy fleet position
+    const eng = gameState.getEngagementForFleet(fleetId);
+    if (!eng) return;
+    const ePos = galaxy.roamingFleetManager?.getFleetWorldPosition(eng.roamingFleetId);
+    if (!ePos) return;
+
+    const toPos = new THREE.Vector3(
+      ePos.x + (Math.random() - 0.5) * 4,
+      (ePos.y || 0) + (Math.random() - 0.5) * 2,
+      ePos.z + (Math.random() - 0.5) * 4
+    );
+
+    // Color by ship type
+    const FIRE_COLORS = {
+      fighter: 0xd4a843, bomber: 0xe87020, carrier: 0x44ccdd,
+      battleship: 0xc0c8e0, titan: 0xaa5533,
+    };
+    combatEffects.projectile(fromPos, toPos, FIRE_COLORS[ship.type] || 0xd4a843);
+  });
+
+  gameState.on('playerShipDestroyed', ({ fleetId, ship }) => {
+    const fleet = gameState.playerFleets.find(f => f.id === fleetId);
+    if (!fleet) return;
+    const pos = new THREE.Vector3(
+      fleet.position.x + (ship.localPos?.x || 0),
+      fleet.position.y || 0,
+      fleet.position.z + (ship.localPos?.z || 0)
+    );
+    combatEffects.explosion(pos, 1.2, 0xd4a843);
+    cameraController.shake(0.05, 0.3);
+  });
+
+  gameState.on('fleetHeal', ({ fleetId, shipIndex }) => {
+    const fleet = gameState.playerFleets.find(f => f.id === fleetId);
+    if (!fleet) return;
+    const target = fleet.ships[shipIndex];
+    if (!target) return;
+    // Find carrier in the fleet
+    const carrier = fleet.ships.find(s => s.hp > 0 && MILITARY_SHIPS[s.type]?.combatBehavior === 'support');
+    if (!carrier) return;
+    const fromPos = new THREE.Vector3(
+      fleet.position.x + (carrier.localPos?.x || 0),
+      fleet.position.y || 0,
+      fleet.position.z + (carrier.localPos?.z || 0)
+    );
+    const toPos = new THREE.Vector3(
+      fleet.position.x + (target.localPos?.x || 0),
+      fleet.position.y || 0,
+      fleet.position.z + (target.localPos?.z || 0)
+    );
+    combatEffects.healBeam(fromPos, toPos);
+  });
+
+  gameState.on('fleetEngaged', ({ restored }) => {
+    if (!restored) {
+      cameraController.shake(0.08, 0.4);
     }
   });
 

@@ -53,6 +53,9 @@ export class RoamingFleetSystem {
         continue;
       }
 
+      // Pause movement if engaged in fleet combat
+      if (gameState.getEngagementForFleet(fleet.id)) continue;
+
       fleet.position = Math.min(1, fleet.position + fleet.speed * dt);
       gameState.emit('fleetMoved', { fleetId: fleet.id, position: fleet.position });
 

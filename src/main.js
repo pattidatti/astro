@@ -14,6 +14,7 @@ import { ThreatSystem } from './game/systems/ThreatSystem.js';
 import { CombatSystem } from './game/systems/CombatSystem.js';
 import { RoamingFleetSystem } from './game/systems/RoamingFleetSystem.js';
 import { FleetMovementSystem } from './game/systems/FleetMovementSystem.js';
+import { FleetCombatSystem } from './game/systems/FleetCombatSystem.js';
 import { Tutorial } from './game/tutorial/Tutorial.js';
 
 async function openPauseMenu() {
@@ -118,6 +119,12 @@ async function boot() {
   routeSystem.reconstructActiveShips();
 
   new FleetMovementSystem(game.animationLoop);
+
+  const fleetCombatSystem = new FleetCombatSystem(
+    game.animationLoop,
+    (fleetId) => game.galaxy?.roamingFleetManager?.getFleetWorldPosition(fleetId) ?? null
+  );
+  fleetCombatSystem.reconstructEngagements();
 
   // Track play time
   game.animationLoop.onUpdate((dt) => { gameState.stats.playTimeSeconds += dt; });
