@@ -149,34 +149,50 @@ export class CombatSystem {
 
     // ── Enemies deal damage (unless EMP'd) ──
     if (!empActive) {
+      // Military base targeting: damage goes to military base first if flagged
+      const milBase = ps.militaryBase;
+      const targetMilBase = attack.targetMilitaryBase && milBase?.built && milBase.hp > 0;
+
       for (const enemy of aliveEnemies) {
         const dmg = enemy.damage * dt;
 
-        switch (enemy.target) {
-          case 'station':
-            gameState.damageStation(planetId, dmg);
-            break;
-          case 'robots':
-            // Damage station at reduced rate (robots are abstractions, not HP targets)
-            gameState.damageStation(planetId, dmg * 0.3);
-            break;
-          case 'silo':
-            // Raiders steal resources
-            if (enemy.stealRate > 0) {
-              const stealAmount = enemy.stealRate * dt;
-              for (const resource of ['ore', 'energy', 'crystal']) {
-                gameState.stealFromSilo(planetId, resource, stealAmount / 3);
+        if (targetMilBase) {
+          // All damage routed to military base while it stands
+          gameState.damageMilitaryBase(planetId, dmg);
+          // If military base just fell, switch targeting to station
+          if (milBase.hp <= 0) attack.targetMilitaryBase = false;
+        } else {
+          switch (enemy.target) {
+            case 'station':
+              gameState.damageStation(planetId, dmg);
+              break;
+            case 'robots':
+              // Damage station at reduced rate (robots are abstractions, not HP targets)
+              gameState.damageStation(planetId, dmg * 0.3);
+              break;
+            case 'silo':
+              // Raiders steal resources
+              if (enemy.stealRate > 0) {
+                const stealAmount = enemy.stealRate * dt;
+                for (const resource of ['ore', 'energy', 'crystal']) {
+                  gameState.stealFromSilo(planetId, resource, stealAmount / 3);
+                }
               }
-            }
-            // Also deal minor station damage
-            gameState.damageStation(planetId, dmg * 0.1);
-            break;
+              // Also deal minor station damage
+              gameState.damageStation(planetId, dmg * 0.1);
+              break;
+          }
         }
       }
 
-      // Mothership also damages station
+      // Mothership also damages station (or military base)
       if (attack.mothership && attack.mothership.hp > 0) {
-        gameState.damageStation(planetId, attack.mothership.damage * dt);
+        if (targetMilBase && milBase.hp > 0) {
+          gameState.damageMilitaryBase(planetId, attack.mothership.damage * dt);
+          if (milBase.hp <= 0) attack.targetMilitaryBase = false;
+        } else {
+          gameState.damageStation(planetId, attack.mothership.damage * dt);
+        }
       }
     }
 
@@ -242,15 +258,28 @@ export class CombatSystem {
       }
     }
 
-    // Calculate enemy DPS and apply to station
+    // Calculate enemy DPS and apply to station (or military base)
+    const milBase = ps.militaryBase;
+    const targetMilBase = attack.targetMilitaryBase && milBase?.built && milBase.hp > 0;
+
     const enemyDPS = calcEnemyDPS(aliveEnemies);
     if (enemyDPS > 0) {
-      gameState.damageStation(planetId, enemyDPS * dt);
+      if (targetMilBase) {
+        gameState.damageMilitaryBase(planetId, enemyDPS * dt);
+        if (milBase.hp <= 0) attack.targetMilitaryBase = false;
+      } else {
+        gameState.damageStation(planetId, enemyDPS * dt);
+      }
     }
 
     // Mothership damage
     if (attack.mothership && attack.mothership.hp > 0) {
-      gameState.damageStation(planetId, attack.mothership.damage * dt);
+      if (targetMilBase && milBase.hp > 0) {
+        gameState.damageMilitaryBase(planetId, attack.mothership.damage * dt);
+        if (milBase.hp <= 0) attack.targetMilitaryBase = false;
+      } else {
+        gameState.damageStation(planetId, attack.mothership.damage * dt);
+      }
     }
 
     // Raiders steal in simplified mode too

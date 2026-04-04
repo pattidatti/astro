@@ -5,6 +5,7 @@ import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP,
 import { ENEMY_TYPES } from './data/enemies.js';
 import { TECH_NODES, TECH_BY_ID, FREE_TECH_IDS, getMaxColonyShipsInFlight } from './data/techTree.js';
 import { MILITARY_SHIPS } from './data/militaryShips.js';
+import { MILITARY_BASE_HP, MILITARY_BASE_MAX_HP } from './data/fleetCombatStats.js';
 
 const SAVE_VERSION = 4;
 
@@ -64,7 +65,7 @@ function makePlanetState(planetDef) {
     upgradeLevels: {},
     buildQueue: [],
     colonyShipBuildQueue: [], // [{ progress: 0 }] — builds one at a time
-    militaryBase: { built: false, hangars: 0, fleetCap: 0, silo: { ore: { amount: 0, capacity: 5000 }, energy: { amount: 0, capacity: 5000 } }, queue: [] },
+    militaryBase: { built: false, hangars: 0, fleetCap: 0, hp: MILITARY_BASE_HP, maxHP: MILITARY_BASE_MAX_HP, silo: { ore: { amount: 0, capacity: 5000 }, energy: { amount: 0, capacity: 5000 } }, queue: [] },
     // Scout deposit unlock progress (seconds needed to unlock one zone)
     depositProgress: { ore: 0, crystal: 0, energy: 0 },
     // Combat & defense state
@@ -137,6 +138,7 @@ class GameState extends EventEmitter {
     this.colonyShipsInFlight = []; // [{ id, fromPlanetId, toPlanetId, duration, elapsed }]
     this.colonyShipsArriving = []; // [{ id, fromPlanetId, toPlanetId }] — in orbit at destination, waiting for base
     this.playerFleets = []; // [{ id, planetId, position, waypoint, state, ships, speed }]
+    this.fleetEngagements = []; // [{ id, playerFleetId, roamingFleetId, elapsed }]
     this._militaryBasePosFns = {}; // planetId → () => THREE.Vector3 (runtime, not serialized)
     this.tutorialStep = 0;
     this.lastSaved = Date.now();
@@ -876,6 +878,126 @@ class GameState extends EventEmitter {
     return true;
   }
 
+  // ─── Fleet engagement management ────────────────────────────────────────────
+
+  /** Start an engagement between a player fleet and a roaming enemy fleet. */
+  startFleetEngagement(playerFleetId, roamingFleetId) {
+    // Prevent duplicate engagements
+    if (this.getEngagementForFleet(playerFleetId)) return null;
+    if (this.getEngagementForFleet(roamingFleetId)) return null;
+
+    const fleet = this.playerFleets.find(f => f.id === playerFleetId);
+    if (!fleet) return null;
+
+    const engagement = {
+      id: `eng_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      playerFleetId,
+      roamingFleetId,
+      elapsed: 0,
+    };
+
+    fleet.state = 'engaged';
+    this.fleetEngagements.push(engagement);
+    this.emit('fleetEngaged', { engagementId: engagement.id, playerFleetId, roamingFleetId });
+    return engagement;
+  }
+
+  /** End an engagement and restore fleet states. */
+  endFleetEngagement(engagementId, reason) {
+    const idx = this.fleetEngagements.findIndex(e => e.id === engagementId);
+    if (idx === -1) return;
+
+    const engagement = this.fleetEngagements[idx];
+    this.fleetEngagements.splice(idx, 1);
+
+    // Restore player fleet state (if it still exists and has ships)
+    const fleet = this.playerFleets.find(f => f.id === engagement.playerFleetId);
+    if (fleet && fleet.state === 'engaged') {
+      fleet.state = 'orbiting';
+      fleet.waypoint = null;
+    }
+
+    // If player fleet has no ships left, remove it entirely
+    if (fleet && fleet.ships.length === 0) {
+      const fi = this.playerFleets.indexOf(fleet);
+      if (fi !== -1) this.playerFleets.splice(fi, 1);
+      this.emit('playerFleetDestroyed', { fleetId: fleet.id });
+    }
+
+    this.emit('fleetDisengaged', { engagementId, reason, playerFleetId: engagement.playerFleetId, roamingFleetId: engagement.roamingFleetId });
+  }
+
+  /** Find an active engagement for a given fleet ID (player or roaming). */
+  getEngagementForFleet(fleetId) {
+    return this.fleetEngagements.find(
+      e => e.playerFleetId === fleetId || e.roamingFleetId === fleetId
+    ) || null;
+  }
+
+  /** Apply damage to a specific ship in a player fleet. Returns remaining HP. */
+  damagePlayerShip(fleetId, shipIndex, damage) {
+    const fleet = this.playerFleets.find(f => f.id === fleetId);
+    if (!fleet || !fleet.ships[shipIndex]) return 0;
+
+    const ship = fleet.ships[shipIndex];
+    ship.hp = Math.max(0, ship.hp - damage);
+
+    if (ship.hp <= 0) {
+      const engagement = this.getEngagementForFleet(fleetId);
+      this.emit('playerShipDestroyed', { fleetId, ship, engagementId: engagement?.id });
+    } else {
+      this.emit('playerShipDamaged', { fleetId, shipIndex, damage });
+    }
+    return ship.hp;
+  }
+
+  /** Remove dead ships from a fleet and emit change event. */
+  removeDeadShips(fleetId) {
+    const fleet = this.playerFleets.find(f => f.id === fleetId);
+    if (!fleet) return;
+
+    const before = fleet.ships.length;
+    fleet.ships = fleet.ships.filter(s => s.hp > 0);
+    if (fleet.ships.length !== before) {
+      // Recalculate fleet speed
+      if (fleet.ships.length > 0) {
+        fleet.speed = Math.min(...fleet.ships.map(s => MILITARY_SHIPS[s.type]?.speed ?? 10));
+      }
+      this.emit('playerFleetChanged', { fleetId: fleet.id });
+    }
+  }
+
+  /** Heal a player ship in a fleet. */
+  healPlayerShip(fleetId, shipIndex, amount) {
+    const fleet = this.playerFleets.find(f => f.id === fleetId);
+    if (!fleet || !fleet.ships[shipIndex]) return;
+    const ship = fleet.ships[shipIndex];
+    const before = ship.hp;
+    ship.hp = Math.min(ship.maxHP, ship.hp + amount);
+    if (ship.hp !== before) {
+      this.emit('fleetHeal', { fleetId, shipIndex, amount: ship.hp - before });
+    }
+  }
+
+  /** Damage a planet's military base HP. Returns remaining HP. */
+  damageMilitaryBase(planetId, amount) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps?.militaryBase?.built) return 0;
+    ps.militaryBase.hp = Math.max(0, ps.militaryBase.hp - amount);
+    this.emit('militaryBaseDamaged', { planetId, damage: amount, hp: ps.militaryBase.hp });
+    if (ps.militaryBase.hp <= 0) {
+      this.emit('militaryBaseDestroyed', { planetId });
+    }
+    return ps.militaryBase.hp;
+  }
+
+  /** Repair a planet's military base HP. */
+  repairMilitaryBase(planetId, amount) {
+    const ps = this.getPlanetState(planetId);
+    if (!ps?.militaryBase?.built) return;
+    ps.militaryBase.hp = Math.min(ps.militaryBase.maxHP, ps.militaryBase.hp + amount);
+  }
+
   // ─── Route management ─────────────────────────────────────────────────────
 
   addRoute(route) {
@@ -1228,6 +1350,7 @@ class GameState extends EventEmitter {
           // localPos and vel are runtime-only — not saved
         })),
       })),
+      fleetEngagements: JSON.parse(JSON.stringify(this.fleetEngagements)),
       activeAttacks: attacks,
       roamingFleets: JSON.parse(JSON.stringify(this.roamingFleets)),
       lastAttackTime: { ...this.lastAttackTime },
@@ -1257,6 +1380,7 @@ class GameState extends EventEmitter {
     this.colonyShipsInFlight = data.colonyShipsInFlight ?? [];
     this.colonyShipsArriving = data.colonyShipsArriving ?? [];
     this.playerFleets        = data.playerFleets ?? [];
+    this.fleetEngagements    = data.fleetEngagements ?? [];
     // Re-init runtime-only per-ship fields stripped during serialization
     for (const fleet of this.playerFleets) {
       for (const ship of fleet.ships) {
@@ -1290,7 +1414,12 @@ class GameState extends EventEmitter {
     for (const ps of Object.values(this.planetState)) {
       if (!ps.colonyShipBuildQueue) ps.colonyShipBuildQueue = [];
       if (!ps.militaryBase) {
-        ps.militaryBase = { built: false, hangars: 0, fleetCap: 0, silo: { ore: { amount: 0, capacity: 5000 }, energy: { amount: 0, capacity: 5000 } }, queue: [] };
+        ps.militaryBase = { built: false, hangars: 0, fleetCap: 0, hp: MILITARY_BASE_HP, maxHP: MILITARY_BASE_MAX_HP, silo: { ore: { amount: 0, capacity: 5000 }, energy: { amount: 0, capacity: 5000 } }, queue: [] };
+      }
+      // Ensure military base has HP fields (v4 migration)
+      if (ps.militaryBase && ps.militaryBase.hp === undefined) {
+        ps.militaryBase.hp = MILITARY_BASE_HP;
+        ps.militaryBase.maxHP = MILITARY_BASE_MAX_HP;
       }
       if (!ps.combat) {
         ps.combat = {

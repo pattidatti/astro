@@ -66,6 +66,21 @@ export class RoamingFleetManager3D {
     return this._active.get(fleetId) ?? null;
   }
 
+  /** Get the world position of a roaming fleet (used by FleetCombatSystem for proximity checks). */
+  getFleetWorldPosition(fleetId) {
+    const fleet3D = this._active.get(fleetId);
+    return fleet3D ? fleet3D.worldPosition : null;
+  }
+
+  /** Get all active fleet world positions keyed by fleet ID. */
+  getAllFleetWorldPositions() {
+    const result = {};
+    for (const [id, fleet3D] of this._active) {
+      result[id] = fleet3D.worldPosition;
+    }
+    return result;
+  }
+
   // ─── Event handlers ───────────────────────────────────────────────────────
 
   _onSpawned(fleet) {
