@@ -29,6 +29,7 @@ export class NebulaVolume {
         uniform float uTime;
         uniform float uOpacity;
         uniform float uTimeOffset;
+        uniform float uDetail;
         uniform vec3  uColor1;
         uniform vec3  uColor2;
         uniform vec3  uColor3;
@@ -42,14 +43,20 @@ export class NebulaVolume {
           // Circular falloff — sharp center, soft edge
           float falloff = smoothstep(1.0, 0.12, dist);
 
+          // FBM octave counts scaled by uDetail (1.0 = full, 0.5 = half)
+          int qOct  = max(1, int(4.0 * uDetail));
+          int n1Oct = max(2, int(5.0 * uDetail));
+          int n2Oct = max(1, int(4.0 * uDetail));
+          int n3Oct = max(1, int(3.0 * uDetail));
+
           // Domain-warped noise for organic cloud shapes
           vec2 q = vec2(
-            fbm(p * 1.5 + uTime * 0.010, 4),
-            fbm(p * 1.5 + vec2(1.7, 9.2) + uTime * 0.008, 4)
+            fbm(p * 1.5 + uTime * 0.010, qOct),
+            fbm(p * 1.5 + vec2(1.7, 9.2) + uTime * 0.008, qOct)
           );
-          float n1 = fbm(p * 2.0 + q * 2.0 + uTime * 0.012, 5);
-          float n2 = fbm(p * 3.5 + q * 1.5 - uTime * 0.008, 4);
-          float n3 = fbm(p * 5.0 - q * 1.0 + uTime * 0.006, 3);
+          float n1 = fbm(p * 2.0 + q * 2.0 + uTime * 0.012, n1Oct);
+          float n2 = fbm(p * 3.5 + q * 1.5 - uTime * 0.008, n2Oct);
+          float n3 = fbm(p * 5.0 - q * 1.0 + uTime * 0.006, n3Oct);
 
           float density = n1 * 0.55 + n2 * 0.30 + n3 * 0.15;
           density = pow(density, 1.2);
@@ -84,6 +91,7 @@ export class NebulaVolume {
         uTime:       { value: 0 },
         uOpacity:    { value: 1.0 },
         uTimeOffset: { value: timeOffset },
+        uDetail:     { value: 1.0 },
         uColor1:     { value: new THREE.Vector3(c1.r, c1.g, c1.b) },
         uColor2:     { value: new THREE.Vector3(c2.r, c2.g, c2.b) },
         uColor3:     { value: new THREE.Vector3(c3.r, c3.g, c3.b) },

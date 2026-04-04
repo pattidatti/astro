@@ -504,17 +504,25 @@ export class SolarSystem {
     this.nebulaVolume5.mesh.visible = nebFade > 0 && nearNeb;
     this.nebulaVolume6.mesh.visible = nebFade > 0 && nearNeb;
     if (nebFade > 0 && camera) {
+      // Reduce FBM octave count when player is far from this planet (saves ~40% fragment cost)
+      const nebulaDetail = distance < 200 ? 1.0 : 0.5;
       this.nebulaVolume.material.uniforms.uOpacity.value = nebFade;
+      this.nebulaVolume.material.uniforms.uDetail.value  = nebulaDetail;
       this.nebulaVolume.update(time, camera);
       this.nebulaVolume2.material.uniforms.uOpacity.value = nebFade * 0.7;
+      this.nebulaVolume2.material.uniforms.uDetail.value  = nebulaDetail;
       this.nebulaVolume2.update(time, camera);
       this.nebulaVolume3.material.uniforms.uOpacity.value = nebFade * 0.9;
+      this.nebulaVolume3.material.uniforms.uDetail.value  = nebulaDetail;
       this.nebulaVolume3.update(time, camera);
       this.nebulaVolume4.material.uniforms.uOpacity.value = nebFade * 0.8;
+      this.nebulaVolume4.material.uniforms.uDetail.value  = nebulaDetail;
       this.nebulaVolume4.update(time, camera);
       this.nebulaVolume5.material.uniforms.uOpacity.value = nebFade * 0.75;
+      this.nebulaVolume5.material.uniforms.uDetail.value  = nebulaDetail;
       this.nebulaVolume5.update(time, camera);
       this.nebulaVolume6.material.uniforms.uOpacity.value = nebFade * 0.65;
+      this.nebulaVolume6.material.uniforms.uDetail.value  = nebulaDetail;
       this.nebulaVolume6.update(time, camera);
     }
 
