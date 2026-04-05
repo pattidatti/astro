@@ -54,7 +54,7 @@ export class Tutorial {
     if (!this._handEl) return;
 
     const targetEl = step.targetEl?.();
-    if (this._bubbleEl) this._bubbleEl.textContent = step.message;
+    if (this._bubbleEl) this._bubbleEl.textContent = typeof step.message === 'function' ? step.message() : step.message;
 
     if (!targetEl) {
       // No specific target — show centered at top
@@ -135,7 +135,9 @@ export class Tutorial {
         targetEl: () => document.querySelector('.base-upg-btn'),
       },
       {
-        message: 'RESEARCH & HIRE A SCOUT BOT',
+        message: gameState.isTechUnlocked('scout_bot')
+          ? 'HIRE A SCOUT BOT (ROBOTS TAB)'
+          : 'RESEARCH SCOUT BOT IN RESEARCH',
         condition: () => (gameState.getPlanetState('xerion')?.robots.scout.count ?? 0) >= 1,
         targetEl: () => gameState.isTechUnlocked('scout_bot')
           ? document.querySelector('.hire-scout-btn')
@@ -147,12 +149,12 @@ export class Tutorial {
         targetEl: () => null,
       },
       {
-        message: 'BUILD A DEFENSE CANNON',
+        message: 'BUILD A DEFENSE CANNON (DEFENSE TAB)',
         condition: () => (gameState.getPlanetState('xerion')?.combat.defenses.cannon ?? 0) >= 1,
         targetEl: () => document.querySelector('#panel-defenses button[data-defense-id="cannon"]'),
       },
       {
-        message: 'LAUNCH A COLONY SHIP',
+        message: 'BUILD A COLONY SHIP',
         condition: () => gameState.colonyShipsInFlight.length >= 1,
         targetEl: () => document.querySelector('#panel-colony-ship .colony-ship-btn'),
       },
