@@ -1837,6 +1837,16 @@ class GameState extends EventEmitter {
       if (st.distressFlareFired === undefined) st.distressFlareFired = false;
     }
 
+    // v7→v8 migration: rename relocated enemy stations
+    const STATION_RENAMES = { station_drakon: 'station_nebulox', station_crystara: 'station_solaris' };
+    const ANCHOR_RENAMES  = { drakon: 'nebulox', crystara: 'solaris' };
+    for (const st of (this.enemyStations || [])) {
+      if (STATION_RENAMES[st.id]) {
+        st.id = STATION_RENAMES[st.id];
+        st.anchorPlanet = ANCHOR_RENAMES[st.anchorPlanet] ?? st.anchorPlanet;
+      }
+    }
+
     this.emit('stateLoaded');
     this.emit('robotHired', { planetId: this.focusedPlanet });
     this.emit('focusedPlanet', this.focusedPlanet);
