@@ -37,8 +37,10 @@ export class PlayerFleetManager3D {
 
   /** Called each frame. isRTSMode controls visibility of RTS overlays. */
   update(isRTSMode) {
+    // Build lookup map once per frame instead of O(n) find per fleet
+    const fleetMap = new Map(gameState.playerFleets.map(f => [f.id, f]));
     for (const [fleetId, fleet3D] of this._active) {
-      const fleet = gameState.playerFleets.find(f => f.id === fleetId);
+      const fleet = fleetMap.get(fleetId);
       if (!fleet) {
         this._onRemoved(fleetId);
         continue;

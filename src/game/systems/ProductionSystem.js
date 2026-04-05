@@ -68,9 +68,18 @@ export class ProductionSystem {
 
       planetSilo.amount -= pump;
       baseSilo.amount   += pump;
-      // Emit planet silo change so HUD stays accurate
-      gameState.emit('siloChanged', { planetId, resource: res, amount: planetSilo.amount });
-      gameState.emit('militaryBaseSiloChanged', { planetId, resource: res, amount: baseSilo.amount });
+    }
+
+    // Throttle elevator silo events — emit at most every 10 frames
+    // (PlanetPanel already rate-limits silo display to 0.1s, so no visual difference)
+    this._elevatorEmitCounter = (this._elevatorEmitCounter || 0) + 1;
+    if (this._elevatorEmitCounter >= 10) {
+      this._elevatorEmitCounter = 0;
+      // Emit per-resource so GameState listener can check energy for tech availability
+      for (const res of ['ore', 'energy']) {
+        gameState.emit('siloChanged', { planetId, resource: res, amount: ps.silos[res].amount });
+      }
+      gameState.emit('militaryBaseSiloChanged', { planetId });
     }
   }
 

@@ -21,6 +21,9 @@ import {
   TITAN_ULTIMATE_HEAVY_DAMAGE,
 } from '../data/militaryStats.js';
 
+// Pre-computed squared radii to avoid per-frame sqrt
+const ENGAGE_RADIUS_SQ = ENGAGE_RADIUS * ENGAGE_RADIUS;
+
 /**
  * FleetCombatSystem — resolves open-space combat between player fleets
  * and enemy roaming fleets, completely separate from CombatSystem (which
@@ -93,9 +96,9 @@ export class FleetCombatSystem {
 
         const dx = pPos.x - ePos.x;
         const dz = pPos.z - ePos.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
+        const distSq = dx * dx + dz * dz;
 
-        if (dist < ENGAGE_RADIUS) {
+        if (distSq < ENGAGE_RADIUS_SQ) {
           gameState.startFleetEngagement(fleet.id, roaming.id);
           break; // One engagement per fleet per scan
         }
@@ -260,6 +263,8 @@ export class FleetCombatSystem {
     const dirX = dist > 0.001 ? dx / dist : 0;
     const dirZ = dist > 0.001 ? dz / dist : 1;
 
+    const time = Date.now() * 0.001;
+
     for (const ship of playerFleet.ships) {
       if (ship.hp <= 0) continue;
       if (!ship.localPos) ship.localPos = { x: 0, y: 0, z: 0 };
@@ -269,7 +274,6 @@ export class FleetCombatSystem {
 
       let targetX = 0;
       let targetZ = 0;
-      const time = Date.now() * 0.001;
 
       switch (def.combatBehavior) {
         case 'circle': {

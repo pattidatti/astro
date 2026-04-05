@@ -488,8 +488,9 @@ export class SolarSystem {
    * @param {number} time - Elapsed time
    * @param {number} dt - Delta time
    * @param {THREE.Camera} camera - For billboard effects
+   * @param {number} [frameCount=0] - Galaxy frame counter for throttling
    */
-  updateLOD(distance, time, dt, camera) {
+  updateLOD(distance, time, dt, camera, frameCount = 0) {
     // Update orbital position every frame
     this._updateOrbit(time);
 
@@ -562,24 +563,15 @@ export class SolarSystem {
     if (nebFade > 0 && camera) {
       // Reduce FBM octave count when player is far from this planet (saves ~40% fragment cost)
       const nebulaDetail = distance < 200 ? 1.0 : 0.5;
-      this.nebulaVolume.material.uniforms.uOpacity.value = nebFade;
-      this.nebulaVolume.material.uniforms.uDetail.value  = nebulaDetail;
-      this.nebulaVolume.update(time, camera);
-      this.nebulaVolume2.material.uniforms.uOpacity.value = nebFade * 0.7;
-      this.nebulaVolume2.material.uniforms.uDetail.value  = nebulaDetail;
-      this.nebulaVolume2.update(time, camera);
-      this.nebulaVolume3.material.uniforms.uOpacity.value = nebFade * 0.9;
-      this.nebulaVolume3.material.uniforms.uDetail.value  = nebulaDetail;
-      this.nebulaVolume3.update(time, camera);
-      this.nebulaVolume4.material.uniforms.uOpacity.value = nebFade * 0.8;
-      this.nebulaVolume4.material.uniforms.uDetail.value  = nebulaDetail;
-      this.nebulaVolume4.update(time, camera);
-      this.nebulaVolume5.material.uniforms.uOpacity.value = nebFade * 0.75;
-      this.nebulaVolume5.material.uniforms.uDetail.value  = nebulaDetail;
-      this.nebulaVolume5.update(time, camera);
-      this.nebulaVolume6.material.uniforms.uOpacity.value = nebFade * 0.65;
-      this.nebulaVolume6.material.uniforms.uDetail.value  = nebulaDetail;
-      this.nebulaVolume6.update(time, camera);
+      // Billboard lookAt is expensive (quaternion+matrix); throttle to every 3 frames
+      // Nebulas are large diffuse backgrounds — 3-frame delay is imperceptible
+      const updateBillboard = frameCount % 3 === 0;
+      this._updateNebula(this.nebulaVolume,  nebFade,        nebulaDetail, time, camera, updateBillboard);
+      this._updateNebula(this.nebulaVolume2, nebFade * 0.7,  nebulaDetail, time, camera, updateBillboard);
+      this._updateNebula(this.nebulaVolume3, nebFade * 0.9,  nebulaDetail, time, camera, updateBillboard);
+      this._updateNebula(this.nebulaVolume4, nebFade * 0.8,  nebulaDetail, time, camera, updateBillboard);
+      this._updateNebula(this.nebulaVolume5, nebFade * 0.75, nebulaDetail, time, camera, updateBillboard);
+      this._updateNebula(this.nebulaVolume6, nebFade * 0.65, nebulaDetail, time, camera, updateBillboard);
     }
 
     // Lens flare (star-type only) — fade out 390→450
@@ -663,6 +655,14 @@ export class SolarSystem {
         this.enemyStation.update(time, dt, camera);
       }
     }
+  }
+
+  /** Update a single nebula volume — avoids per-frame array allocation */
+  _updateNebula(neb, opacity, detail, time, camera, updateBillboard) {
+    neb.material.uniforms.uOpacity.value = opacity;
+    neb.material.uniforms.uDetail.value  = detail;
+    neb.material.uniforms.uTime.value    = time;
+    if (updateBillboard) neb.mesh.lookAt(camera.position);
   }
 
   dispose() {
