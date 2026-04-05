@@ -294,6 +294,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/game/ui/CombatHUD.js` | Alert banners + combat summary overlay |
 | `src/game/ui/FleetPanel.js` | Roaming fleet inspection panel |
 | `src/game/ui/TechTreeWindow.js` | Tech tree modal (press T) |
+| `src/game/ui/EnemyStationPanel.js` | Enemy station inspection panel |
 | `src/game/ui/Minimap.js` | Galaxy minimap with fleet markers |
 | `src/game/tutorial/Tutorial.js` | Guided onboarding |
 | `src/game/audio/AudioManager.js` | SFX + procedural synth sounds |
@@ -302,13 +303,14 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/game/data/planets.js` | 8 planets: costs, multipliers, resourceTypes, deposits, nebula palettes |
 | `src/game/data/upgrades.js` | BASE_UPGRADES (4) + ROBOT_UPGRADES (8) + ROBOT_ACTIONS (4) + cost helpers |
 | `src/game/data/defenses.js` | DEFENSE_TYPES (4) + DEFENSE_UPGRADES + ACTIVE_ABILITIES (3) + balance constants |
-| `src/game/data/militaryShips.js` | 5 ship types: fighter/bomber/carrier/battleship/titan (stats, costs, combat behavior) |
+| `src/game/data/militaryShips.js` | 6 ship types: fighter/bomber/carrier/battleship/titan/scavenger (stats, costs, combat behavior) |
+| `src/game/data/enemyStations.js` | 7 enemy station definitions (4 planet-anchored + 3 free-floating outposts) |
 | `src/game/data/militaryStats.js` | Supply balance: FUEL_BURN_RATE, AMMO_BURN_RATE, RESUPPLY_RATE, TITAN constants |
-| `src/game/data/fleetCombatStats.js` | Fleet combat geometry: ENGAGE_RADIUS (30), DISENGAGE_RADIUS (50), per-ship positioning |
+| `src/game/data/fleetCombatStats.js` | Fleet combat geometry: ENGAGE_RADIUS (30), DISENGAGE_RADIUS (50), per-ship positioning; station combat: STATION_ENGAGE_RANGE (20), STATION_DPS by phase |
 | `src/game/data/enemies.js` | ENEMY_TYPES (interceptor/bomber/raider/mothership) + RAID/INVASION_TEMPLATES |
 | `src/game/data/routes.js` | Route creation + validation + travel duration calc |
 | `src/game/data/galaxyLayout.js` | Planet positions (4000×4000 grid) + 9 hyperlane connections |
-| `src/game/data/techTree.js` | Tech nodes (4 branches: robots/defense/military/colonization), FREE_TECH_IDS |
+| `src/game/data/techTree.js` | Tech nodes (6 branches: robots/defense/base/colonization/military/special), FREE_TECH_IDS |
 | `src/game/utils/ShaderLib.js` | Shared GLSL (noise, FBM, Fresnel) |
 | `src/game/utils/CoordinateMapper.js` | 2D galaxy coords → 3D world positions |
 | `src/game/world/Galaxy.js` | All 8 solar systems, asteroid belts, nebulas, fleet managers |
@@ -320,6 +322,10 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/game/world/DefenseManager3D.js` | Defense structure visuals + fire-position lookup |
 | `src/game/world/ShipManager3D.js` | Cargo ship visual pool |
 | `src/game/world/RouteLane3D.js` | Visual lane for active trade routes |
+| `src/game/world/EnemyStationManager3D.js` | Enemy station 3D manager (7 stations, lifecycle + destruction) |
+| `src/game/world/WreckageField3D.js` | Debris field at destroyed stations (600s lifetime, tractor beam support) |
+| `src/game/world/SnitchPath3D.js` | Visual snitch path (red line scout→station) |
+| `src/game/objects/EnemyStation3D.js` | Enemy station 3D geometry (orbital + free-floating variants) |
 | `src/game/objects/MilitaryBase3D.js` | Military base geometry on planet surface |
 | `src/game/objects/DefenseSatellite3D.js` | Orbiting defense satellite geometry |
 | `src/game/objects/PatrolShip3D.js` | Military patrol fighter geometry |
@@ -330,6 +336,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/storage.js` | LocalStorage save/load, 3-slot management, auto-save |
 | `src/db.js` | Firestore cloud sync |
 | `src/auth.js` | Firebase auth (anonymous + Google Sign-In) |
+| `src/game/shaders/effects/WarpDistortionShader.js` | Warp distortion post-processing (Emergency Jump visual) |
 
 ## Environment
 
