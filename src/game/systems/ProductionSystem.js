@@ -75,7 +75,10 @@ export class ProductionSystem {
     this._elevatorEmitCounter = (this._elevatorEmitCounter || 0) + 1;
     if (this._elevatorEmitCounter >= 10) {
       this._elevatorEmitCounter = 0;
-      gameState.emit('siloChanged', { planetId });
+      // Emit per-resource so GameState listener can check energy for tech availability
+      for (const res of ['ore', 'energy']) {
+        gameState.emit('siloChanged', { planetId, resource: res, amount: ps.silos[res].amount });
+      }
       gameState.emit('militaryBaseSiloChanged', { planetId });
     }
   }
