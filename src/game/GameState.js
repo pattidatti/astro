@@ -744,6 +744,8 @@ class GameState extends EventEmitter {
       if (ps.silos.crystal.capacity > 0) ps.silos.crystal.capacity += bonus;
     }
 
+    ps.baseLevels[upg.effect]++;
+
     this.emit('baseUpgraded', { planetId, upgradeId });
     return true;
   }
