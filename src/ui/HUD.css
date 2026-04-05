@@ -2737,3 +2737,55 @@
   text-align: right;
 }
 
+/* Emergency Jump button — cyan accent to distinguish from Titan purple */
+.pfp-jump-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 5px 10px;
+  background: rgba(0, 180, 255, 0.15);
+  border: 1px solid rgba(0, 180, 255, 0.6);
+  border-radius: 4px;
+  color: #44ccff;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.pfp-jump-btn:hover:not(:disabled) {
+  background: rgba(0, 180, 255, 0.3);
+  border-color: rgba(0, 180, 255, 0.9);
+}
+.pfp-jump-btn--cooldown,
+.pfp-jump-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.pfp-jump-fill {
+  background: #00aaff;
+}
+
+.pfp-jump-dest-row {
+  margin-bottom: 6px;
+}
+
+.pfp-jump-select {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  background: rgba(0, 20, 40, 0.9);
+  border: 1px solid rgba(0, 180, 255, 0.4);
+  border-radius: 4px;
+  color: #88ddff;
+  padding: 3px 6px;
+  width: 100%;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.pfp-jump-select:focus {
+  border-color: rgba(0, 180, 255, 0.8);
+}
+.pfp-jump-select option {
+  background: #0a1a2a;
+  color: #88ddff;
+}
+

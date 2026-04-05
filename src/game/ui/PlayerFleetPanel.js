@@ -37,12 +37,13 @@ export class PlayerFleetPanel {
   /**
    * Show the panel for a given fleet.
    * @param {string} fleetId
-   * @param {{ onClose?: function, onTitan?: function }} opts
+   * @param {{ onClose?: function, onTitan?: function, onJump?: function }} opts
    */
-  show(fleetId, { onClose, onTitan } = {}) {
+  show(fleetId, { onClose, onTitan, onJump } = {}) {
     this._fleetId = fleetId;
     this._onClose = onClose ?? null;
     this._onTitan = onTitan ?? null;
+    this._onJump = onJump ?? null;
     this._el.style.display = 'block';
     this._render();
   }
@@ -50,14 +51,6 @@ export class PlayerFleetPanel {
   hide() {
     this._fleetId = null;
     this._el.style.display = 'none';
-  }
-
-  /** Call each frame to update the Titan cooldown bar. */
-  update() {
-    if (!this._fleetId) return;
-    const fleet = gameState.playerFleets.find(f => f.id === this._fleetId);
-    if (!fleet) { this.hide(); return; }
-    this._updateTitanButton();
   }
 
   // ─── Rendering ─────────────────────────────────────────────────────────────
@@ -124,6 +117,36 @@ export class PlayerFleetPanel {
         <div id="pfp-cd-label" class="pfp-cd-label">${titanReady ? 'READY' : `${Math.ceil(cooldown)}s`}</div>
       </div>` : '';
 
+    // Emergency Jump section
+    const jumpCooldown    = fleet.emergencyJumpCooldown ?? 0;
+    const jumpReady       = jumpCooldown <= 0;
+    const jumpCooldownPct = Math.max(0, Math.min(100, (1 - jumpCooldown / EMERGENCY_JUMP_COOLDOWN) * 100));
+    const energyPct2      = fleet.supply ? fleet.supply.energy.amount / fleet.supply.energy.max : 0;
+    const jumpEnabled     = jumpReady && energyPct2 > 0.01;
+
+    const planetOptions = gameState.ownedPlanets
+      .map(pid => `<option value="${pid}">${pid.toUpperCase()}</option>`).join('');
+
+    const jumpHTML = `
+      <div class="pfp-section">
+        <div class="fleet-section-title">EMERGENCY JUMP</div>
+        <div class="pfp-jump-dest-row">
+          <select id="pfp-jump-dest" class="pfp-jump-select">${planetOptions}</select>
+        </div>
+        <div class="pfp-titan-row">
+          <button id="pfp-jump-btn"
+            class="pfp-jump-btn${jumpEnabled ? '' : ' pfp-jump-btn--cooldown'}"
+            ${jumpEnabled ? '' : 'disabled'}>⚡ JUMP</button>
+          <span class="pfp-cooldown-bar-wrap">
+            <span id="pfp-jump-fill" class="pfp-cooldown-fill pfp-jump-fill"
+                  style="width:${jumpCooldownPct}%"></span>
+          </span>
+        </div>
+        <div id="pfp-jump-label" class="pfp-cd-label">
+          ${jumpReady ? (energyPct2 > 0.01 ? 'READY' : 'NO FUEL') : `${Math.ceil(jumpCooldown)}s`}
+        </div>
+      </div>`;
+
     // Render
     const stateLabel = { orbiting: 'ORBITING', moving: 'MOVING', engaged: 'ENGAGED' }[fleet.state] ?? fleet.state.toUpperCase();
     const stateCol   = fleet.state === 'engaged' ? '#ff4444' : fleet.state === 'moving' ? '#ffcc44' : '#44ff88';
@@ -156,6 +179,7 @@ export class PlayerFleetPanel {
         </div>
       </div>
       ${titanHTML}
+      ${jumpHTML}
     `;
 
     // Close button
@@ -176,6 +200,16 @@ export class PlayerFleetPanel {
           if (this._onTitan) this._onTitan(this._fleetId);
         }, { once: true });
       }
+    }
+
+    // Emergency Jump button
+    const jumpBtn = this._el.querySelector('#pfp-jump-btn');
+    if (jumpBtn) {
+      jumpBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        const dest = this._el.querySelector('#pfp-jump-dest')?.value;
+        if (dest && this._onJump) this._onJump(this._fleetId, dest);
+      }, { once: true });
     }
   }
 
@@ -235,5 +269,55 @@ export class PlayerFleetPanel {
     } else if (!ready) {
       delete btn.dataset.bound;
     }
+  }
+
+  _updateJumpButton() {
+    const fleet = gameState.playerFleets.find(f => f.id === this._fleetId);
+    if (!fleet) return;
+
+    const btn = this._el.querySelector('#pfp-jump-btn');
+    if (!btn) return;
+
+    const jumpCooldown = fleet.emergencyJumpCooldown ?? 0;
+    const jumpReady = jumpCooldown <= 0;
+    const hasEnergy = fleet.supply
+      ? fleet.supply.energy.amount / fleet.supply.energy.max > 0.01
+      : false;
+    const enabled = jumpReady && hasEnergy;
+    const cdPct = Math.max(0, Math.min(100,
+      (1 - jumpCooldown / EMERGENCY_JUMP_COOLDOWN) * 100));
+
+    btn.disabled = !enabled;
+    btn.classList.toggle('pfp-jump-btn--cooldown', !enabled);
+
+    const fill = this._el.querySelector('#pfp-jump-fill');
+    if (fill) fill.style.width = `${cdPct}%`;
+
+    const label = this._el.querySelector('#pfp-jump-label');
+    if (label) label.textContent = jumpReady
+      ? (hasEnergy ? 'READY' : 'NO FUEL')
+      : `${Math.ceil(jumpCooldown)}s`;
+
+    // Re-bind when button transitions back to ready
+    if (enabled && !btn.dataset.jumpBound) {
+      btn.dataset.jumpBound = '1';
+      btn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        delete btn.dataset.jumpBound;
+        const dest = this._el.querySelector('#pfp-jump-dest')?.value;
+        if (dest && this._onJump) this._onJump(this._fleetId, dest);
+      }, { once: true });
+    } else if (!enabled) {
+      delete btn.dataset.jumpBound;
+    }
+  }
+
+  /** Call each frame to update button states. */
+  update() {
+    if (!this._fleetId) return;
+    const fleet = gameState.playerFleets.find(f => f.id === this._fleetId);
+    if (!fleet) { this.hide(); return; }
+    this._updateTitanButton();
+    this._updateJumpButton();
   }
 }

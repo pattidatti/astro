@@ -10,6 +10,7 @@ import { gameState } from './GameState.js';
 import { Galaxy } from './world/Galaxy.js';
 import { Skybox } from './world/Skybox.js';
 import { GodRayShader } from './shaders/effects/GodRayShader.js';
+import { WarpDistortionShader } from './shaders/effects/WarpDistortionShader.js';
 import { ShipManager3D } from './world/ShipManager3D.js';
 import { EnemyManager3D } from './world/EnemyManager3D.js';
 import { SpawnFlight } from './effects/SpawnFlight.js';
@@ -54,6 +55,7 @@ export function createGame() {
   // Post-processing
   renderPipeline.setupPostProcessing(sceneManager.scene, camera);
   renderPipeline.addGodRayPass(GodRayShader);
+  renderPipeline.addWarpPass();
 
   // Input
   const inputManager = new InputManager(
@@ -301,6 +303,10 @@ export function createGame() {
             onClose: () => _selectedPlayerFleets.delete(target.fleetId),
             onTitan: (fId) => {
               const ok = gameState.useTitanUltimate(fId);
+              if (!ok) AudioManager.play('UI_CLICK_DENIED');
+            },
+            onJump: (fId, targetPlanetId) => {
+              const ok = gameState.dispatchEmergencyJump(fId, targetPlanetId);
               if (!ok) AudioManager.play('UI_CLICK_DENIED');
             },
           });
@@ -649,6 +655,13 @@ export function createGame() {
     cameraController.shake(0.12, 0.6);
   });
 
+  // Emergency Jump VFX + audio
+  gameState.on('emergencyJumpExecuted', ({ fleetId }) => {
+    renderPipeline.triggerWarpDistortion();
+    AudioManager.playSynth('WARP_POP');
+    cameraController.shake(0.06, 0.2);
+  });
+
   // Enemy ship destroyed in fleet combat → explosion + sound
   gameState.on('fleetEnemyDestroyed', ({ fleetId }) => {
     AudioManager.playSynth('FLEET_EXPLOSION');
@@ -914,7 +927,7 @@ export function createGame() {
     playerFleetPanel.update();
     enemyStationPanel.update();
     playerFleetManager.update(cameraController.isRTSMode);
-    renderPipeline.tick(time);
+    renderPipeline.tick(dt);
 
     // Waypoint crosshair: project 3D position to screen and update label
     if (_rtsWaypoint3D && cameraController.isRTSMode) {
