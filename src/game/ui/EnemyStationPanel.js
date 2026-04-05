@@ -59,11 +59,11 @@ export class EnemyStationPanel {
     this._el.style.display = 'none';
   }
 
-  /** Call each frame to auto-hide if station is cleared. */
+  /** Call each frame to auto-hide if station no longer exists or is cleared. */
   update() {
     if (!this._stationId) return;
     const st = gameState.enemyStations?.find(s => s.id === this._stationId);
-    if (!st) { this.hide(); return; }
+    if (!st || st.cleared) { this.hide(); return; }
   }
 
   // ─── Rendering ─────────────────────────────────────────────────────────────

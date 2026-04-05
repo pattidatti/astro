@@ -364,7 +364,7 @@ export class FleetCombatSystem {
 
       // Player DPS → station (each alive non-scavenger ship)
       const supplyMult = this._supplySystem?.getDPSMultiplier(fleet.id) ?? 1;
-      const techMult = gameState.unlockedTech.has('pure_crystal_lasers') ? CRYSTAL_LASER_DPS_MULT : 1;
+      const techMult = gameState.isTechUnlocked('pure_crystal_lasers') ? CRYSTAL_LASER_DPS_MULT : 1;
       let totalPlayerDps = 0;
       for (const ship of fleet.ships) {
         if (ship.hp <= 0 || ship.type === 'scavenger') continue;

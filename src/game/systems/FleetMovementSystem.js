@@ -41,7 +41,7 @@ export class FleetMovementSystem {
   _execEmergencyJump(fleet, targetPlanetId) {
     const owned = this._galaxy?.getOwnedStationPositions();
     const dest = owned?.find(s => s.planetId === targetPlanetId);
-    if (!dest) return;
+    if (!dest?.worldPos) return;
     fleet.position = { x: dest.worldPos.x, y: 0, z: dest.worldPos.z };
     fleet.waypoint = null;
     fleet.state = 'orbiting';

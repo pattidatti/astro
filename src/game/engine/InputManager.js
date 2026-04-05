@@ -130,7 +130,7 @@ export class InputManager {
 
       // Check for enemy station hitbox first
       const stationHits = this.raycaster.intersectObjects(this.clickables, false);
-      const stationHit = stationHits.find(h => h.object.userData.stationId);
+      const stationHit = stationHits.find(h => h.object.userData.stationId && h.object.userData.type === 'enemyStation');
       if (stationHit) {
         for (const fn of this._onRightClickableCallbacks) fn(stationHit.object.userData.stationId);
         return;
