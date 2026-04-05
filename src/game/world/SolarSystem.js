@@ -55,6 +55,8 @@ export class SolarSystem {
     this.station = new Station3D();
     this.station.init(planetDef.id);
     this.orbitGroup.add(this.station.group);
+    // Register live position getter so SupplySystem can find the station
+    gameState.registerStationPosFn(planetDef.id, () => this.station.stationWorldPosition ?? null);
 
     // Defense objects (satellites, patrol ships, cannon turrets)
     this.defenseManager = new DefenseManager3D(planetDef.id, this.orbitGroup, this.station);
@@ -679,6 +681,7 @@ export class SolarSystem {
     if (this.colonyShip) this.colonyShip.dispose();
     if (this.militaryBase) this.militaryBase.dispose();
     if (this.enemyStation) this.enemyStation.dispose();
+    gameState.unregisterStationPosFn(this.id);
     this.planet.dispose();
     this.station.dispose();
     this.defenseManager.dispose();

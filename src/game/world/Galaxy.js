@@ -37,6 +37,7 @@ export class Galaxy {
     /** Set by Game.js after scene is available. */
     this.roamingFleetManager = null;
     this.enemyStationManager = null;  // Set by Game.js after scene is available
+    this._roamingFleetSystem = null;  // Set via setRoamingFleetSystem() in main.js
     this._frameCount = 0;
   }
 
@@ -141,6 +142,11 @@ export class Galaxy {
   /** Get the live world position of the orbiting planet */
   getPlanetWorldPosition(planetId) {
     return this.systems[planetId]?.planetWorldPosition;
+  }
+
+  /** Wire in the RoamingFleetSystem so route lanes can show blocked state. */
+  setRoamingFleetSystem(rfs) {
+    this._roamingFleetSystem = rfs;
   }
 
   /** Get all planet click targets for InputManager registration */
@@ -324,6 +330,9 @@ export class Galaxy {
       const toPos   = this.getPlanetWorldPosition(route.toPlanet);
       const hasShip = gameState.activeShips.some(s => s.routeId === routeId);
       lane.update(dt, fromPos, toPos, route.active, hasShip);
+      if (this._roamingFleetSystem) {
+        lane.setBlocked(this._roamingFleetSystem.isLaneBlocked(route.fromPlanet, route.toPlanet));
+      }
     }
 
     // Update each planet system's LOD — distance measured to planet, not center

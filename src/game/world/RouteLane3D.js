@@ -22,6 +22,11 @@ export class RouteLane3D {
 
     const color = RESOURCE_COLORS[route.resource] ?? RESOURCE_COLORS.ore;
 
+    // Store base colors for blocked/unblocked restore
+    this._baseColor         = color.getHex();
+    this._baseParticleColor = new THREE.Vector3(color.r, color.g, color.b);
+    this._blocked           = false;
+
     // Offset sign: consistent rule so bidirectional routes go to opposite sides
     this._offsetSign = route.fromPlanet < route.toPlanet ? 1 : -1;
 
@@ -77,7 +82,7 @@ export class RouteLane3D {
         }
       `,
       uniforms: {
-        uColor:   { value: new THREE.Vector3(color.r, color.g, color.b) },
+        uColor:   { value: this._baseParticleColor.clone() },
         uOpacity: { value: 0.45 },
       },
       transparent: true,
@@ -95,6 +100,25 @@ export class RouteLane3D {
     this._to      = new THREE.Vector3();
     this._perp    = new THREE.Vector3();
     this._tempPos = new THREE.Vector3();
+  }
+
+  /**
+   * Mark this lane as blocked by a hostile scout fleet.
+   * When blocked the lane renders in red/dim and skips normal opacity lerp.
+   * @param {boolean} blocked
+   */
+  setBlocked(blocked) {
+    if (this._blocked === blocked) return;
+    this._blocked = blocked;
+    if (blocked) {
+      this._lineMat.color.setHex(0xff3300);
+      this._lineMat.opacity = 0.25;
+      this._particleMat.uniforms.uColor.value.set(0.8, 0.1, 0.05);
+    } else {
+      this._lineMat.color.setHex(this._baseColor);
+      this._particleMat.uniforms.uColor.value.copy(this._baseParticleColor);
+      // Opacity will be restored by lerp logic in the next update()
+    }
   }
 
   /**
@@ -121,12 +145,14 @@ export class RouteLane3D {
     linePos[3] = this._to.x;   linePos[4] = this._to.y;   linePos[5] = this._to.z;
     this._lineGeo.attributes.position.needsUpdate = true;
 
-    // Lerp opacities
-    const targetLine = hasShipInTransit ? 0.85 : active ? 0.55 : 0.15;
-    const targetPart = hasShipInTransit ? 0.70 : active ? 0.45 : 0.12;
-    const blend = Math.min(1, dt * 3);
-    this._lineMat.opacity += (targetLine - this._lineMat.opacity) * blend;
-    this._particleMat.uniforms.uOpacity.value += (targetPart - this._particleMat.uniforms.uOpacity.value) * blend;
+    // Lerp opacities (skipped when blocked — red/dim override is kept)
+    if (!this._blocked) {
+      const targetLine = hasShipInTransit ? 0.85 : active ? 0.55 : 0.15;
+      const targetPart = hasShipInTransit ? 0.70 : active ? 0.45 : 0.12;
+      const blend = Math.min(1, dt * 3);
+      this._lineMat.opacity += (targetLine - this._lineMat.opacity) * blend;
+      this._particleMat.uniforms.uOpacity.value += (targetPart - this._particleMat.uniforms.uOpacity.value) * blend;
+    }
 
     // Advance particles along from→to
     const speed = active ? PARTICLE_SPEED : PARTICLE_SPEED * 0.25;
