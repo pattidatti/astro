@@ -529,6 +529,7 @@ export class PlanetPanel {
       // Full DOM build — only happens on planet change or capacity change
       el.innerHTML = `<div class="panel-section-title">SILOS</div>`;
       this._siloEls = {};
+      this._siloCache = {};
       this._siloBuiltForPlanet = this._planetId;
 
       for (const resource of ['ore', 'energy', 'crystal']) {
@@ -593,7 +594,7 @@ export class PlanetPanel {
       const rateStr = rate > 0 ? `+${rate >= 10 ? fmt(rate) : rate.toFixed(1)}/s` : '';
 
       // Skip DOM writes if visual state is identical to last render
-      const cacheKey = `${Math.floor(pct)}:${full ? 1 : 0}:${warning ? 1 : 0}:${drained ? 1 : 0}:${rateStr}`;
+      const cacheKey = `${Math.floor(pct)}:${full ? 1 : 0}:${warning ? 1 : 0}:${drained ? 1 : 0}:${rateStr}:${fmt(silo.amount)}`;
       if (this._siloCache[resource] === cacheKey) continue;
       this._siloCache[resource] = cacheKey;
 
