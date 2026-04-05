@@ -23,7 +23,9 @@
       "Bash(git checkout:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(\"C:/Users/patti/dev/astro/src/ui/HUD.css\":*)"
+      "Bash(\"C:/Users/patti/dev/astro/src/ui/HUD.css\":*)",
+      "Bash(cp \"/c/Users/patti/dev/astro/SCI-FI_UI_SFX_PACK/Impacts/Impact_2_Reso.wav\" \"/c/Users/patti/dev/astro/public/audio/fx/threat_escalation_war.wav\")",
+      "Bash(cp \"/c/Users/patti/dev/astro/SCI-FI_UI_SFX_PACK/Tone3/Major/Tone3B_MajorThirdUp.wav\" \"/c/Users/patti/dev/astro/public/audio/tones/threat_alert.wav\")"
     ]
   }
 }
