@@ -202,6 +202,25 @@ const AudioManager = {
       osc.stop(ctx.currentTime + 0.6);
     });
   },
+
+  /** Sharp hyperspace pop — dual 600/1200 Hz sine burst, 80ms sharp decay. */
+  _synthWarpPop(ctx) {
+    const out = ctx.createGain();
+    out.connect(this._sfxGain);
+    [600, 1200].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(freq * 2.5, ctx.currentTime + 0.04);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(i === 0 ? 0.5 : 0.3, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.connect(g);
+      g.connect(out);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.08);
+    });
+  },
 };
 
 export { AudioManager };

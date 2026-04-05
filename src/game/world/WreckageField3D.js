@@ -84,6 +84,7 @@ export class WreckageField3D {
 
   /** Fire an amber tractor-beam laser from a fleet position toward the nearest node. */
   tractorBeam(fleetPos) {
+    if (this._disposed) return; // P3: guard against disposed state
     if (!this._combatEffects || this._nodes.length === 0) return;
 
     // Find nearest node to the fleet
@@ -103,6 +104,7 @@ export class WreckageField3D {
    * @param {'ore'|'crystal'} resource
    */
   spawnResourceSprite(amount, resource) {
+    if (this._disposed) return; // P3: guard against disposed state
     if (amount <= 0 || this._nodes.length === 0) return;
 
     const color  = resource === 'crystal' ? '#c890ff' : '#d4a843';

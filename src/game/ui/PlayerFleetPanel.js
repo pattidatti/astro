@@ -1,6 +1,6 @@
 import { gameState } from '../GameState.js';
 import { MILITARY_SHIPS } from '../data/militaryShips.js';
-import { TITAN_ULTIMATE_COOLDOWN } from '../data/militaryStats.js';
+import { TITAN_ULTIMATE_COOLDOWN, EMERGENCY_JUMP_COOLDOWN } from '../data/militaryStats.js';
 
 /**
  * PlayerFleetPanel — shown when the player clicks one of their own fleets in RTS mode.
@@ -26,6 +26,7 @@ export class PlayerFleetPanel {
     this._fleetId = null;
     this._onClose = null;
     this._onTitan = null;
+    this._onJump = null;
 
     // Fast supply bar update without full re-render
     gameState.on('fleetSupplyChanged', ({ fleetId }) => {
