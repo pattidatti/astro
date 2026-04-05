@@ -189,9 +189,10 @@ export class FleetMovementSystem {
       fx += fleetDirX * ALIGN_STR;
       fz += fleetDirZ * ALIGN_STR;
 
-      // Integrate velocity with damping
-      ship.vel.x = (ship.vel.x + fx * dt) * VEL_DAMPING;
-      ship.vel.z = (ship.vel.z + fz * dt) * VEL_DAMPING;
+      // Integrate velocity with damping (time-normalized so behaviour is identical at any refresh rate)
+      const frameDamping = Math.pow(VEL_DAMPING, dt * 60);
+      ship.vel.x = (ship.vel.x + fx * dt) * frameDamping;
+      ship.vel.z = (ship.vel.z + fz * dt) * frameDamping;
 
       // Clamp velocity magnitude (use squared comparison, only sqrt when needed)
       const vLenSq = ship.vel.x * ship.vel.x + ship.vel.z * ship.vel.z;
