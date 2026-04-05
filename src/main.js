@@ -170,8 +170,9 @@ async function boot() {
 
   // Tab-bytte: stopp/start loop (visibilitychange er pålitelig)
   document.addEventListener('visibilitychange', () => {
+    const pauseOnSwitch = localStorage.getItem('astro_pause_on_tab_switch') === 'true';
     if (document.visibilityState === 'hidden') {
-      game.animationLoop.stop();
+      if (pauseOnSwitch) game.animationLoop.stop();
     } else if (!menuOpen) {
       game.animationLoop.start();
     }
@@ -180,7 +181,8 @@ async function boot() {
   // CSS-animasjoner: poll fokus-tilstand hvert 200ms
   // (blur/focus-events er upålitelige ved app-bytte — in-frame hasFocus()-sjekk håndterer GPU)
   setInterval(() => {
-    const inactive = document.hidden || !document.hasFocus();
+    const pauseOnSwitch = localStorage.getItem('astro_pause_on_tab_switch') === 'true';
+    const inactive = pauseOnSwitch && (document.hidden || !document.hasFocus());
     if (inactive) {
       document.body.classList.add('game-paused');
     } else if (!menuOpen) {

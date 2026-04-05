@@ -60,7 +60,7 @@ export class PlanetPanel {
     this._siloEls = null;      // cached DOM refs per resource
     this._siloBuiltForPlanet = null;
     this._siloBuiltCapacity = {}; // resource → capacity when DOM was last built
-    this._siloTimer = 0;       // accumulates dt to rate-limit silo DOM updates
+    this._siloTimer = 0;       // timestamp (ms) of last silo DOM update
     this._siloCache = {};      // per-resource last-rendered key for dirty-check
     this._routesFp = '';       // fingerprint to skip redundant _renderRoutes() rebuilds
 
@@ -114,12 +114,12 @@ export class PlanetPanel {
     const rerenderRoutes = () => { if (this._visible) this._renderRoutes(); };
     gameState.on('shipLaunched', rerenderRoutes);
     gameState.on('shipArrived', rerenderRoutes);
-    gameState.on('productionTick', (dt) => {
+    gameState.on('productionTick', () => {
       if (!this._visible) return;
       // Rate-limit silo DOM updates — productionTick fires every frame, 10 updates/sec is plenty
-      this._siloTimer += dt;
-      if (this._siloTimer >= 0.1) {
-        this._siloTimer = 0;
+      const now = performance.now();
+      if (now - this._siloTimer >= 100) {
+        this._siloTimer = now;
         this._renderSilos();
       }
       this._updateColonyShipProgress();

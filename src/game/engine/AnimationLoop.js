@@ -33,7 +33,7 @@ export class AnimationLoop {
     if (!this._running) return;
     requestAnimationFrame(this._frame);
 
-    if (document.hidden || !document.hasFocus()) {
+    if (localStorage.getItem('astro_pause_on_tab_switch') === 'true' && (document.hidden || !document.hasFocus())) {
       this._lastTime = now; // hold oppdatert → ingen dt-spike ved retur
       return;
     }

@@ -405,6 +405,12 @@ export class LandingScreen {
           <button id="graphics-bloom-btn" class="landing-setting-toggle">ON</button>
         </div>
 
+        <div class="landing-section-title">GAMEPLAY</div>
+        <div class="landing-setting-row">
+          <span class="landing-setting-label">PAUSE ON TAB SWITCH</span>
+          <button id="gameplay-pause-tab-btn" class="landing-setting-toggle">${localStorage.getItem('astro_pause_on_tab_switch') === 'true' ? 'ON' : 'OFF'}</button>
+        </div>
+
         <button class="landing-btn-back" id="panel-back" style="margin-top:8px;">BACK</button>
       </div>
     `;
@@ -433,6 +439,12 @@ export class LandingScreen {
     document.getElementById('graphics-bloom-btn').addEventListener('click', (e) => {
       /* Placeholder for future bloom toggle */
       e.currentTarget.textContent = e.currentTarget.textContent === 'ON' ? 'OFF' : 'ON';
+      AudioManager.play('UI_MENU_CLICK');
+    });
+    document.getElementById('gameplay-pause-tab-btn').addEventListener('click', (e) => {
+      const nowOn = e.currentTarget.textContent === 'OFF';
+      localStorage.setItem('astro_pause_on_tab_switch', nowOn ? 'true' : 'false');
+      e.currentTarget.textContent = nowOn ? 'ON' : 'OFF';
       AudioManager.play('UI_MENU_CLICK');
     });
     document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
