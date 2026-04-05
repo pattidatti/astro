@@ -283,6 +283,7 @@ export function createGame() {
   const playerFleetManager = new PlayerFleetManager3D(sceneManager.scene);
   const _selectedPlayerFleets = new Set(); // Set<fleetId>
   const playerFleetPanel = new PlayerFleetPanel();
+  playerFleetPanel.setGalaxy(galaxy);
 
   // --- Enemy station panel ---
   const enemyStationPanel = new EnemyStationPanel();

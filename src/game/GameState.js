@@ -1063,7 +1063,7 @@ class GameState extends EventEmitter {
 
   /**
    * Request an emergency jump for a fleet to a target owned planet.
-   * Requires: emergencyJumpCooldown === 0, fleet has energy supply.
+   * Requires: emergencyJumpCooldown === 0, fleet has >= 40% energy max supply.
    * The jump is deferred: FleetMovementSystem executes it next tick.
    * @param {string} fleetId
    * @param {string} targetPlanetId
@@ -1073,11 +1073,13 @@ class GameState extends EventEmitter {
     const fleet = this.playerFleets.find(f => f.id === fleetId);
     if (!fleet) return false;
     if (fleet.emergencyJumpCooldown > 0) return false;
-    if (!fleet.supply || fleet.supply.energy.amount <= 0) return false;
+    if (!fleet.supply) return false;
+
+    const requiredEnergy = Math.ceil(fleet.supply.energy.max * EMERGENCY_JUMP_ENERGY_COST_PCT);
+    if (fleet.supply.energy.amount < requiredEnergy) return false;
     if (!this.ownedPlanets.includes(targetPlanetId)) return false;
 
-    const cost = Math.ceil(fleet.supply.energy.amount * EMERGENCY_JUMP_ENERGY_COST_PCT);
-    fleet.supply.energy.amount = Math.max(0, fleet.supply.energy.amount - cost);
+    fleet.supply.energy.amount = Math.max(0, fleet.supply.energy.amount - requiredEnergy);
     fleet.emergencyJumpCooldown = EMERGENCY_JUMP_COOLDOWN;
     fleet.pendingEmergencyJump = targetPlanetId;
     this.emit('fleetSupplyChanged', { fleetId, resource: 'energy',

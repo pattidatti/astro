@@ -132,7 +132,7 @@ const AudioManager = {
   /**
    * Play a procedurally synthesized sound effect using the Web Audio API.
    * Bypasses the buffer map — no audio files needed.
-   * @param {'FLEET_EXPLOSION'|'TITAN_ULTIMATE'|'CARRIER_HUM'} name
+   * @param {'FLEET_EXPLOSION'|'TITAN_ULTIMATE'|'CARRIER_HUM'|'WARP_POP'} name
    */
   playSynth(name) {
     if (!this._unlocked || this._muted || !this._ctx) return;

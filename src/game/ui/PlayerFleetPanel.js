@@ -1,6 +1,6 @@
 import { gameState } from '../GameState.js';
 import { MILITARY_SHIPS } from '../data/militaryShips.js';
-import { TITAN_ULTIMATE_COOLDOWN, EMERGENCY_JUMP_COOLDOWN } from '../data/militaryStats.js';
+import { TITAN_ULTIMATE_COOLDOWN, EMERGENCY_JUMP_COOLDOWN, EMERGENCY_JUMP_ENERGY_COST_PCT } from '../data/militaryStats.js';
 
 /**
  * PlayerFleetPanel — shown when the player clicks one of their own fleets in RTS mode.
@@ -27,11 +27,17 @@ export class PlayerFleetPanel {
     this._onClose = null;
     this._onTitan = null;
     this._onJump = null;
+    this._galaxy = null;
 
     // Fast supply bar update without full re-render
     gameState.on('fleetSupplyChanged', ({ fleetId }) => {
       if (fleetId === this._fleetId) this._updateBarsOnly();
     });
+  }
+
+  /** Set the Galaxy reference for position lookups. */
+  setGalaxy(galaxy) {
+    this._galaxy = galaxy;
   }
 
   /**
@@ -121,11 +127,34 @@ export class PlayerFleetPanel {
     const jumpCooldown    = fleet.emergencyJumpCooldown ?? 0;
     const jumpReady       = jumpCooldown <= 0;
     const jumpCooldownPct = Math.max(0, Math.min(100, (1 - jumpCooldown / EMERGENCY_JUMP_COOLDOWN) * 100));
-    const energyPct2      = fleet.supply ? fleet.supply.energy.amount / fleet.supply.energy.max : 0;
-    const jumpEnabled     = jumpReady && energyPct2 > 0.01;
 
-    const planetOptions = gameState.ownedPlanets
-      .map(pid => `<option value="${pid}">${pid.toUpperCase()}</option>`).join('');
+    // Compute required energy and check if fleet has enough
+    const requiredEnergy = fleet.supply ? Math.ceil(fleet.supply.energy.max * EMERGENCY_JUMP_ENERGY_COST_PCT) : 0;
+    const hasEnoughEnergy = fleet.supply && fleet.supply.energy.amount >= requiredEnergy;
+    const jumpEnabled = jumpReady && hasEnoughEnergy;
+
+    // Get planets sorted by distance from fleet position
+    let planetOptions = '';
+    const ownedStations = this._galaxy?.getOwnedStationPositions() ?? [];
+    if (ownedStations.length > 0 && fleet.position) {
+      const planetsWithDist = ownedStations.map(({ planetId, worldPos }) => {
+        if (!worldPos) return { planetId, distance: Infinity };
+        const dist = Math.hypot(
+          fleet.position.x - worldPos.x,
+          fleet.position.z - worldPos.z
+        );
+        return { planetId, distance: dist };
+      }).sort((a, b) => a.distance - b.distance);
+
+      planetOptions = planetsWithDist
+        .map(({ planetId, distance }) => {
+          const distStr = distance === Infinity ? '—' : distance.toFixed(0);
+          return `<option value="${planetId}">${planetId.toUpperCase()} (${distStr})</option>`;
+        }).join('');
+    } else {
+      planetOptions = gameState.ownedPlanets
+        .map(pid => `<option value="${pid}">${pid.toUpperCase()}</option>`).join('');
+    }
 
     const jumpHTML = `
       <div class="pfp-section">
@@ -143,7 +172,7 @@ export class PlayerFleetPanel {
           </span>
         </div>
         <div id="pfp-jump-label" class="pfp-cd-label">
-          ${jumpReady ? (energyPct2 > 0.01 ? 'READY' : 'NO FUEL') : `${Math.ceil(jumpCooldown)}s`}
+          ${jumpReady ? (hasEnoughEnergy ? 'READY' : 'NEED FUEL') : `${Math.ceil(jumpCooldown)}s`}
         </div>
       </div>`;
 
@@ -280,10 +309,9 @@ export class PlayerFleetPanel {
 
     const jumpCooldown = fleet.emergencyJumpCooldown ?? 0;
     const jumpReady = jumpCooldown <= 0;
-    const hasEnergy = fleet.supply
-      ? fleet.supply.energy.amount / fleet.supply.energy.max > 0.01
-      : false;
-    const enabled = jumpReady && hasEnergy;
+    const requiredEnergy = fleet.supply ? Math.ceil(fleet.supply.energy.max * EMERGENCY_JUMP_ENERGY_COST_PCT) : 0;
+    const hasEnoughEnergy = fleet.supply && fleet.supply.energy.amount >= requiredEnergy;
+    const enabled = jumpReady && hasEnoughEnergy;
     const cdPct = Math.max(0, Math.min(100,
       (1 - jumpCooldown / EMERGENCY_JUMP_COOLDOWN) * 100));
 
@@ -295,7 +323,7 @@ export class PlayerFleetPanel {
 
     const label = this._el.querySelector('#pfp-jump-label');
     if (label) label.textContent = jumpReady
-      ? (hasEnergy ? 'READY' : 'NO FUEL')
+      ? (hasEnoughEnergy ? 'READY' : 'NEED FUEL')
       : `${Math.ceil(jumpCooldown)}s`;
 
     // Re-bind when button transitions back to ready
