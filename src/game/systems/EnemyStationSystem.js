@@ -6,6 +6,7 @@ const MAX_STATION_INVASIONS = 2;         // per station — separate from Threat
 const DISTRESS_HP_THRESHOLD = 0.15;      // 15% HP triggers flare
 const AWAKEN_COLONY_COUNT = 3;           // owned planets needed to trigger proximity awakening
 const AWAKEN_FLEET_RADIUS = 50;          // world units — wake dormant station near player fleet
+const AWAKEN_FLEET_RADIUS_SQ = AWAKEN_FLEET_RADIUS * AWAKEN_FLEET_RADIUS;
 
 const ALL_PLANETS = ['xerion', 'drakon', 'crystara', 'voltara', 'glacius', 'nebulox', 'solaris', 'voidex'];
 
@@ -94,7 +95,7 @@ export class EnemyStationSystem {
         if (!pFleet.ships.some(s => s.hp > 0)) continue;
         const dx = pFleet.position.x - stPos.x;
         const dz = pFleet.position.z - stPos.z;
-        if (dx * dx + dz * dz < AWAKEN_FLEET_RADIUS * AWAKEN_FLEET_RADIUS) {
+        if (dx * dx + dz * dz < AWAKEN_FLEET_RADIUS_SQ) {
           this._awakenStation(st);
           break;
         }

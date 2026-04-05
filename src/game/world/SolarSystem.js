@@ -566,20 +566,12 @@ export class SolarSystem {
       // Billboard lookAt is expensive (quaternion+matrix); throttle to every 3 frames
       // Nebulas are large diffuse backgrounds — 3-frame delay is imperceptible
       const updateBillboard = frameCount % 3 === 0;
-      const nebulas = [
-        [this.nebulaVolume,  nebFade],
-        [this.nebulaVolume2, nebFade * 0.7],
-        [this.nebulaVolume3, nebFade * 0.9],
-        [this.nebulaVolume4, nebFade * 0.8],
-        [this.nebulaVolume5, nebFade * 0.75],
-        [this.nebulaVolume6, nebFade * 0.65],
-      ];
-      for (const [neb, opacity] of nebulas) {
-        neb.material.uniforms.uOpacity.value = opacity;
-        neb.material.uniforms.uDetail.value  = nebulaDetail;
-        neb.material.uniforms.uTime.value    = time;
-        if (updateBillboard) neb.mesh.lookAt(camera.position);
-      }
+      this._updateNebula(this.nebulaVolume,  nebFade,        nebulaDetail, time, camera, updateBillboard);
+      this._updateNebula(this.nebulaVolume2, nebFade * 0.7,  nebulaDetail, time, camera, updateBillboard);
+      this._updateNebula(this.nebulaVolume3, nebFade * 0.9,  nebulaDetail, time, camera, updateBillboard);
+      this._updateNebula(this.nebulaVolume4, nebFade * 0.8,  nebulaDetail, time, camera, updateBillboard);
+      this._updateNebula(this.nebulaVolume5, nebFade * 0.75, nebulaDetail, time, camera, updateBillboard);
+      this._updateNebula(this.nebulaVolume6, nebFade * 0.65, nebulaDetail, time, camera, updateBillboard);
     }
 
     // Lens flare (star-type only) — fade out 390→450
@@ -663,6 +655,14 @@ export class SolarSystem {
         this.enemyStation.update(time, dt, camera);
       }
     }
+  }
+
+  /** Update a single nebula volume — avoids per-frame array allocation */
+  _updateNebula(neb, opacity, detail, time, camera, updateBillboard) {
+    neb.material.uniforms.uOpacity.value = opacity;
+    neb.material.uniforms.uDetail.value  = detail;
+    neb.material.uniforms.uTime.value    = time;
+    if (updateBillboard) neb.mesh.lookAt(camera.position);
   }
 
   dispose() {

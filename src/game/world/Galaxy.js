@@ -297,14 +297,12 @@ export class Galaxy {
     // Update central star
     this.centralStar.update(time);
 
-    // Update cosmic background nebulas — throttled billboard + time updates every 3 frames
-    // Nebulas are large diffuse elements; 3-frame delay (~50ms at 60fps) is imperceptible
-    const updateNebulas = this._frameCount % 3 === 0;
-    if (updateNebulas) {
-      for (const neb of this._cosmicNebulas) {
-        neb.mesh.lookAt(camera.position);
-        neb.material.uniforms.uTime.value = time;
-      }
+    // Update cosmic background nebulas — uTime always updates for smooth animation,
+    // but expensive lookAt() billboard is throttled to every 3rd frame (~50ms at 60fps)
+    const updateNebulaBillboard = this._frameCount % 3 === 0;
+    for (const neb of this._cosmicNebulas) {
+      neb.material.uniforms.uTime.value = time;
+      if (updateNebulaBillboard) neb.mesh.lookAt(camera.position);
     }
 
     // Update galactic asteroid belts

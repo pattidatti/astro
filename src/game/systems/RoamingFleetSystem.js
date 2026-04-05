@@ -13,6 +13,7 @@ const SCOUT_SPAWN_CHANCE = 0.003;    // per second
 const INVASION_SPAWN_CHANCE = 0.001; // per second
 const INTERCEPT_THRESHOLD = 0.08;
 const SNITCH_DETECT_RADIUS = 30;   // matches ENGAGE_RADIUS from fleetCombatStats.js
+const SNITCH_DETECT_RADIUS_SQ = SNITCH_DETECT_RADIUS * SNITCH_DETECT_RADIUS;
 const SNITCH_SPEED = 0.03;         // slower than SCOUT_SPEED (0.04) — creates catchable window
 
 const ALL_PLANETS = ['xerion', 'drakon', 'crystara', 'voltara', 'glacius', 'nebulox', 'solaris', 'voidex'];
@@ -385,7 +386,7 @@ export class RoamingFleetSystem {
           if (!pFleet.position) continue; // fleet position not yet initialized
           const dx = pFleet.position.x - ePos.x;
           const dz = pFleet.position.z - ePos.z;
-          if (dx * dx + dz * dz < SNITCH_DETECT_RADIUS * SNITCH_DETECT_RADIUS) {
+          if (dx * dx + dz * dz < SNITCH_DETECT_RADIUS_SQ) {
             // Activate snitching: find nearest non-cleared, non-dormant station
             const target = this._findNearestStation(ePos);
             if (target) {
