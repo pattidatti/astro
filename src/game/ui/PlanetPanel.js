@@ -123,7 +123,6 @@ export class PlanetPanel {
         this._renderSilos();
       }
       this._updateColonyShipProgress();
-      const now = performance.now();
       if (now - this._renderTimer > 1000) {
         this._renderTimer = now;
         const ps = gameState.getPlanetState(this._planetId);
