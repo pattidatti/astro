@@ -34,7 +34,8 @@ export const WarpDistortionShader = {
       float step = 6.28318 / float(NUM_DIRS);
       for (int i = 0; i < NUM_DIRS; i++) {
         float a = float(i) * step;
-        vec2 offset = vec2(cos(a), sin(a)) * uStrength * env * (1.0 - dist);
+        // Radial warp blur: stronger at edges (dist ~0.7), weaker at center (dist ~0)
+        vec2 offset = vec2(cos(a), sin(a)) * uStrength * env * dist;
         accum += texture2D(tDiffuse, clamp(vUv + offset, 0.0, 1.0));
       }
       accum /= float(NUM_DIRS);

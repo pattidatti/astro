@@ -382,14 +382,16 @@ export class FleetCombatSystem {
         const alive = fleet.ships.filter(s => s.hp > 0);
         if (alive.length > 0) {
           const target = alive.reduce((a, b) => a.hp < b.hp ? a : b);
-          target.hp = Math.max(0, target.hp - stDps * dt);
+          const shipIdx = fleet.ships.indexOf(target);
+
+          // Apply damage and emit appropriate event (fix H3: playerShipDamaged for non-lethal hits)
+          gameState.damagePlayerShip(fleet.id, shipIdx, stDps * dt);
 
           // VFX fire event (throttled)
           const fireKey = siege.id;
           const timer = (this._fireTimers.get(fireKey) ?? 0) + dt;
           if (timer >= STATION_FIRE_INTERVAL) {
             this._fireTimers.set(fireKey, 0);
-            const shipIdx = fleet.ships.indexOf(target);
             gameState.emit('stationFired', {
               siegeId: siege.id,
               stationId: siege.enemyStationId,
@@ -400,12 +402,8 @@ export class FleetCombatSystem {
             this._fireTimers.set(fireKey, timer);
           }
 
-          // Remove dead ship
-          if (target.hp <= 0) {
-            target.hp = 0;
-            gameState.emit('playerShipDestroyed', { fleetId: fleet.id, ship: target });
-            fleet.ships = fleet.ships.filter(s => s.hp > 0);
-          }
+          // Remove dead ships
+          fleet.ships = fleet.ships.filter(s => s.hp > 0);
         }
       }
 

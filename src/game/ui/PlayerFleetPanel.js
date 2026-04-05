@@ -265,6 +265,9 @@ export class PlayerFleetPanel {
 
     const energyVal = this._el.querySelector('#pfp-energy-val');
     if (energyVal) energyVal.textContent = `${Math.floor(energy.amount)}/${Math.floor(energy.max)}`;
+
+    // Update jump button state when supply changes (fix H1: race condition on double-click)
+    this._updateJumpButton();
   }
 
   _updateTitanButton() {

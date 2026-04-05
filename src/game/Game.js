@@ -712,6 +712,11 @@ export function createGame() {
     enemyStationPanel.show(stationId);
   });
 
+  // Station siege restored after load → show panel (fix H2: UI regression on reload)
+  gameState.on('stationSiegeRestored', ({ stationId }) => {
+    enemyStationPanel.show(stationId);
+  });
+
   // Station fire event → projectile VFX
   gameState.on('stationFired', ({ stationId, targetFleetId, targetShipIdx }) => {
     const stPos = galaxy.enemyStationManager?.getStationWorldPosition(stationId);

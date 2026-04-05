@@ -1,4 +1,5 @@
 import { gameState } from '../GameState.js';
+import { STATION_ENGAGE_RANGE } from '../data/fleetCombatStats.js';
 
 /**
  * FleetMovementSystem — moves player fleets toward waypoints using Boids.
@@ -79,6 +80,14 @@ export class FleetMovementSystem {
     const dx = wx - cx;
     const dz = wz - cz;
     const dist = Math.sqrt(dx * dx + dz * dz);
+
+    // Check for station engagement (Fase 4: Station Combat)
+    if (fleet.stationTarget && dist < STATION_ENGAGE_RANGE) {
+      // Initiate siege if not already in progress
+      if (!gameState.stationSieges.some(s => s.playerFleetId === fleet.id)) {
+        gameState.startStationSiege(fleet.id, fleet.stationTarget);
+      }
+    }
 
     // Arrived?
     if (dist < ARRIVAL_RADIUS) {

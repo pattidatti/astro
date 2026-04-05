@@ -108,7 +108,9 @@ export class SupplySystem {
     if (!this._isNearOwnBase(fleet)) return;
 
     const hasCarrier = this._fleetHasCarrier(fleet);
-    const mult = hasCarrier ? CARRIER_RESUPPLY_MULT : 1.0;
+    let mult = hasCarrier ? CARRIER_RESUPPLY_MULT : 1.0;
+    // Apply supply regen debuff from void-type stations (fix M7)
+    if (fleet.supplyRegenDebuff) mult *= fleet.supplyRegenDebuff;
     const rate = RESUPPLY_RATE * mult * dt;
 
     const oreNotFull    = fleet.supply.ore.amount    < fleet.supply.ore.max;
@@ -148,7 +150,10 @@ export class SupplySystem {
       const dz = fleet.position.z - p.z;
       if (dx * dx + dz * dz >= r2) continue;
 
-      const rate = RESUPPLY_RATE * dt;
+      // Apply supply regen debuff from void-type stations (fix M7)
+      let rateMult = 1.0;
+      if (fleet.supplyRegenDebuff) rateMult *= fleet.supplyRegenDebuff;
+      const rate = RESUPPLY_RATE * rateMult * dt;
       const oreNotFull    = fleet.supply.ore.amount    < fleet.supply.ore.max;
       const energyNotFull = fleet.supply.energy.amount < fleet.supply.energy.max;
 

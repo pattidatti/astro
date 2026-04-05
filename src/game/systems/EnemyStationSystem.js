@@ -39,6 +39,12 @@ export class EnemyStationSystem {
 
     animationLoop.onUpdate((dt) => this._tick(dt));
 
+    // Listen for snitch scout arrival → wake the target station (Fase 3: Snitch Mechanic)
+    gameState.on('stationAlerted', ({ stationId }) => {
+      const st = gameState.enemyStations?.find(s => s.id === stationId);
+      if (st) this._awakenStation(st);
+    });
+
     // Listen for direct hull damage → escalate to War
     gameState.on('enemyStationDamaged', ({ stationId, hullDamage }) => {
       if (hullDamage > 0) this._onHullDamaged(stationId);

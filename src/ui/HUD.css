@@ -2763,6 +2763,10 @@
   background: #00aaff;
 }
 
+.pfp-jump-label {
+  color: #44ccff !important; /* override .pfp-cd-label purple */
+}
+
 .pfp-jump-dest-row {
   margin-bottom: 6px;
 }
