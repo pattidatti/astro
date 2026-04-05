@@ -126,9 +126,9 @@ export class Skybox {
     const colors      = new Float32Array(TWINKLE_COUNT * 3);
     const glowFactors = new Float32Array(TWINKLE_COUNT);
 
-    this._twinklePhases    = new Float32Array(TWINKLE_COUNT);
-    this._twinkleSpeeds    = new Float32Array(TWINKLE_COUNT);
-    this._twinkleBaseSizes = new Float32Array(TWINKLE_COUNT);
+    const twinklePhases    = new Float32Array(TWINKLE_COUNT);
+    const twinkleSpeeds    = new Float32Array(TWINKLE_COUNT);
+    const twinkleBaseSizes = new Float32Array(TWINKLE_COUNT);
 
     for (let i = 0; i < TWINKLE_COUNT; i++) {
       const r = 300 + Math.random() * 500;
@@ -155,23 +155,29 @@ export class Skybox {
       // 10% super-bright stars get a large glow halo
       glowFactors[i] = Math.random() < 0.10 ? 3.0 : 1.0;
 
-      this._twinklePhases[i]    = Math.random() * Math.PI * 2;
-      this._twinkleSpeeds[i]    = 1.0 + Math.random() * 3.0;
-      this._twinkleBaseSizes[i] = 1.0 + Math.random() * 2.5;
+      twinklePhases[i]    = Math.random() * Math.PI * 2;
+      twinkleSpeeds[i]    = 1.0 + Math.random() * 3.0;
+      twinkleBaseSizes[i] = 1.0 + Math.random() * 2.5;
     }
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position',   new THREE.BufferAttribute(positions,   3));
     geo.setAttribute('color',      new THREE.BufferAttribute(colors,      3));
     geo.setAttribute('aGlowFactor',new THREE.BufferAttribute(glowFactors, 1));
-
-    this._twinkleSizeAttr = new THREE.BufferAttribute(new Float32Array(TWINKLE_COUNT), 1);
-    geo.setAttribute('size', this._twinkleSizeAttr);
+    geo.setAttribute('aBaseSize',  new THREE.BufferAttribute(twinkleBaseSizes, 1));
+    geo.setAttribute('aSpeed',     new THREE.BufferAttribute(twinkleSpeeds, 1));
+    geo.setAttribute('aPhase',     new THREE.BufferAttribute(twinklePhases, 1));
 
     // Custom ShaderMaterial: gaussian soft-circle core + glow halo
     this._twinkleMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+      },
       vertexShader: /* glsl */`
-        attribute float size;
+        uniform float uTime;
+        attribute float aBaseSize;
+        attribute float aSpeed;
+        attribute float aPhase;
         attribute float aGlowFactor;
         attribute vec3 color;
         varying vec3 vColor;
@@ -180,6 +186,8 @@ export class Skybox {
         void main() {
           vColor = color;
           vGlow  = aGlowFactor;
+          float twinkle = 0.4 + 0.6 * (sin(uTime * aSpeed + aPhase) * 0.5 + 0.5);
+          float size = aBaseSize * twinkle;
           vec4 mvPos  = modelViewMatrix * vec4(position, 1.0);
           gl_PointSize = size * aGlowFactor * (300.0 / -mvPos.z);
           gl_Position  = projectionMatrix * mvPos;
@@ -406,13 +414,8 @@ export class Skybox {
     // Milky Way strength transition
     u.uMilkyWayStrength.value += (this._targetMilkyWay - u.uMilkyWayStrength.value) * lerpSpeed;
 
-    // Animate twinkling star sizes
-    const sizes = this._twinkleSizeAttr.array;
-    for (let i = 0; i < TWINKLE_COUNT; i++) {
-      const twinkle = 0.4 + 0.6 * (Math.sin(time * this._twinkleSpeeds[i] + this._twinklePhases[i]) * 0.5 + 0.5);
-      sizes[i] = this._twinkleBaseSizes[i] * twinkle;
-    }
-    this._twinkleSizeAttr.needsUpdate = true;
+    // Animate twinkling star sizes on GPU
+    this._twinkleMaterial.uniforms.uTime.value = time;
   }
 
   resize(width, height) {

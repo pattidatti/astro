@@ -20,12 +20,15 @@ const ARRIVAL_RADIUS     = 3;    // fleet "arrives" when center is within this r
 
 // Boids parameters for individual ships within the fleet
 const SEP_RADIUS      = 7;    // separation trigger radius (world units in local space)
+const SEP_RADIUS_SQ   = SEP_RADIUS * SEP_RADIUS;
 const SEP_STRENGTH    = 22;   // push-away force per unit of overlap
 const COHESION_STR    = 6;    // pull toward fleet center (0,0,0 local)
 const ALIGN_STR       = 10;   // align velocity with fleet heading
 const VEL_DAMPING     = 0.88; // per-frame velocity decay (0–1)
 const MAX_LOCAL_VEL   = 8;    // cap on local-space ship speed
+const MAX_LOCAL_VEL_SQ = MAX_LOCAL_VEL * MAX_LOCAL_VEL;
 const MAX_SPREAD      = 18;   // maximum localPos distance from center
+const MAX_SPREAD_SQ   = MAX_SPREAD * MAX_SPREAD;
 
 export class FleetMovementSystem {
   constructor(animationLoop) {
@@ -169,8 +172,9 @@ export class FleetMovementSystem {
         if (!other.localPos) continue;
         const sdx = ship.localPos.x - other.localPos.x;
         const sdz = ship.localPos.z - other.localPos.z;
-        const sd  = Math.sqrt(sdx * sdx + sdz * sdz);
-        if (sd < SEP_RADIUS && sd > 0.001) {
+        const distSq = sdx * sdx + sdz * sdz;
+        if (distSq < SEP_RADIUS_SQ && distSq > 0.000001) {
+          const sd  = Math.sqrt(distSq);
           const str = SEP_STRENGTH * (1 - sd / SEP_RADIUS);
           fx += (sdx / sd) * str;
           fz += (sdz / sd) * str;
@@ -189,9 +193,10 @@ export class FleetMovementSystem {
       ship.vel.x = (ship.vel.x + fx * dt) * VEL_DAMPING;
       ship.vel.z = (ship.vel.z + fz * dt) * VEL_DAMPING;
 
-      // Clamp velocity magnitude
-      const vLen = Math.sqrt(ship.vel.x * ship.vel.x + ship.vel.z * ship.vel.z);
-      if (vLen > MAX_LOCAL_VEL) {
+      // Clamp velocity magnitude (use squared comparison, only sqrt when needed)
+      const vLenSq = ship.vel.x * ship.vel.x + ship.vel.z * ship.vel.z;
+      if (vLenSq > MAX_LOCAL_VEL_SQ) {
+        const vLen = Math.sqrt(vLenSq);
         ship.vel.x = (ship.vel.x / vLen) * MAX_LOCAL_VEL;
         ship.vel.z = (ship.vel.z / vLen) * MAX_LOCAL_VEL;
       }
@@ -201,8 +206,9 @@ export class FleetMovementSystem {
       ship.localPos.z += ship.vel.z * dt;
 
       // Clamp spread so ships don't drift too far from fleet center
-      const lLen = Math.sqrt(ship.localPos.x * ship.localPos.x + ship.localPos.z * ship.localPos.z);
-      if (lLen > MAX_SPREAD) {
+      const lLenSq = ship.localPos.x * ship.localPos.x + ship.localPos.z * ship.localPos.z;
+      if (lLenSq > MAX_SPREAD_SQ) {
+        const lLen = Math.sqrt(lLenSq);
         ship.localPos.x = (ship.localPos.x / lLen) * MAX_SPREAD;
         ship.localPos.z = (ship.localPos.z / lLen) * MAX_SPREAD;
       }

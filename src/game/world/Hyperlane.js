@@ -41,28 +41,35 @@ export class Hyperlane {
     this.dirNorm    = this.direction.clone().normalize();
     this.fromPos    = fromPos.clone();
 
+    // Particle offsets (0–1 along lane) stored as attribute for GPU animation
+    const particleOffsets = new Float32Array(PARTICLE_COUNT);
+    // Dummy positions — actual positions computed in vertex shader
     const particlePositions = new Float32Array(PARTICLE_COUNT * 3);
-    this.particleOffsets = new Float32Array(PARTICLE_COUNT);
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      this.particleOffsets[i] = Math.random();
-      const pos = fromPos.clone().addScaledVector(this.dirNorm, this.particleOffsets[i] * this.length);
-      particlePositions[i * 3]     = pos.x;
-      particlePositions[i * 3 + 1] = pos.y;
-      particlePositions[i * 3 + 2] = pos.z;
+      particleOffsets[i] = Math.random();
     }
 
     const particleGeo = new THREE.BufferGeometry();
     particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    particleGeo.setAttribute('aOffset',  new THREE.BufferAttribute(particleOffsets, 1));
 
-    // Gaussian soft-sprite particle material
+    // Gaussian soft-sprite particle material — positions computed on GPU
     this.particleMaterial = new THREE.ShaderMaterial({
       vertexShader: /* glsl */`
+        uniform float uTime;
+        uniform vec3  uFrom;
+        uniform vec3  uDir;
+        uniform float uLength;
+        uniform float uSpeed;
+        attribute float aOffset;
         #ifdef USE_LOGDEPTHBUF
           uniform float logDepthBufFC;
         #endif
         void main() {
-          vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+          float t = fract(aOffset + uTime * uSpeed);
+          vec3 pos = uFrom + uDir * (t * uLength);
+          vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
           gl_PointSize = 4.5 * (150.0 / -mvPos.z);
           gl_Position  = projectionMatrix * mvPos;
           #ifdef USE_LOGDEPTHBUF
@@ -84,6 +91,11 @@ export class Hyperlane {
       uniforms: {
         uColor:   { value: new THREE.Vector3(0.784, 0.659, 0.306) },
         uOpacity: { value: 0.3 },
+        uTime:    { value: 0 },
+        uFrom:    { value: this.fromPos.clone() },
+        uDir:     { value: this.dirNorm.clone() },
+        uLength:  { value: this.length },
+        uSpeed:   { value: PARTICLE_SPEED },
       },
       transparent: true,
       blending:    THREE.AdditiveBlending,
@@ -92,9 +104,6 @@ export class Hyperlane {
 
     this.particles = new THREE.Points(particleGeo, this.particleMaterial);
     this.group.add(this.particles);
-
-    // Scratch vector to avoid per-frame allocation
-    this._tempPos = new THREE.Vector3();
   }
 
   /**
@@ -103,19 +112,9 @@ export class Hyperlane {
    * @param {boolean} owned - Whether both ends are owned (brighter if so)
    */
   update(dt, owned) {
-    // Advance time uniform for flow animation
+    // Advance time uniform for flow animation (tube + particles both GPU-driven)
     this.tubeMaterial.uniforms.uTime.value += dt;
-
-    // Animate particle positions along the lane
-    const positions = this.particles.geometry.attributes.position.array;
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      this.particleOffsets[i] = (this.particleOffsets[i] + dt * PARTICLE_SPEED) % 1.0;
-      this._tempPos.copy(this.fromPos).addScaledVector(this.dirNorm, this.particleOffsets[i] * this.length);
-      positions[i * 3]     = this._tempPos.x;
-      positions[i * 3 + 1] = this._tempPos.y;
-      positions[i * 3 + 2] = this._tempPos.z;
-    }
-    this.particles.geometry.attributes.position.needsUpdate = true;
+    this.particleMaterial.uniforms.uTime.value += dt;
 
     // Brighten when both systems are owned
     const targetIntensity = owned ? 0.55 : 0.15;

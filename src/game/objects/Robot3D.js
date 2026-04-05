@@ -106,6 +106,7 @@ export class Robot3D {
     for (let i = 0; i < TRAIL_LENGTH; i++) {
       this.trailPositions.push(new THREE.Vector3());
     }
+    this._trailHead = 0; // circular buffer index
   }
 
   /**
@@ -294,18 +295,18 @@ export class Robot3D {
       return;
     }
 
-    // Shift trail positions
-    for (let i = TRAIL_LENGTH - 1; i > 0; i--) {
-      this.trailPositions[i].copy(this.trailPositions[i - 1]);
-    }
-    this.trailPositions[0].copy(this.group.position);
+    // Circular buffer: write new position at head, read backwards for trail order
+    this.trailPositions[this._trailHead].copy(this.group.position);
+    this._trailHead = (this._trailHead + 1) % TRAIL_LENGTH;
 
-    // Update buffer
+    // Update buffer — read from head backwards (newest first)
     const arr = this.trailGeo.attributes.position.array;
     for (let i = 0; i < TRAIL_LENGTH; i++) {
-      arr[i * 3]     = this.trailPositions[i].x;
-      arr[i * 3 + 1] = this.trailPositions[i].y;
-      arr[i * 3 + 2] = this.trailPositions[i].z;
+      const srcIdx = (this._trailHead - 1 - i + TRAIL_LENGTH) % TRAIL_LENGTH;
+      const p = this.trailPositions[srcIdx];
+      arr[i * 3]     = p.x;
+      arr[i * 3 + 1] = p.y;
+      arr[i * 3 + 2] = p.z;
     }
     this.trailGeo.attributes.position.needsUpdate = true;
 

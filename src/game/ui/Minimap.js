@@ -63,10 +63,48 @@ export class Minimap {
     for (const p of PLANETS) {
       this._planetMap[p.id] = p;
     }
+
+    // Offscreen canvas for static elements (background, orbit rings, central star)
+    this._staticCanvas = document.createElement('canvas');
+    this._staticCanvas.width = SIZE * DPR;
+    this._staticCanvas.height = SIZE * DPR;
+    this._staticCtx = this._staticCanvas.getContext('2d');
+    this._staticCtx.scale(DPR, DPR);
+    this._lastStaticZoom = -1; // force initial render
   }
 
   setGalaxy(galaxy) {
     this._galaxy = galaxy;
+  }
+
+  /** Render static elements (background, orbit rings, central star) to offscreen canvas */
+  _renderStaticLayer() {
+    const ctx = this._staticCtx;
+    const s = SCALE * this._mapZoom;
+
+    ctx.clearRect(0, 0, SIZE, SIZE);
+
+    // Background
+    ctx.fillStyle = 'rgba(10, 12, 16, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, SIZE, SIZE, 8);
+    ctx.fill();
+
+    // Orbit rings
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+    ctx.lineWidth = 0.5;
+    for (const planet of PLANETS) {
+      const r = planet.orbit.radius * s;
+      ctx.beginPath();
+      ctx.arc(CENTER, CENTER, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Central star
+    ctx.fillStyle = '#ffdd44';
+    ctx.beginPath();
+    ctx.arc(CENTER, CENTER, 3, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   _getPlanetPos(planet, time) {
@@ -117,27 +155,18 @@ export class Minimap {
     }
     if (!shouldShow) return;
 
-    // Clear
-    ctx.clearRect(0, 0, SIZE, SIZE);
-
-    // Background
-    ctx.fillStyle = 'rgba(10, 12, 16, 0.85)';
-    ctx.beginPath();
-    ctx.roundRect(0, 0, SIZE, SIZE, 8);
-    ctx.fill();
-
-    // Draw orbit rings (subtle)
-    const s = SCALE * this._mapZoom;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-    ctx.lineWidth = 0.5;
-    for (const planet of PLANETS) {
-      const r = planet.orbit.radius * s;
-      ctx.beginPath();
-      ctx.arc(CENTER, CENTER, r, 0, Math.PI * 2);
-      ctx.stroke();
+    // Rebuild static layer only when zoom changes
+    if (this._mapZoom !== this._lastStaticZoom) {
+      this._lastStaticZoom = this._mapZoom;
+      this._renderStaticLayer();
     }
 
-    // Draw hyperlanes
+    // Clear and composite static layer
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    ctx.drawImage(this._staticCanvas, 0, 0, SIZE, SIZE);
+
+    // Draw hyperlanes (dynamic — endpoints move with planet orbits)
+    const s = SCALE * this._mapZoom;
     ctx.strokeStyle = 'rgba(212, 168, 67, 0.15)';
     ctx.lineWidth = 0.8;
     for (const [fromId, toId] of HYPERLANES) {
@@ -153,12 +182,6 @@ export class Minimap {
       ctx.lineTo(to.x, to.y);
       ctx.stroke();
     }
-
-    // Draw central star
-    ctx.fillStyle = '#ffdd44';
-    ctx.beginPath();
-    ctx.arc(CENTER, CENTER, 3, 0, Math.PI * 2);
-    ctx.fill();
 
     // Draw planets
     const owned = gameState.ownedPlanets;

@@ -297,12 +297,14 @@ export class Galaxy {
     // Update central star
     this.centralStar.update(time);
 
-    // Update cosmic background nebulas — throttled to every other frame (uTime advances
-    // ~0.010/frame; skipping one frame shifts by ~0.00017, imperceptible)
-    const updateNebulas = this._frameCount % 2 === 0;
-    for (const neb of this._cosmicNebulas) {
-      neb.mesh.lookAt(camera.position); // billboard every frame
-      if (updateNebulas) neb.material.uniforms.uTime.value = time;
+    // Update cosmic background nebulas — throttled billboard + time updates every 3 frames
+    // Nebulas are large diffuse elements; 3-frame delay (~50ms at 60fps) is imperceptible
+    const updateNebulas = this._frameCount % 3 === 0;
+    if (updateNebulas) {
+      for (const neb of this._cosmicNebulas) {
+        neb.mesh.lookAt(camera.position);
+        neb.material.uniforms.uTime.value = time;
+      }
     }
 
     // Update galactic asteroid belts
@@ -322,13 +324,15 @@ export class Galaxy {
     if (this.enemyStationManager) this.enemyStationManager.update(dt, time, camera);
     this._updateThreatIndicators(time);
 
-    // Update route lanes
+    // Update route lanes (use Map/Set for O(1) lookup instead of O(n) find/some)
+    const routeMap = new Map(gameState.routes.map(r => [r.id, r]));
+    const activeShipRoutes = new Set(gameState.activeShips.map(s => s.routeId));
     for (const [routeId, lane] of this._routeLanes) {
-      const route = gameState.routes.find(r => r.id === routeId);
+      const route = routeMap.get(routeId);
       if (!route) continue;
       const fromPos = this.getPlanetWorldPosition(route.fromPlanet);
       const toPos   = this.getPlanetWorldPosition(route.toPlanet);
-      const hasShip = gameState.activeShips.some(s => s.routeId === routeId);
+      const hasShip = activeShipRoutes.has(routeId);
       lane.update(dt, fromPos, toPos, route.active, hasShip);
       if (this._roamingFleetSystem) {
         lane.setBlocked(this._roamingFleetSystem?.isLaneBlocked(route.fromPlanet, route.toPlanet) ?? false); // BUG-L: add optional chaining
@@ -347,10 +351,15 @@ export class Galaxy {
         system.group.visible = true;
         system._updateOrbit(time);
         if (this._frameCount % 10 === _sysIdx % 10) {
-          system.updateLOD(distance, time, dt, camera);
+          system.updateLOD(distance, time, dt, camera, this._frameCount);
+        }
+      } else if (distance > 250) {
+        system._updateOrbit(time);
+        if (this._frameCount % 3 === _sysIdx % 3) {
+          system.updateLOD(distance, time, dt, camera, this._frameCount);
         }
       } else {
-        system.updateLOD(distance, time, dt, camera);
+        system.updateLOD(distance, time, dt, camera, this._frameCount);
       }
       _sysIdx++;
     }

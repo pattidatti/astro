@@ -385,8 +385,7 @@ export class RoamingFleetSystem {
           if (!pFleet.position) continue; // fleet position not yet initialized
           const dx = pFleet.position.x - ePos.x;
           const dz = pFleet.position.z - ePos.z;
-          const dist = Math.sqrt(dx * dx + dz * dz);
-          if (dist < SNITCH_DETECT_RADIUS) {
+          if (dx * dx + dz * dz < SNITCH_DETECT_RADIUS * SNITCH_DETECT_RADIUS) {
             // Activate snitching: find nearest non-cleared, non-dormant station
             const target = this._findNearestStation(ePos);
             if (target) {

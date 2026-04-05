@@ -94,7 +94,7 @@ export class EnemyStationSystem {
         if (!pFleet.ships.some(s => s.hp > 0)) continue;
         const dx = pFleet.position.x - stPos.x;
         const dz = pFleet.position.z - stPos.z;
-        if (Math.sqrt(dx * dx + dz * dz) < AWAKEN_FLEET_RADIUS) {
+        if (dx * dx + dz * dz < AWAKEN_FLEET_RADIUS * AWAKEN_FLEET_RADIUS) {
           this._awakenStation(st);
           break;
         }
@@ -108,16 +108,16 @@ export class EnemyStationSystem {
     for (const st of dormantStations) {
       const stPos = this._getStationWorldPos(st);
       if (!stPos) continue;
-      let minDist = Infinity;
+      let minDistSq = Infinity;
       for (const pid of gameState.ownedPlanets) {
         const pPos = this._galaxy.getPlanetWorldPosition(pid);
         if (!pPos) continue;
         const dx = stPos.x - pPos.x;
         const dz = stPos.z - pPos.z;
-        const d = Math.sqrt(dx * dx + dz * dz);
-        if (d < minDist) minDist = d;
+        const dSq = dx * dx + dz * dz;
+        if (dSq < minDistSq) minDistSq = dSq;
       }
-      candidates.push({ st, minDist });
+      candidates.push({ st, minDist: minDistSq });
     }
 
     candidates.sort((a, b) => a.minDist - b.minDist);
