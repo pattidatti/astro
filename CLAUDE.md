@@ -187,7 +187,7 @@ Shared GLSL utilities in `src/game/utils/ShaderLib.js` (noise, FBM, Fresnel).
 - **PlayerFleet3D.js** — 3D visual representation of a player fleet (ship group with formation)
 - **PlayerFleetManager3D.js** — Pool manager for PlayerFleet3D; handles RTS selection targets and fleet world-position lookups
 - **RouteLane3D.js** — Visual lane rendered between planets with an active trade route
-- **EnemyStationManager3D.js** — Manages 7 enemy station visuals: 4 planet-anchored (Drakon, Glacius, Crystara, Voidex) + 3 free-floating outposts. Handles station lifecycle, phase updates, and destruction.
+- **EnemyStationManager3D.js** — Manages 7 enemy station visuals: 4 planet-anchored (Nebulox, Glacius, Solaris, Voidex) + 3 free-floating outposts. Handles station lifecycle, phase updates, and destruction.
 - **WreckageField3D.js** — Debris field spawned at destroyed enemy stations. 3–5 hull fragments, 600-second lifetime. Supports Scavenger ship tractor beam visualization.
 - **SnitchPath3D.js** — Visual red line from snitch scout → enemy station when snitch mechanic triggers.
 
@@ -391,7 +391,7 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 - **Fleet combat**: Player fleets engage roaming fleets within 30 units. Disengage beyond 50 units. Supply runs out → reduced DPS. Carrier heals fleet. Titan ultimate (120s cooldown, 50 ore) AoE instakills light enemies.
 - **Combat & Defense**: Station HP (`BASE_STATION_HP`). Waves of interceptor/bomber/raider/mothership. 3 abilities: EMP, shieldBoost, orbitalStrike. Planet falls → `combat.fallen = true`, fraction of robots lost. Builders repair HP.
 - **Tech tree**: 6 branches (robots/defense/base/colonization/military/special). Costs energy, requires prerequisites. `FREE_TECH_IDS` unlocked on new game. Access via T. Capstone techs: `pure_crystal_lasers` (+15% DPS, +20% ammo) and `quantum_fuel` (×1.5 energy capacity), both 50k energy. `getColonySpeedMult()` → 1.0–2.0×. `getMaxColonyShipsInFlight()` → 1–5.
-- **Enemy stations**: 7 stations scattered in galaxy — 4 planet-anchored (Drakon, Glacius, Crystara, Voidex) + 3 free-floating outposts (Alpha r550, Beta r950, Gamma r1250). Each has a 4-phase state machine: Dormant (passive) → Alert (sends scouts) → Skirmish (raids) → War (invasions). Player fleets besiege within 20 units. Stations fire back (DPS: alert 3, skirmish 8, war 15/s). Destroyed stations leave scavengeable `WreckageField3D`.
+- **Enemy stations**: 7 stations scattered in galaxy — 4 planet-anchored (Nebulox, Glacius, Solaris, Voidex) + 3 free-floating outposts (Alpha r550, Beta r950, Gamma r1250). Each has a 4-phase state machine: Dormant (passive) → Alert (sends scouts) → Skirmish (raids) → War (invasions). Player fleets besiege within 20 units. Stations fire back (DPS: alert 3, skirmish 8, war 15/s). Destroyed stations leave scavengeable `WreckageField3D`.
 - **Snitch mechanic**: Snitch-type roaming fleets patrol hyperlanes. When a snitch detects a player fleet, it reports to the nearest enemy station (SnitchPath3D visual red line), escalating its phase.
 - **Emergency Jump**: Fleet ability in PlayerFleetPanel. 300s cooldown, costs 40% of current energy. Triggers `WarpDistortionShader` post-processing effect. Instantly repositions fleet.
 - **Camera modes**: Orbital (default), free-fly (Shift), RTS top-down (V, "ADMIRAL MODE"). Scroll to zoom, click planet to focus.

@@ -5,9 +5,9 @@
 
 export const ENEMY_STATION_DEFS = [
   // Planet-anchored (4)
-  { id: 'station_drakon',   type: 'lava',       anchorPlanet: 'drakon',   maxHP: 800,  shieldMaxHP: 200, orbitRadius: 50 },
+  { id: 'station_nebulox',  type: 'lava',       anchorPlanet: 'nebulox',  maxHP: 800,  shieldMaxHP: 200, orbitRadius: 50 },
   { id: 'station_glacius',  type: 'ice',        anchorPlanet: 'glacius',  maxHP: 600,  shieldMaxHP: 600, orbitRadius: 50 },
-  { id: 'station_crystara', type: 'industrial', anchorPlanet: 'crystara', maxHP: 700,  shieldMaxHP: 400, orbitRadius: 50 },
+  { id: 'station_solaris',  type: 'industrial', anchorPlanet: 'solaris',  maxHP: 700,  shieldMaxHP: 400, orbitRadius: 50 },
   { id: 'station_voidex',   type: 'void',       anchorPlanet: 'voidex',   maxHP: 1200, shieldMaxHP: 300, orbitRadius: 50 },
   // Free-floating (3)
   { id: 'outpost_alpha',    type: 'generic',    anchorPlanet: null,       maxHP: 800,  shieldMaxHP: 300, orbitRadius: null },

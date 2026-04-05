@@ -472,7 +472,7 @@ export class RoamingFleetSystem {
   /**
    * Spawn a scout fleet originating from an enemy station, targeting a player planet.
    * Called by EnemyStationSystem._tickScoutSpawning().
-   * @param {string} stationId - The enemy station's state id (e.g. 'station_drakon')
+   * @param {string} stationId - The enemy station's state id (e.g. 'station_nebulox')
    * @param {string} targetPlanetId - A player-owned planet id
    * @param {string|null} fromPlanetOverride - Explicit from-planet for free-floating stations
    * @returns {string|null} - fleet.id on success, null on failure

@@ -238,9 +238,9 @@ When a player fleet orbits a friendly `Station3D` or military base:
 // Persisted (save v6 — kodebasen var på v5, dette bumper til v6)
 enemyStations: [
   {
-    id: 'station_drakon',
+    id: 'station_nebulox',
     type: 'lava' | 'ice' | 'industrial' | 'void' | 'generic',
-    anchorPlanet: 'drakon' | null,   // null for free-floating
+    anchorPlanet: 'nebulox' | null,   // null for free-floating
     hp: number,
     maxHP: number,
     shieldHP: number,
