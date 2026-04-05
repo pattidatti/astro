@@ -351,6 +351,9 @@ export class HUDBridge {
     gameState.on('enemyStationDestroyed', () => this._updateThreatBar());
     gameState.on('stationAwakened', () => this._updateThreatBar());
     gameState.on('stationAlerted', () => this._updateThreatBar());
+
+    // Initial render (EnemyStationSystem is initialized before HUDBridge)
+    this._updateThreatBar();
   }
 
   _updateThreatBar() {
@@ -366,8 +369,10 @@ export class HUDBridge {
     let activeCount = 0;
     for (const st of stations) {
       if (st.cleared) continue;
-      if (counts[st.phase] !== undefined) counts[st.phase]++;
-      activeCount++;
+      if (counts[st.phase] !== undefined) {
+        counts[st.phase]++;
+        activeCount++;
+      }
     }
 
     if (activeCount === 0) {

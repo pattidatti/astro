@@ -14,7 +14,7 @@ import {
 } from './data/militaryStats.js';
 import { buildDefaultEnemyStations } from './data/enemyStations.js';
 
-const SAVE_VERSION = 6;
+const SAVE_VERSION = 8;
 
 /**
  * Compute max energy and ore supply capacity for a fleet based on ship count and tech.
