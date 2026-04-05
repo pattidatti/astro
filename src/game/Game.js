@@ -406,6 +406,7 @@ export function createGame() {
         const st = gameState.enemyStations?.find(s => s.id === target.stationId);
         if (!st) return;
         AudioManager.play('PLANET_CLICK_3D');
+        if (!st.cleared) AudioManager.playSynth('STATION_HUM');
         enemyStationPanel.show(target.stationId);
         // Center camera on the enemy station
         if (target.planetId) {
@@ -553,6 +554,7 @@ export function createGame() {
     if (pos) {
       combatEffects.explosion(pos, 4.0, 0xff4400);
       if (cameraController.shake) cameraController.shake(0.12, 0.6);
+      AudioManager.playSynth('STATION_CRASH');
     }
   });
 

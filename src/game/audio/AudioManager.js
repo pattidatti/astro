@@ -135,7 +135,7 @@ const AudioManager = {
   /**
    * Play a procedurally synthesized sound effect using the Web Audio API.
    * Bypasses the buffer map — no audio files needed.
-   * @param {'FLEET_EXPLOSION'|'TITAN_ULTIMATE'|'CARRIER_HUM'|'WARP_POP'} name
+   * @param {'FLEET_EXPLOSION'|'TITAN_ULTIMATE'|'CARRIER_HUM'|'WARP_POP'|'STATION_CRASH'|'STATION_HUM'} name
    */
   playSynth(name) {
     if (!this._unlocked || this._muted || !this._ctx) return;
@@ -145,6 +145,8 @@ const AudioManager = {
       case 'TITAN_ULTIMATE':   this._synthTitanUltimate(ctx);  break;
       case 'CARRIER_HUM':      this._synthCarrierHum(ctx);     break;
       case 'WARP_POP':         this._synthWarpPop(ctx);        break;
+      case 'STATION_CRASH':    this._synthStationCrash(ctx);   break;
+      case 'STATION_HUM':      this._synthStationHum(ctx);     break;
     }
   },
 
@@ -203,6 +205,69 @@ const AudioManager = {
       g.connect(out);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.6);
+    });
+  },
+
+  /** Massive metallic crash + shockwave — low burst + noise, 1.2s tail. */
+  _synthStationCrash(ctx) {
+    const out = ctx.createGain();
+    out.connect(this._sfxGain);
+    // Sub-bass shockwave (40/70 Hz)
+    [40, 70].forEach((freq) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.15, ctx.currentTime + 1.0);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.6, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+      osc.connect(g);
+      g.connect(out);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 1.2);
+    });
+    // Metallic noise burst (filtered white noise, 0.4s)
+    const bufSize = ctx.sampleRate * 0.4;
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 800;
+    bp.Q.value = 1.5;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.45, ctx.currentTime);
+    ng.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    src.connect(bp);
+    bp.connect(ng);
+    ng.connect(out);
+    src.start(ctx.currentTime);
+    src.stop(ctx.currentTime + 0.4);
+  },
+
+  /** Deep industrial hum — 55/110 Hz drone, 0.8s fade in/out. */
+  _synthStationHum(ctx) {
+    const out = ctx.createGain();
+    out.connect(this._sfxGain);
+    [55, 110].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = i === 0 ? 'sawtooth' : 'sine';
+      osc.frequency.value = freq;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 200;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(i === 0 ? 0.25 : 0.15, ctx.currentTime + 0.3);
+      g.gain.setValueAtTime(i === 0 ? 0.25 : 0.15, ctx.currentTime + 0.5);
+      g.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.8);
+      osc.connect(lp);
+      lp.connect(g);
+      g.connect(out);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.8);
     });
   },
 
