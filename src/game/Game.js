@@ -717,6 +717,15 @@ export function createGame() {
     enemyStationPanel.show(stationId);
   });
 
+  // Station phase changed → audio cue (fix M4: phase-transition audio)
+  gameState.on('stationPhaseChanged', ({ phase }) => {
+    if (phase === 'war') {
+      AudioManager.play('THREAT_WAR');
+    } else if (phase === 'alert' || phase === 'skirmish') {
+      AudioManager.play('THREAT_ALERT');
+    }
+  });
+
   // Station fire event → projectile VFX
   gameState.on('stationFired', ({ stationId, targetFleetId, targetShipIdx }) => {
     const stPos = galaxy.enemyStationManager?.getStationWorldPosition(stationId);

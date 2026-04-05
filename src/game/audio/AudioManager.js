@@ -18,6 +18,9 @@ const SOUNDS = {
   SHIP_LAUNCHED:    '/audio/fx/air_fx_pitched_up.wav',
   DEPOSIT_UNLOCKED: '/audio/fx/ring_pitched_up.wav',
   COLONIZE_DENIED:  '/audio/fx/glitch_1.wav',
+
+  THREAT_ALERT:     '/audio/tones/threat_alert.wav',        // Alert/Skirmish phase
+  THREAT_WAR:       '/audio/fx/threat_escalation_war.wav',   // War phase escalation
 };
 
 const AudioManager = {
