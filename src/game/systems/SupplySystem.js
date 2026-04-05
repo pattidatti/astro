@@ -45,6 +45,7 @@ export class SupplySystem {
       this._tickAmmoBurn(fleet, clamped);
       this._tickCombatCarrierResupply(fleet, clamped);
       this._tickResupply(fleet, clamped);
+      this._tickFriendlyStationResupply(fleet, clamped);
     }
   }
 
@@ -119,6 +120,45 @@ export class SupplySystem {
     // Green/amber supply beam visual when Carrier is actively filling up
     if (hasCarrier && (oreNotFull || energyNotFull)) {
       gameState.emit('carrierSupplyBeam', { fleetId: fleet.id, type: 'orbit' });
+    }
+  }
+
+  // ─── Friendly station resupply ─────────────────────────────────────────────
+
+  /**
+   * Resupply fleet when orbiting within range of a friendly orbital station
+   * (planet-anchored Station3D, distinct from military base).
+   * Uses the same RESUPPLY_RATE as military-base resupply.
+   */
+  _tickFriendlyStationResupply(fleet, dt) {
+    if (fleet.state !== 'orbiting') return;
+
+    const STATION_RESUPPLY_DIST = 25; // station orbits at ~15u; use generous radius
+    const r2 = STATION_RESUPPLY_DIST * STATION_RESUPPLY_DIST;
+
+    for (const planetId of gameState.ownedPlanets) {
+      const posFn = gameState._stationPosFns?.[planetId];
+      if (!posFn) continue;
+      const p = posFn();
+      if (!p) continue;
+      const dx = fleet.position.x - p.x;
+      const dz = fleet.position.z - p.z;
+      if (dx * dx + dz * dz >= r2) continue;
+
+      // Don't double-resupply if already near own military base
+      if (this._isNearOwnBase(fleet)) return;
+
+      const rate = RESUPPLY_RATE * dt;
+      const oreNotFull    = fleet.supply.ore.amount    < fleet.supply.ore.max;
+      const energyNotFull = fleet.supply.energy.amount < fleet.supply.energy.max;
+
+      if (oreNotFull)    gameState.updateFleetSupply(fleet.id, 'ore',    rate);
+      if (energyNotFull) gameState.updateFleetSupply(fleet.id, 'energy', rate);
+
+      if (oreNotFull || energyNotFull) {
+        gameState.emit('fleetResupplied', { fleetId: fleet.id, planetId });
+      }
+      return;
     }
   }
 

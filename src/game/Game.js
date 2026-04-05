@@ -267,7 +267,7 @@ export function createGame() {
   galaxy.roamingFleetManager = fleetManager;
 
   // --- Enemy station visuals ---
-  const stationManager = new EnemyStationManager3D(sceneManager.scene);
+  const stationManager = new EnemyStationManager3D(sceneManager.scene, combatEffects);
   galaxy.enemyStationManager = stationManager;
 
   // --- Fleet info panel ---
@@ -867,8 +867,30 @@ export function createGame() {
 
   // Waypoint: dispatch to all selected player fleets + place crosshair
   inputManager.onWaypoint((pos) => {
+    // Check if waypoint is near an owned planet — enables scavenger hold delivery
+    const PLANET_WAYPOINT_SNAP = 40; // world units; generous radius around planet
+    let deliverPlanetId = null;
+    for (const pid of gameState.ownedPlanets) {
+      const pPos = galaxy.getPlanetWorldPosition(pid);
+      if (!pPos) continue;
+      const dx = pos.x - pPos.x, dz = pos.z - pPos.z;
+      if (Math.sqrt(dx * dx + dz * dz) < PLANET_WAYPOINT_SNAP) {
+        deliverPlanetId = pid;
+        break;
+      }
+    }
+
     for (const fleetId of _selectedPlayerFleets) {
       gameState.dispatchFleetWaypoint(fleetId, pos);
+
+      // Tag scavenger fleets with deliverHold when targeting an owned planet
+      if (deliverPlanetId) {
+        const fleet = gameState.playerFleets.find(f => f.id === fleetId);
+        if (fleet?.hold && (fleet.hold.ore > 0 || fleet.hold.crystal > 0)) {
+          const hasScavenger = fleet.ships.some(s => s.hp > 0 && s.type === 'scavenger');
+          if (hasScavenger) fleet.deliverHold = { planetId: deliverPlanetId };
+        }
+      }
     }
     // Remove previous crosshair if still visible
     if (_rtsWaypointMesh) {

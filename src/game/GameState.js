@@ -168,6 +168,7 @@ class GameState extends EventEmitter {
     this.stationSieges = [];       // active player fleet sieges on enemy stations
     this.wreckageFields = [];      // runtime-only, not persisted
     this._militaryBasePosFns = {}; // planetId → () => THREE.Vector3 (runtime, not serialized)
+    this._stationPosFns      = {}; // planetId → () => THREE.Vector3 (runtime, not serialized)
     this.tutorialStep = 0;
     this.lastSaved = Date.now();
 
@@ -853,6 +854,14 @@ class GameState extends EventEmitter {
 
   unregisterMilitaryBasePosFn(planetId) {
     delete this._militaryBasePosFns[planetId];
+  }
+
+  registerStationPosFn(planetId, fn) {
+    this._stationPosFns[planetId] = fn;
+  }
+
+  unregisterStationPosFn(planetId) {
+    delete this._stationPosFns[planetId];
   }
 
   /**
@@ -1682,6 +1691,7 @@ class GameState extends EventEmitter {
       }
     }
     this._militaryBasePosFns = {}; // always reset on load
+    this._stationPosFns      = {}; // always reset on load
     this.activeAttacks       = data.activeAttacks ?? [];
     this.roamingFleets       = data.roamingFleets ?? [];
     this.lastAttackTime      = data.lastAttackTime ?? {};

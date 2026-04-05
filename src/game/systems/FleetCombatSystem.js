@@ -63,6 +63,7 @@ export class FleetCombatSystem {
     this._tickEngagements(clampedDt);
     this._tickDisengageCheck();
     this._tickStationCombat(clampedDt);
+    this._tickScavengerBeams(clampedDt);
   }
 
   // ─── Aggro scan ─────────────────────────────────────────────────────────────
@@ -501,6 +502,57 @@ export class FleetCombatSystem {
       }
     }
   }
+
+  // ─── Scavenger tractor beams ────────────────────────────────────────────────
+
+  /**
+   * For every orbiting fleet that contains a live scavenger ship, scan nearby
+   * wreckage fields within tractorRange and transfer resources to fleet.hold.
+   * Emits 'scavengerCollecting' so EnemyStationManager3D can fire the visual
+   * tractor-beam and spawn floating resource sprites.
+   */
+  _tickScavengerBeams(dt) {
+    for (const fleet of gameState.playerFleets) {
+      if (fleet.state !== 'orbiting') continue;
+      const scavShip = fleet.ships.find(s => s.hp > 0 && s.type === 'scavenger');
+      if (!scavShip) continue;
+
+      // Lazy-init hold
+      if (!fleet.hold) fleet.hold = { ore: 0, crystal: 0 };
+      const cap = MILITARY_SHIPS.scavenger.holdCapacity; // { ore: 200, crystal: 100 }
+
+      if (fleet.hold.ore >= cap.ore && fleet.hold.crystal >= cap.crystal) continue;
+
+      const tractorRange = MILITARY_SHIPS.scavenger.tractorRange; // 15
+
+      for (const wf of gameState.wreckageFields) {
+        if (!wf.position) continue;
+        const dx = fleet.position.x - wf.position.x;
+        const dz = fleet.position.z - wf.position.z;
+        if (Math.sqrt(dx * dx + dz * dz) > tractorRange) continue;
+
+        const avail = wf.resources ?? { ore: 0, crystal: 0 };
+        const oreGain   = Math.min(10 * dt, cap.ore     - fleet.hold.ore,     avail.ore);
+        const crystGain = Math.min( 5 * dt, cap.crystal - fleet.hold.crystal, avail.crystal);
+
+        fleet.hold.ore     += oreGain;
+        fleet.hold.crystal += crystGain;
+        avail.ore          = Math.max(0, avail.ore     - oreGain);
+        avail.crystal      = Math.max(0, avail.crystal - crystGain);
+
+        gameState.emit('scavengerCollecting', {
+          fleetId:    fleet.id,
+          wreckageId: wf.id,
+          oreGain,
+          crystGain,
+          fleetPos:   { x: fleet.position.x, y: 0, z: fleet.position.z },
+        });
+        break; // one wreckage field per fleet per frame
+      }
+    }
+  }
+
+  // ─── Reconstruct ────────────────────────────────────────────────────────────
 
   /**
    * Reconstruct active engagements from save data.

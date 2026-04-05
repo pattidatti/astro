@@ -69,9 +69,26 @@ export class FleetMovementSystem {
 
     // Arrived?
     if (dist < ARRIVAL_RADIUS) {
-      fleet.state   = 'orbiting';
+      fleet.state    = 'orbiting';
       fleet.waypoint = null;
       gameState.emit('playerFleetArrived', { fleetId: fleet.id });
+
+      // Scavenger hold delivery
+      if (fleet.deliverHold && fleet.hold) {
+        const { planetId } = fleet.deliverHold;
+        const ps = gameState.getPlanetState(planetId);
+        if (ps) {
+          const oreTransfer   = Math.min(fleet.hold.ore,     ps.silos.ore.capacity     - ps.silos.ore.amount);
+          const crystTransfer = Math.min(fleet.hold.crystal, ps.silos.crystal.capacity - ps.silos.crystal.amount);
+          ps.silos.ore.amount     = Math.min(ps.silos.ore.capacity,     ps.silos.ore.amount     + oreTransfer);
+          ps.silos.crystal.amount = Math.min(ps.silos.crystal.capacity, ps.silos.crystal.amount + crystTransfer);
+          gameState.emit('siloChanged', { planetId });
+          gameState.emit('scavengerDelivered', { fleetId: fleet.id, planetId, hold: { ...fleet.hold } });
+        }
+        fleet.hold        = { ore: 0, crystal: 0 };
+        fleet.deliverHold = null;
+      }
+
       return;
     }
 

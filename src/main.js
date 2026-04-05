@@ -151,6 +151,9 @@ async function boot() {
   const fleetMovementSystem = new FleetMovementSystem(game.animationLoop);
   fleetMovementSystem.setGalaxy(game.galaxy);
 
+  // Wire RoamingFleetSystem into Galaxy so route lanes can show blocked state
+  game.galaxy.setRoamingFleetSystem(roamingFleetSystem);
+
   const supplySystem = new SupplySystem(game.animationLoop);
 
   const fleetCombatSystem = new FleetCombatSystem(

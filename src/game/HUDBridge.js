@@ -291,6 +291,25 @@ export class HUDBridge {
     gameState.on('distressFlare', () => {
       this.toast('🚨 DISTRESS FLARE DETECTED', 'error');
     });
+
+    gameState.on('enemyStationDestroyed', ({ stationId }) => {
+      const st = gameState.enemyStations?.find(s => s.id === stationId);
+      const name = st?.anchorPlanet
+        ? (PLANETS.find(p => p.id === st.anchorPlanet)?.name ?? stationId)
+        : stationId.replace(/_/g, ' ').toUpperCase();
+      this.toast(`✓ STATION CLEARED: ${name}`, 'success');
+    });
+
+    gameState.on('snitchDetected', () => {
+      this.toast('⚠ SCOUT FLEEING', 'warn');
+    });
+
+    gameState.on('scavengerDelivered', ({ fleetId, planetId, hold }) => {
+      const planet = PLANETS.find(p => p.id === planetId);
+      const name = planet?.name ?? planetId;
+      const total = Math.round((hold.ore ?? 0) + (hold.crystal ?? 0));
+      this.toast(`♻ SCAVENGED ${total} RESOURCES → ${name}`, 'info');
+    });
   }
 
   update(_dt) {

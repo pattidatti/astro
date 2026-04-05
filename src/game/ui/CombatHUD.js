@@ -88,6 +88,21 @@ export class CombatHUD {
       const name = planet?.name || planetId;
       this.showAlert(`✖ MILITARY BASE DESTROYED — ${name}`, 'fall');
     });
+
+    // ── Enemy station alerts ──
+    gameState.on('stationPhaseChanged', ({ stationId, phase }) => {
+      if (phase === 'war') {
+        this.showAlert('⚔ WAR ZONE — ENEMY STATION HOSTILE', 'warzone');
+      } else if (phase === 'skirmish') {
+        this.showAlert('⚠ THREAT DETECTED — ENEMY PATROLS ACTIVE', 'station');
+      } else if (phase === 'alert') {
+        this.showAlert('⚠ THREAT DETECTED — ENEMY SCOUTS DEPLOYED', 'station');
+      }
+    });
+
+    gameState.on('enemyStationDestroyed', ({ stationId }) => {
+      this.showAlert('✓ ENEMY STATION CLEARED', 'victory');
+    });
   }
 
   /**
