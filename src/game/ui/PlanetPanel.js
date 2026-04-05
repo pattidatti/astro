@@ -914,7 +914,10 @@ export class PlanetPanel {
       const canAfford = gameState.siloHas(this._planetId, 'energy', energyCost);
 
       const btn = document.createElement('button');
-      btn.className = 'hire-btn' + (robotType === 'miner' ? ' hire-miner-btn' : '') + (robotType === 'energyBot' ? ' hire-energy-btn' : '');
+      btn.className = 'hire-btn'
+        + (robotType === 'miner'     ? ' hire-miner-btn'  : '')
+        + (robotType === 'energyBot' ? ' hire-energy-btn' : '')
+        + (robotType === 'scout'     ? ' hire-scout-btn'  : '');
       btn.disabled = !canAfford;
       btn.innerHTML = `
         <span class="hire-btn-icon">${action.icon}</span>

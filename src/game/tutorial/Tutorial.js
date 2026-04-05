@@ -9,13 +9,22 @@ export class Tutorial {
     this._game = game;
     this._step = gameState.tutorialStep;
     this._handEl = document.getElementById('tutorial-hand');
-    this._bubbleEl = this._handEl?.querySelector('.tutorial-bubble');
+    this._bubbleEl = this._handEl?.querySelector('.tutorial-bubble-text');
+    this._dismissBtn = this._handEl?.querySelector('.tutorial-dismiss-btn');
     this._steps = this._defineSteps();
 
     if (this._handEl) {
       game.animationLoop.onUpdate(() => this._tick());
       gameState.on('stateLoaded', () => { this._step = gameState.tutorialStep; });
+      this._dismissBtn?.addEventListener('click', () => this._skipStep());
     }
+  }
+
+  _skipStep() {
+    this._step++;
+    gameState.tutorialStep = this._step >= this._steps.length ? -1 : this._step;
+    if (this._step >= this._steps.length && this._handEl)
+      this._handEl.style.display = 'none';
   }
 
   _tick() {
@@ -124,6 +133,33 @@ export class Tutorial {
         message: 'EXPAND YOUR BASE STORAGE',
         condition: () => (gameState.getPlanetState('xerion')?.baseLevels.storage ?? 0) >= 1,
         targetEl: () => document.querySelector('.base-upg-btn'),
+      },
+      {
+        message: 'RESEARCH & HIRE A SCOUT BOT',
+        condition: () => (gameState.getPlanetState('xerion')?.robots.scout.count ?? 0) >= 1,
+        targetEl: () => gameState.isTechUnlocked('scout_bot')
+          ? document.querySelector('.hire-scout-btn')
+          : document.getElementById('research-btn'),
+      },
+      {
+        message: 'SCOUT REVEALS NEW DEPOSITS',
+        condition: () => (gameState.getPlanetState('xerion')?.deposits?.ore?.unlocked ?? 1) >= 2,
+        targetEl: () => null,
+      },
+      {
+        message: 'BUILD A DEFENSE CANNON',
+        condition: () => (gameState.getPlanetState('xerion')?.combat.defenses.cannon ?? 0) >= 1,
+        targetEl: () => document.querySelector('#panel-defenses button[data-defense-id="cannon"]'),
+      },
+      {
+        message: 'LAUNCH A COLONY SHIP',
+        condition: () => gameState.colonyShipsInFlight.length >= 1,
+        targetEl: () => document.querySelector('#panel-colony-ship .colony-ship-btn'),
+      },
+      {
+        message: 'ESTABLISH A TRADE ROUTE',
+        condition: () => gameState.routes.length >= 1,
+        targetEl: () => document.querySelector('button[data-tab="routes"]'),
       },
       {
         // Final step — show for 4 seconds, then complete

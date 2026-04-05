@@ -827,10 +827,12 @@
   flex-direction: column-reverse;
 }
 .tutorial-bubble {
+  position: relative;
   background: rgba(10,12,16,0.96);
   border: 1px solid var(--dune-gold-dim);
   border-radius: 5px;
-  padding: 8px 14px;
+  padding: 8px 14px 8px 14px;
+  padding-right: 30px;
   font-family: 'Orbitron', sans-serif;
   font-size: 14px;
   font-weight: 700;
@@ -839,6 +841,25 @@
   text-shadow: 0 0 6px rgba(212,168,67,0.3);
   white-space: nowrap;
   box-shadow: 0 0 16px rgba(212,168,67,0.15);
+}
+.tutorial-dismiss-btn {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  pointer-events: auto;
+  background: none;
+  border: none;
+  color: var(--dune-gold-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.7;
+  transition: opacity 0.15s, color 0.15s;
+}
+.tutorial-dismiss-btn:hover {
+  opacity: 1;
+  color: var(--dune-gold);
 }
 .tutorial-pointer {
   color: var(--dune-gold);
