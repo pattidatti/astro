@@ -87,7 +87,8 @@ export class EnemyStationManager3D {
     // Find the matching wreckage data entry (created by GameState.destroyEnemyStation)
     const wf = gameState.wreckageFields.find(w => w.stationId === stationId);
     if (wf) {
-      wf.resources = { ore: 500, crystal: 200 }; // initial scavengeable amounts
+      if (!wf.resources) wf.resources = { ore: 500, crystal: 200 }; // initial scavengeable amounts
+      wf.position = worldPos; // BUG-A: set position so scavenger can find wreckage
       const wreckage3D = new WreckageField3D(wf, this._scene, worldPos, this._combatEffects);
       this._wreckageFields.set(wf.id, wreckage3D);
       this._spriteTimers.set(wf.id, 0);

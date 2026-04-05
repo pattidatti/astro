@@ -32,3 +32,7 @@ export const TITAN_ULTIMATE_RADIUS               = 15;  // world units AoE radiu
 export const TITAN_ULTIMATE_COST_ORE             = 50;  // ore deducted on use
 export const TITAN_ULTIMATE_LIGHT_HP_THRESHOLD   = 90;  // enemies with maxHP ≤ this are instantly killed
 export const TITAN_ULTIMATE_HEAVY_DAMAGE         = 200; // damage dealt to heavier enemies
+
+// ── Emergency Jump ────────────────────────────────────────────────────────────
+export const EMERGENCY_JUMP_COOLDOWN         = 300;  // seconds between jumps
+export const EMERGENCY_JUMP_ENERGY_COST_PCT  = 0.4;  // fraction of current energy consumed

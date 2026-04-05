@@ -76,6 +76,7 @@ export class WreckageField3D {
       this._scene.add(mesh);
       this._nodes.push(mesh);
     }
+    hullMat.dispose(); // BUG-I: dispose template material to prevent memory leak
   }
 
   // ---------------------------------------------------------------------------

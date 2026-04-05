@@ -50,6 +50,19 @@ export class FleetMovementSystem {
 
   _tick(dt) {
     for (const fleet of gameState.playerFleets) {
+      // Tick down emergency jump cooldown
+      if (fleet.emergencyJumpCooldown > 0) {
+        fleet.emergencyJumpCooldown = Math.max(0, fleet.emergencyJumpCooldown - dt);
+      }
+
+      // Execute a pending jump (set by GameState.dispatchEmergencyJump)
+      if (fleet.pendingEmergencyJump) {
+        const targetId = fleet.pendingEmergencyJump;
+        fleet.pendingEmergencyJump = null;
+        this._execEmergencyJump(fleet, targetId);
+        continue; // skip normal movement this tick
+      }
+
       if (fleet.state !== 'moving' || !fleet.waypoint) continue;
       this._moveFleet(dt, fleet);
     }
@@ -78,15 +91,18 @@ export class FleetMovementSystem {
         const { planetId } = fleet.deliverHold;
         const ps = gameState.getPlanetState(planetId);
         if (ps) {
-          const oreTransfer   = Math.min(fleet.hold.ore,     ps.silos.ore.capacity     - ps.silos.ore.amount);
-          const crystTransfer = Math.min(fleet.hold.crystal, ps.silos.crystal.capacity - ps.silos.crystal.amount);
+          const oreTransfer   = Math.max(0, Math.min(fleet.hold.ore,     ps.silos.ore.capacity     - ps.silos.ore.amount));
+          const crystTransfer = Math.max(0, Math.min(fleet.hold.crystal, ps.silos.crystal.capacity - ps.silos.crystal.amount));
           ps.silos.ore.amount     = Math.min(ps.silos.ore.capacity,     ps.silos.ore.amount     + oreTransfer);
           ps.silos.crystal.amount = Math.min(ps.silos.crystal.capacity, ps.silos.crystal.amount + crystTransfer);
           gameState.emit('siloChanged', { planetId });
           gameState.emit('scavengerDelivered', { fleetId: fleet.id, planetId, hold: { ...fleet.hold } });
+          fleet.hold        = { ore: 0, crystal: 0 };
+          fleet.deliverHold = null;
+        } else {
+          // BUG-C: planet no longer exists — keep hold intact, just clear delivery
+          fleet.deliverHold = null;
         }
-        fleet.hold        = { ore: 0, crystal: 0 };
-        fleet.deliverHold = null;
       }
 
       return;

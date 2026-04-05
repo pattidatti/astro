@@ -394,6 +394,7 @@ export class RoamingFleetSystem {
               fleet.snitchTarget = target.stationId;
               fleet.snitchMode = target.viaHyperlane ? 'hyperlane' : 'freespace';
               gameState.emit('fleetSnitching', { fleetId: fleet.id, stationId: target.stationId });
+              gameState.emit('snitchDetected', { fleetId: fleet.id }); // BUG-B: emit so HUDBridge can show "SCOUT FLEEING"
             }
             break;
           }

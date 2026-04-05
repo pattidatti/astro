@@ -141,6 +141,7 @@ const AudioManager = {
       case 'FLEET_EXPLOSION':  this._synthFleetExplosion(ctx); break;
       case 'TITAN_ULTIMATE':   this._synthTitanUltimate(ctx);  break;
       case 'CARRIER_HUM':      this._synthCarrierHum(ctx);     break;
+      case 'WARP_POP':         this._synthWarpPop(ctx);        break;
     }
   },
 

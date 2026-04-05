@@ -48,10 +48,11 @@ export class FleetCombatSystem {
     this._fireTimers = new Map(); // shipKey → seconds since last VFX fire event
     animationLoop.onUpdate((dt) => this._tick(dt));
 
-    // Listen for Titan Ultimate activation
-    gameState.on('fleetTitanUltimate', ({ fleetId, position }) => {
+    // Listen for Titan Ultimate activation (BUG-M: save reference for cleanup)
+    this._onTitanUltimate = ({ fleetId, position }) => {
       this._applyTitanAoE(fleetId, position);
-    });
+    };
+    gameState.on('fleetTitanUltimate', this._onTitanUltimate);
   }
 
   // ─── Main tick ──────────────────────────────────────────────────────────────
@@ -531,9 +532,10 @@ export class FleetCombatSystem {
         const dz = fleet.position.z - wf.position.z;
         if (Math.sqrt(dx * dx + dz * dz) > tractorRange) continue;
 
-        const avail = wf.resources ?? { ore: 0, crystal: 0 };
-        const oreGain   = Math.min(10 * dt, cap.ore     - fleet.hold.ore,     avail.ore);
-        const crystGain = Math.min( 5 * dt, cap.crystal - fleet.hold.crystal, avail.crystal);
+        if (!wf.resources) wf.resources = { ore: 0, crystal: 0 }; // BUG-G: ensure alias writes back to wf
+        const avail = wf.resources;
+        const oreGain   = Math.max(0, Math.min(10 * dt, cap.ore     - fleet.hold.ore,     avail.ore));
+        const crystGain = Math.max(0, Math.min( 5 * dt, cap.crystal - fleet.hold.crystal, avail.crystal));
 
         fleet.hold.ore     += oreGain;
         fleet.hold.crystal += crystGain;
@@ -581,5 +583,11 @@ export class FleetCombatSystem {
         enemyStationId: siege.enemyStationId,
       });
     }
+  }
+
+  // ─── Cleanup ────────────────────────────────────────────────────────────────
+
+  dispose() {
+    gameState.off('fleetTitanUltimate', this._onTitanUltimate); // BUG-M: cleanup listener
   }
 }

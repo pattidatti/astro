@@ -331,7 +331,7 @@ export class Galaxy {
       const hasShip = gameState.activeShips.some(s => s.routeId === routeId);
       lane.update(dt, fromPos, toPos, route.active, hasShip);
       if (this._roamingFleetSystem) {
-        lane.setBlocked(this._roamingFleetSystem.isLaneBlocked(route.fromPlanet, route.toPlanet));
+        lane.setBlocked(this._roamingFleetSystem?.isLaneBlocked(route.fromPlanet, route.toPlanet) ?? false); // BUG-L: add optional chaining
       }
     }
 

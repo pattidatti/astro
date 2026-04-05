@@ -883,13 +883,11 @@ export function createGame() {
     for (const fleetId of _selectedPlayerFleets) {
       gameState.dispatchFleetWaypoint(fleetId, pos);
 
-      // Tag scavenger fleets with deliverHold when targeting an owned planet
+      // Tag scavenger fleets with deliverHold when targeting an owned planet (BUG-E: remove hold check)
       if (deliverPlanetId) {
         const fleet = gameState.playerFleets.find(f => f.id === fleetId);
-        if (fleet?.hold && (fleet.hold.ore > 0 || fleet.hold.crystal > 0)) {
-          const hasScavenger = fleet.ships.some(s => s.hp > 0 && s.type === 'scavenger');
-          if (hasScavenger) fleet.deliverHold = { planetId: deliverPlanetId };
-        }
+        const hasScavenger = fleet?.ships.some(s => s.hp > 0 && s.type === 'scavenger');
+        if (hasScavenger) fleet.deliverHold = { planetId: deliverPlanetId };
       }
     }
     // Remove previous crosshair if still visible

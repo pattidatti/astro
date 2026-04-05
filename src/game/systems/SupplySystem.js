@@ -133,6 +133,9 @@ export class SupplySystem {
   _tickFriendlyStationResupply(fleet, dt) {
     if (fleet.state !== 'orbiting') return;
 
+    // Don't double-resupply if already near own military base (BUG-K: check early, before loop)
+    if (this._isNearOwnBase(fleet)) return;
+
     const STATION_RESUPPLY_DIST = 25; // station orbits at ~15u; use generous radius
     const r2 = STATION_RESUPPLY_DIST * STATION_RESUPPLY_DIST;
 
@@ -144,9 +147,6 @@ export class SupplySystem {
       const dx = fleet.position.x - p.x;
       const dz = fleet.position.z - p.z;
       if (dx * dx + dz * dz >= r2) continue;
-
-      // Don't double-resupply if already near own military base
-      if (this._isNearOwnBase(fleet)) return;
 
       const rate = RESUPPLY_RATE * dt;
       const oreNotFull    = fleet.supply.ore.amount    < fleet.supply.ore.max;

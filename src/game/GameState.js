@@ -10,6 +10,7 @@ import {
   SUPPLY_ENERGY_PER_SHIP_BASE, SUPPLY_ORE_PER_SHIP_BASE,
   QUANTUM_FUEL_ENERGY_MULT,
   TITAN_ULTIMATE_COOLDOWN, TITAN_ULTIMATE_COST_ORE,
+  EMERGENCY_JUMP_COOLDOWN, EMERGENCY_JUMP_ENERGY_COST_PCT,
 } from './data/militaryStats.js';
 import { buildDefaultEnemyStations } from './data/enemyStations.js';
 
@@ -864,6 +865,10 @@ class GameState extends EventEmitter {
     delete this._stationPosFns[planetId];
   }
 
+  getStationWorldPosition(planetId) {
+    return this._stationPosFns?.[planetId]?.() ?? null; // BUG-H: return station position for lookup
+  }
+
   /**
    * Queue one ship of the given type for production on a planet's military base.
    * Costs are deducted immediately from the base silo (or planet silo for crystal).
@@ -965,6 +970,7 @@ class GameState extends EventEmitter {
       fleet.supply.energy.max = energyMax;
     }
     if (fleet.titanCooldown === undefined) fleet.titanCooldown = 0;
+    if (fleet.emergencyJumpCooldown === undefined) fleet.emergencyJumpCooldown = 0;
 
     this.emit('playerFleetChanged', { fleetId: fleet.id });
   }
@@ -1052,6 +1058,30 @@ class GameState extends EventEmitter {
     fleet.titanCooldown = TITAN_ULTIMATE_COOLDOWN;
     this.emit('fleetTitanUltimate', { fleetId, position: { ...fleet.position } });
     this.emit('fleetSupplyChanged', { fleetId, resource: 'ore', amount: fleet.supply.ore.amount, max: fleet.supply.ore.max });
+    return true;
+  }
+
+  /**
+   * Request an emergency jump for a fleet to a target owned planet.
+   * Requires: emergencyJumpCooldown === 0, fleet has energy supply.
+   * The jump is deferred: FleetMovementSystem executes it next tick.
+   * @param {string} fleetId
+   * @param {string} targetPlanetId
+   * @returns {boolean} true if queued
+   */
+  dispatchEmergencyJump(fleetId, targetPlanetId) {
+    const fleet = this.playerFleets.find(f => f.id === fleetId);
+    if (!fleet) return false;
+    if (fleet.emergencyJumpCooldown > 0) return false;
+    if (!fleet.supply || fleet.supply.energy.amount <= 0) return false;
+    if (!this.ownedPlanets.includes(targetPlanetId)) return false;
+
+    const cost = Math.ceil(fleet.supply.energy.amount * EMERGENCY_JUMP_ENERGY_COST_PCT);
+    fleet.supply.energy.amount = Math.max(0, fleet.supply.energy.amount - cost);
+    fleet.emergencyJumpCooldown = EMERGENCY_JUMP_COOLDOWN;
+    fleet.pendingEmergencyJump = targetPlanetId;
+    this.emit('fleetSupplyChanged', { fleetId, resource: 'energy',
+      amount: fleet.supply.energy.amount, max: fleet.supply.energy.max });
     return true;
   }
 
@@ -1642,6 +1672,7 @@ class GameState extends EventEmitter {
         ...f,
         supply: f.supply ? JSON.parse(JSON.stringify(f.supply)) : null,
         titanCooldown: f.titanCooldown ?? 0,
+        emergencyJumpCooldown: f.emergencyJumpCooldown ?? 0,
         ships: f.ships.map(s => ({
           type: s.type, hp: s.hp, maxHP: s.maxHP, fleetCapCost: s.fleetCapCost,
           // localPos and vel are runtime-only — not saved
@@ -1789,6 +1820,7 @@ class GameState extends EventEmitter {
         };
       }
       if (fleet.titanCooldown === undefined) fleet.titanCooldown = 0;
+      if (fleet.emergencyJumpCooldown === undefined) fleet.emergencyJumpCooldown = 0;
     }
 
     // v5→v6 migration: initialize enemy station data if not present

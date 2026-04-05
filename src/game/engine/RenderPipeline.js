@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { ColorGradeShader } from '../shaders/effects/ColorGradeShader.js';
+import { WarpDistortionShader } from '../shaders/effects/WarpDistortionShader.js';
 
 export class RenderPipeline {
   constructor(container) {
@@ -28,7 +29,12 @@ export class RenderPipeline {
     this.composer = null;
     this.bloomPass = null;
     this.godRayPass = null;
+    this.warpPass = null;
     this.colorGradePass = null;
+
+    this._warpProgress = 0;
+    this._warpActive = false;
+    this._warpDuration = 0.4;  // seconds
   }
 
   setupPostProcessing(scene, camera) {
@@ -50,7 +56,17 @@ export class RenderPipeline {
   }
 
   /** Called by Game.js each frame to advance time-based uniforms. */
-  tick(time) {
+  tick(dt) {
+    if (!this._warpActive || !this.warpPass) return;
+    this._warpProgress += dt / this._warpDuration;
+    if (this._warpProgress >= 1.0) {
+      this._warpProgress = 1.0;
+      this._warpActive = false;
+      this.warpPass.uniforms.uEnabled.value = 0.0;
+      this.warpPass.uniforms.uProgress.value = 0.0;
+    } else {
+      this.warpPass.uniforms.uProgress.value = this._warpProgress;
+    }
   }
 
   /**
@@ -83,6 +99,48 @@ export class RenderPipeline {
 
     this.colorGradePass = new ShaderPass(ColorGradeShader);
     this.composer.addPass(this.colorGradePass);
+  }
+
+  /**
+   * Insert warp distortion pass into the composer chain between god ray and color grade.
+   * Called by Game.js during setup after addGodRayPass().
+   */
+  addWarpPass() {
+    if (this.warpPass) return;
+
+    if (this.bloomPass) this.bloomPass.dispose();
+    if (this.colorGradePass) this.colorGradePass.dispose();
+    // Do NOT dispose godRayPass — it's re-used in place
+
+    const rp = this.composer.passes[0];
+    const size = new THREE.Vector2(window.innerWidth, window.innerHeight);
+    this.composer.passes.length = 0;
+    this.composer.addPass(rp);
+
+    this.bloomPass = new UnrealBloomPass(size, 0.8, 0.6, 0.55);
+    this.composer.addPass(this.bloomPass);
+
+    if (this.godRayPass) this.composer.addPass(this.godRayPass);
+
+    this.warpPass = new ShaderPass(WarpDistortionShader);
+    this.warpPass.uniforms.uEnabled.value = 0.0;
+    this.warpPass.uniforms.uProgress.value = 0.0;
+    this.composer.addPass(this.warpPass);
+
+    this.colorGradePass = new ShaderPass(ColorGradeShader);
+    this.composer.addPass(this.colorGradePass);
+  }
+
+  /**
+   * Kick off a one-shot warp distortion animation.
+   * Safe to call before addWarpPass() — silently ignored if pass not built.
+   */
+  triggerWarpDistortion() {
+    if (!this.warpPass) return;
+    this._warpProgress = 0;
+    this._warpActive = true;
+    this.warpPass.uniforms.uEnabled.value = 1.0;
+    this.warpPass.uniforms.uProgress.value = 0.0;
   }
 
   /**
