@@ -2813,3 +2813,123 @@
   color: #88ddff;
 }
 
+/* ─── Enemy Threat Bar ────────────────────────────────────────────────────── */
+
+#enemy-threat-bar {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  background: rgba(10,12,16,0.75);
+  border: 1px solid rgba(212,168,67,0.25);
+  border-radius: 4px;
+  padding: 5px 14px;
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  cursor: default;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.threat-phase-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.threat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.threat-count {
+  color: var(--dune-sand);
+}
+.threat-label {
+  color: var(--dune-text-dim);
+  font-size: 10px;
+}
+
+#enemy-threat-tooltip {
+  position: fixed;
+  z-index: 200;
+  background: rgba(10,12,16,0.94);
+  border: 1px solid var(--dune-border-bright);
+  backdrop-filter: blur(14px);
+  padding: 12px 16px;
+  min-width: 240px;
+  max-width: 300px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  border-radius: 4px;
+}
+#enemy-threat-tooltip.visible { opacity: 1; }
+.ett-station {
+  margin-bottom: 10px;
+}
+.ett-station:last-child { margin-bottom: 0; }
+.ett-header {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.ett-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  color: var(--dune-gold);
+}
+.ett-phase-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-left: 6px;
+  color: #000;
+  font-weight: bold;
+}
+.ett-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.ett-bar-label {
+  font-size: 10px;
+  color: var(--dune-text-dim);
+  width: 36px;
+  flex-shrink: 0;
+}
+.ett-bar-bg {
+  flex: 1;
+  height: 5px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ett-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.ett-bar-val {
+  font-size: 9px;
+  color: var(--dune-text-dim);
+  min-width: 50px;
+  text-align: right;
+}
+.ett-debuff {
+  font-size: 10px;
+  color: #f87171;
+  margin-top: 4px;
+}
+.ett-cleared {
+  font-size: 10px;
+  color: #4ade80;
+  margin-left: 6px;
+}
+

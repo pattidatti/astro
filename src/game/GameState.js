@@ -14,7 +14,7 @@ import {
 } from './data/militaryStats.js';
 import { buildDefaultEnemyStations } from './data/enemyStations.js';
 
-const SAVE_VERSION = 6;
+const SAVE_VERSION = 8;
 
 /**
  * Compute max energy and ore supply capacity for a fleet based on ship count and tech.
@@ -661,6 +661,15 @@ class GameState extends EventEmitter {
     if (!toDef) return;
     const ps = makePlanetState(toDef);
     ps.hasBase = false;
+
+    // Expand the silo capacity to match the base cost so cargo ships can fill it.
+    // This prevents a softlock where baseCost > default silo capacity (500).
+    const costMult = this.getTechColonyCostMult();
+    const neededOre    = Math.floor((toDef.baseCost.ore    || 0) * costMult);
+    const neededEnergy = Math.floor((toDef.baseCost.energy || 0) * costMult);
+    if (neededOre    > ps.silos.ore.capacity)    ps.silos.ore.capacity    = neededOre;
+    if (neededEnergy > ps.silos.energy.capacity) ps.silos.energy.capacity = neededEnergy;
+
     this.planetState[toPlanetId] = ps;
     this.ownedPlanets.push(toPlanetId);
     // Apply all currently-unlocked silo and HP tech bonuses to new planet

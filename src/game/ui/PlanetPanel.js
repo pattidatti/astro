@@ -288,9 +288,17 @@ export class PlanetPanel {
         return;
       }
 
-      const { ore: oreCost = 0, energy: energyCost = 0 } = def.baseCost;
-      const canAfford = gameState.siloHas(this._planetId, 'ore', oreCost) &&
-        gameState.siloHas(this._planetId, 'energy', energyCost);
+      // Apply tech multiplier and clamp to silo capacity — matches buildBase() logic exactly
+      const rawOreCost    = def.baseCost.ore    || 0;
+      const rawEnergyCost = def.baseCost.energy || 0;
+      const costMult = gameState.getTechColonyCostMult();
+      const adjOreCost    = Math.floor(rawOreCost    * costMult);
+      const adjEnergyCost = Math.floor(rawEnergyCost * costMult);
+      const cost = gameState._clampCost(this._planetId, { ore: adjOreCost, energy: adjEnergyCost });
+      const oreCost    = cost.ore    || 0;
+      const energyCost = cost.energy || 0;
+      const canAfford = (oreCost    === 0 || gameState.siloHas(this._planetId, 'ore',    oreCost))
+                     && (energyCost === 0 || gameState.siloHas(this._planetId, 'energy', energyCost));
 
       if (isOwned) {
         // Show clickable build base button
@@ -319,6 +327,15 @@ export class PlanetPanel {
           });
         }
         el.appendChild(btn);
+
+        // If a colony ship is in orbit waiting for resources, show a hint
+        const colonyArriving = gameState.colonyShipsArriving?.some(s => s.toPlanetId === this._planetId);
+        if (colonyArriving && !canAfford && (oreCost > 0 || energyCost > 0)) {
+          const hint = document.createElement('div');
+          hint.style.cssText = 'font-size:11px;color:var(--dune-text-dim);margin-top:8px;line-height:1.4;text-align:center';
+          hint.textContent = 'Send a cargo route from another planet to fill the silos, then build.';
+          el.appendChild(hint);
+        }
       } else {
         el.innerHTML = `
           <div class="panel-section-title">SPACE BASE</div>

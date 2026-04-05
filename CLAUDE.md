@@ -70,7 +70,7 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
 
 ### State Management
 
-**GameState** (`src/game/GameState.js`): Singleton with EventEmitter pattern. Save version **6** (v1→v2→v3→v4→v5→v6 migration supported).
+**GameState** (`src/game/GameState.js`): Singleton with EventEmitter pattern. Save version **8** (v1→v2→v3→v4→v5→v6→v7→v8 migration supported).
 
 **Per-planet state** (one record per owned planet):
 ```js
@@ -260,7 +260,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 - **LocalStorage** (`src/storage.js`): Auto-saves every 10s + visibility change + significant events. Key: `astro_save_<slot>`.
 - **Firestore** (`src/db.js`): Cloud sync every 30s at `saves/{uid}/state/current`. Requires auth.
 - **Conflict resolution**: Prefer highest ore; tie-break by timestamp.
-- **Save version**: 6 (migration from v1→v6 supported in `GameState.deserialize()`).
+- **Save version**: 8 (migration from v1→v8 supported in `GameState.deserialize()`). v6→v7 adds `distressFlareFired`; v7→v8 renames station IDs (station_drakon→station_nebulox, station_crystara→station_solaris).
 
 ### Authentication
 
@@ -268,7 +268,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 
 ### HUD Bridge
 
-`src/game/HUDBridge.js`: Updates DOM each frame. Resource displays, planet panel visibility, toast notifications (5s), menu button, research (T) button pulse when `_newTechAvailable`.
+`src/game/HUDBridge.js`: Updates DOM each frame. Resource displays, planet panel visibility, toast notifications (5s), menu button, research (T) button pulse when `_newTechAvailable`. Enemy threat bar (`#enemy-threat-bar`) at top-center shows station counts per phase with hover tooltip (name, phase badge, HP/shield bars, debuff text); updates every 2s and on station events.
 
 ## Key Files
 
@@ -276,8 +276,8 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 |------|---------|
 | `src/main.js` | Entry point — boot sequence (9 systems) |
 | `src/game/Game.js` | Three.js init, galaxy setup, click handling, render loop |
-| `src/game/GameState.js` | Singleton state + EventEmitter (v6 save format) |
-| `src/game/HUDBridge.js` | HTML HUD updates + toast notifications |
+| `src/game/GameState.js` | Singleton state + EventEmitter (v8 save format) |
+| `src/game/HUDBridge.js` | HTML HUD updates, toast notifications, enemy threat bar |
 | `src/game/systems/ProductionSystem.js` | Per-planet resource generation, space elevator, ship build ticks |
 | `src/game/systems/RouteSystem.js` | Cargo ship dispatch + delivery |
 | `src/game/systems/ThreatSystem.js` | Enemy invasion wave scheduling + difficulty scaling |
@@ -373,7 +373,7 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 - **Robot hire cost**: Scales with existing count (`energyCostFn(ps)` in ROBOT_ACTIONS)
 - **Upgrade cost scaling**: `baseCost × 1.15^level` — buy multiplier toggles ×1/×10/×100
 - **8 planets**: Xerion (free home) → Voidex (~8M energy). Each has `resourceTypes` and `planetMult` bonuses.
-- **Colony ships**: Multi-step — (1) build on planet (cost: `5000 ore × 1.5^planetsColonized`, 20s); (2) launch to unowned planet (cost: `50 + dist × 0.3` energy); (3) ship flies + enters orbit; (4) build base manually. Recolonizing fallen planet costs `baseCost × RECOLONIZE_COST_MULT`.
+- **Colony ships**: Multi-step — (1) build on planet (cost: `5000 ore × 1.5^planetsColonized`, 20s); (2) launch to unowned planet (cost: `50 + dist × 0.3` energy); (3) ship flies + enters orbit; (4) build base manually. Recolonizing fallen planet costs `baseCost × RECOLONIZE_COST_MULT`. On arrival the new planet's silo capacity is expanded to `max(500, baseCost × techMult)` so cargo routes from other planets can fill it enough to build. Cargo ships can deliver to planets without a base (destination only needs to be in `ownedPlanets`).
 - **Military base**: Build with 2000 ore + 1500 energy. Add hangars (1000 + 500×n energy each, max 5, 10–15 fleet cap/hangar). Build ships from military silo. Space elevator pumps 2 ore+energy/s from planet silo.
 - **Military ships** (6 types):
 

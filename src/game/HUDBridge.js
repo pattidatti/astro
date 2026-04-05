@@ -6,6 +6,21 @@ import { CombatHUD } from './ui/CombatHUD.js';
 import { TechTreeWindow } from './ui/TechTreeWindow.js';
 import { AudioManager } from './audio/AudioManager.js';
 
+const THREAT_PHASE_COLORS = {
+  dormant:  '#4488ff',
+  alert:    '#ffcc44',
+  skirmish: '#ff8800',
+  war:      '#ff2222',
+};
+
+const THREAT_DEBUFF_TEXT = {
+  lava:       'Beams ignore 20% of player shield',
+  ice:        'Frost beams reduce fleet speed −40%',
+  industrial: 'Balanced kinetic weaponry',
+  void:       'Energy-drain pulses reduce supply regen',
+  generic:    '',
+};
+
 const fmt = (n) => {
   if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
   if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
@@ -43,6 +58,9 @@ export class HUDBridge {
     };
     this._hoveredAnyMesh = null;
     this._tmpVec = new THREE.Vector3();
+    this._threatBarTimer = 0;
+    this._threatBar = document.getElementById('enemy-threat-bar');
+    this._threatTooltip = document.getElementById('enemy-threat-tooltip');
 
     if (onMenu) {
       document.getElementById('menu-btn')?.addEventListener('pointerdown', (e) => {
@@ -62,6 +80,7 @@ export class HUDBridge {
     this._setupColonyShipHover();
     this._setupGenericHover();
     this._setupEvents();
+    this._setupThreatBar();
 
     // Show welcome toast
     this.toast('WELCOME, COMMANDER');
@@ -312,6 +331,128 @@ export class HUDBridge {
     });
   }
 
+  _setupThreatBar() {
+    if (!this._threatBar) return;
+    this._threatBar.addEventListener('mouseenter', () => {
+      const html = this._buildThreatTooltipHTML();
+      if (!html) return;
+      this._threatTooltip.innerHTML = html;
+      const rect = this._threatBar.getBoundingClientRect();
+      this._threatTooltip.style.left = rect.left + 'px';
+      this._threatTooltip.style.top  = (rect.bottom + 8) + 'px';
+      this._threatTooltip.classList.add('visible');
+    });
+    this._threatBar.addEventListener('mouseleave', () => {
+      this._threatTooltip.classList.remove('visible');
+    });
+
+    // Immediate update on station events
+    gameState.on('enemyStationDamaged', () => this._updateThreatBar());
+    gameState.on('enemyStationDestroyed', () => this._updateThreatBar());
+    gameState.on('stationAwakened', () => this._updateThreatBar());
+    gameState.on('stationAlerted', () => this._updateThreatBar());
+
+    // Initial render (EnemyStationSystem is initialized before HUDBridge)
+    this._updateThreatBar();
+  }
+
+  _updateThreatBar() {
+    if (!this._threatBar) return;
+    const stations = gameState.enemyStations;
+    if (!stations || stations.length === 0) {
+      this._threatBar.style.display = 'none';
+      return;
+    }
+
+    // Count active (non-cleared) stations per phase
+    const counts = { dormant: 0, alert: 0, skirmish: 0, war: 0 };
+    let activeCount = 0;
+    for (const st of stations) {
+      if (st.cleared) continue;
+      if (counts[st.phase] !== undefined) {
+        counts[st.phase]++;
+        activeCount++;
+      }
+    }
+
+    if (activeCount === 0) {
+      // All cleared
+      this._threatBar.style.display = '';
+      this._threatBar.innerHTML = '<span style="color:#4ade80;font-size:11px">✓ ALL STATIONS CLEARED</span>';
+      return;
+    }
+
+    this._threatBar.style.display = '';
+    const order = ['dormant', 'alert', 'skirmish', 'war'];
+    let html = '';
+    for (const phase of order) {
+      const n = counts[phase];
+      if (n === 0) continue;
+      const color = THREAT_PHASE_COLORS[phase];
+      html += `<span class="threat-phase-group">` +
+        `<span class="threat-dot" style="background:${color}"></span>` +
+        `<span class="threat-count">${n}</span>` +
+        `<span class="threat-label">${phase.toUpperCase()}</span>` +
+        `</span>`;
+    }
+    this._threatBar.innerHTML = html;
+  }
+
+  _buildThreatTooltipHTML() {
+    const stations = gameState.enemyStations;
+    if (!stations || stations.length === 0) return '';
+
+    let html = '';
+    for (const st of stations) {
+      // For planet-anchored stations, show the planet name; for outposts use the id
+      const anchorPlanet = st.anchorPlanet
+        ? PLANETS.find(p => p.id === st.anchorPlanet)
+        : null;
+      const displayName = anchorPlanet
+        ? anchorPlanet.name.toUpperCase() + ' STATION'
+        : st.id.replace(/_/g, ' ').toUpperCase();
+      const debuff = THREAT_DEBUFF_TEXT[st.type] || '';
+
+      const hpPct = Math.max(0, Math.min(100, (st.hp / st.maxHP) * 100));
+      const hullColor = hpPct > 50 ? '#d4a843' : hpPct > 25 ? '#ff8800' : '#ff2222';
+
+      let shieldRow = '';
+      if (st.shieldMaxHP > 0) {
+        const shPct = Math.max(0, Math.min(100, (st.shieldHP / st.shieldMaxHP) * 100));
+        shieldRow = `<div class="ett-bar-row">
+          <span class="ett-bar-label">SHIELD</span>
+          <div class="ett-bar-bg"><div class="ett-bar-fill" style="width:${shPct}%;background:#44aaff"></div></div>
+          <span class="ett-bar-val">${Math.ceil(st.shieldHP)}/${st.shieldMaxHP}</span>
+        </div>`;
+      }
+
+      if (st.cleared) {
+        html += `<div class="ett-station">
+          <div class="ett-header">
+            <span class="ett-name">${displayName}</span>
+            <span class="ett-cleared">CLEARED</span>
+          </div>
+        </div>`;
+      } else {
+        const phaseColor = THREAT_PHASE_COLORS[st.phase] ?? '#888';
+        html += `<div class="ett-station">
+          <div class="ett-header">
+            <span class="ett-name">${displayName}</span>
+            <span class="ett-phase-badge" style="background:${phaseColor}">${(st.phase || 'DORMANT').toUpperCase()}</span>
+          </div>
+          <div class="ett-bar-row">
+            <span class="ett-bar-label">HULL</span>
+            <div class="ett-bar-bg"><div class="ett-bar-fill" style="width:${hpPct}%;background:${hullColor}"></div></div>
+            <span class="ett-bar-val">${Math.ceil(st.hp)}/${st.maxHP}</span>
+          </div>
+          ${shieldRow}
+          ${debuff ? `<div class="ett-debuff">${debuff}</div>` : ''}
+        </div>`;
+      }
+    }
+    return html;
+  }
+
   update(_dt) {
     // FPS counter
     this._fpsFrames++;
@@ -376,6 +517,13 @@ export class HUDBridge {
 
     // Update combat HUD summary
     this._combatHUD.updateSummary();
+
+    // Throttled threat bar update
+    this._threatBarTimer += _dt;
+    if (this._threatBarTimer >= 2) {
+      this._threatBarTimer = 0;
+      this._updateThreatBar();
+    }
   }
 
   toast(msg, severity = 'info', planetId = null) {
