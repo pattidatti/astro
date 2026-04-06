@@ -126,7 +126,7 @@ export class Tutorial {
       },
       {
         message: 'WATCH YOUR ORE SILO FILL',
-        condition: () => (gameState.getPlanetState('xerion')?.silos.ore.amount ?? 0) >= 50,
+        condition: () => (gameState.getPlanetState('xerion')?.silos.ore.amount ?? 0) >= 20,
         targetEl: () => document.querySelector('#panel-silos .silo-bar-row'),
       },
       {

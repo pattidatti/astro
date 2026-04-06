@@ -18,7 +18,7 @@ export const TECH_NODES = [
     name: 'MINER BOT',
     icon: '⛏',
     desc: 'Mines ore from planetary deposits.',
-    cost: 150, free: false, requires: ['energy_bot'], tier: 1, branch: 'robots',
+    cost: 50, free: false, requires: ['energy_bot'], tier: 1, branch: 'robots',
   },
   {
     id: 'builder_bot',
@@ -28,60 +28,32 @@ export const TECH_NODES = [
     cost: 800, free: false, requires: ['energy_bot'], tier: 1, branch: 'robots',
   },
   {
-    id: 'energy_upgrades',
-    name: 'ENERGY OPT.',
-    icon: '⚡',
-    desc: 'Unlocks speed and cargo upgrades for Energy Bots.',
-    cost: 800, free: false, requires: ['energy_bot'], tier: 1, branch: 'robots',
-  },
-  {
     id: 'scout_bot',
     name: 'SCOUT BOT',
     icon: '📡',
     desc: 'Surveys terrain to unlock new resource deposits.',
-    cost: 1500, free: false, requires: ['miner_bot'], tier: 2, branch: 'robots',
-  },
-  {
-    id: 'miner_upgrades',
-    name: 'MINING SPEC.',
-    icon: '🪨',
-    desc: 'Unlocks speed and cargo upgrades for Miner Bots.',
-    cost: 1000, free: false, requires: ['miner_bot'], tier: 2, branch: 'robots',
-  },
-  {
-    id: 'builder_upgrades',
-    name: 'CONSTRUCTION',
-    icon: '🔩',
-    desc: 'Unlocks speed and toolkit upgrades for Builder Bots.',
-    cost: 1500, free: false, requires: ['builder_bot'], tier: 2, branch: 'robots',
+    cost: 500, free: false, requires: ['miner_bot'], tier: 2, branch: 'robots',
   },
   {
     id: 'energy_efficiency',
     name: 'ENERGY EFFICIENCY',
     icon: '⚡',
     desc: 'Energy Bots produce 20% more energy.',
-    cost: 1500, free: false, requires: ['energy_upgrades'], tier: 2, branch: 'robots',
+    cost: 1500, free: false, requires: ['energy_bot'], tier: 2, branch: 'robots',
   },
   {
     id: 'mining_efficiency',
     name: 'MINING EFFICIENCY',
     icon: '📈',
     desc: 'Miner Bots produce 20% more ore.',
-    cost: 1500, free: false, requires: ['miner_bot'], tier: 2, branch: 'robots',
-  },
-  {
-    id: 'scout_upgrades',
-    name: 'SCOUT ARRAY',
-    icon: '🔭',
-    desc: 'Unlocks speed and sensor upgrades for Scout Bots.',
-    cost: 2000, free: false, requires: ['scout_bot'], tier: 3, branch: 'robots',
+    cost: 600, free: false, requires: ['miner_bot'], tier: 2, branch: 'robots',
   },
   {
     id: 'builder_efficiency',
     name: 'REPAIR PROTOCOLS',
     icon: '🛠',
     desc: 'Builder Bots repair station hull 60% faster.',
-    cost: 3000, free: false, requires: ['builder_upgrades'], tier: 3, branch: 'robots',
+    cost: 3000, free: false, requires: ['builder_bot'], tier: 3, branch: 'robots',
   },
   {
     id: 'crystal_focus',
@@ -109,7 +81,7 @@ export const TECH_NODES = [
     name: 'DEEP SCAN',
     icon: '🔍',
     desc: 'Scouts unlock deposit zones 40% faster.',
-    cost: 2500, free: false, requires: ['scout_upgrades'], tier: 3, branch: 'robots',
+    cost: 2500, free: false, requires: ['scout_bot'], tier: 3, branch: 'robots',
   },
   {
     id: 'neural_sync',
@@ -125,6 +97,35 @@ export const TECH_NODES = [
     desc: 'Ore production increased to +60% total.',
     cost: 8000, free: false, requires: ['mining_efficiency_2'], tier: 4, branch: 'robots',
   },
+
+  // ─── Robot upgrade chains (global — apply to all planets) ────────────────
+  { id: 'energy_speed_1', name: 'ENERGY SPEED I',   icon: '💨', branch: 'robots', tier: 2, desc: 'Energy Bots move 20% faster.',  cost: 250,   requires: ['energy_bot'],     free: false },
+  { id: 'energy_speed_2', name: 'ENERGY SPEED II',  icon: '💨', branch: 'robots', tier: 3, desc: 'Energy Bots move 20% faster.',  cost: 3500,  requires: ['energy_speed_1'], free: false },
+  { id: 'energy_speed_3', name: 'ENERGY SPEED III', icon: '💨', branch: 'robots', tier: 4, desc: 'Energy Bots move 20% faster.',  cost: 45000, requires: ['energy_speed_2'], free: false },
+  { id: 'energy_load_1',  name: 'ENERGY LOAD I',    icon: '📦', branch: 'robots', tier: 2, desc: 'Energy Bots carry 30% more.',   cost: 350,   requires: ['energy_bot'],     free: false },
+  { id: 'energy_load_2',  name: 'ENERGY LOAD II',   icon: '📦', branch: 'robots', tier: 3, desc: 'Energy Bots carry 30% more.',   cost: 4500,  requires: ['energy_load_1'],  free: false },
+  { id: 'energy_load_3',  name: 'ENERGY LOAD III',  icon: '📦', branch: 'robots', tier: 4, desc: 'Energy Bots carry 30% more.',   cost: 65000, requires: ['energy_load_2'],  free: false },
+
+  { id: 'miner_speed_1',  name: 'MINER SPEED I',    icon: '💨', branch: 'robots', tier: 2, desc: 'Miner Bots move 20% faster.',   cost: 200,   requires: ['miner_bot'],      free: false },
+  { id: 'miner_speed_2',  name: 'MINER SPEED II',   icon: '💨', branch: 'robots', tier: 3, desc: 'Miner Bots move 20% faster.',   cost: 3000,  requires: ['miner_speed_1'],  free: false },
+  { id: 'miner_speed_3',  name: 'MINER SPEED III',  icon: '💨', branch: 'robots', tier: 4, desc: 'Miner Bots move 20% faster.',   cost: 40000, requires: ['miner_speed_2'],  free: false },
+  { id: 'miner_load_1',   name: 'MINER LOAD I',     icon: '📦', branch: 'robots', tier: 2, desc: 'Miner Bots carry 30% more.',    cost: 300,   requires: ['miner_bot'],      free: false },
+  { id: 'miner_load_2',   name: 'MINER LOAD II',    icon: '📦', branch: 'robots', tier: 3, desc: 'Miner Bots carry 30% more.',    cost: 4000,  requires: ['miner_load_1'],   free: false },
+  { id: 'miner_load_3',   name: 'MINER LOAD III',   icon: '📦', branch: 'robots', tier: 4, desc: 'Miner Bots carry 30% more.',    cost: 60000, requires: ['miner_load_2'],   free: false },
+
+  { id: 'builder_speed_1', name: 'BUILDER SPEED I',   icon: '💨', branch: 'robots', tier: 2, desc: 'Builder Bots move 20% faster.', cost: 300,   requires: ['builder_bot'],      free: false },
+  { id: 'builder_speed_2', name: 'BUILDER SPEED II',  icon: '💨', branch: 'robots', tier: 3, desc: 'Builder Bots move 20% faster.', cost: 4000,  requires: ['builder_speed_1'],  free: false },
+  { id: 'builder_speed_3', name: 'BUILDER SPEED III', icon: '💨', branch: 'robots', tier: 4, desc: 'Builder Bots move 20% faster.', cost: 55000, requires: ['builder_speed_2'],  free: false },
+  { id: 'builder_load_1',  name: 'BUILDER LOAD I',    icon: '📦', branch: 'robots', tier: 2, desc: 'Builder Bots carry 30% more.',  cost: 400,   requires: ['builder_bot'],      free: false },
+  { id: 'builder_load_2',  name: 'BUILDER LOAD II',   icon: '📦', branch: 'robots', tier: 3, desc: 'Builder Bots carry 30% more.',  cost: 5000,  requires: ['builder_load_1'],   free: false },
+  { id: 'builder_load_3',  name: 'BUILDER LOAD III',  icon: '📦', branch: 'robots', tier: 4, desc: 'Builder Bots carry 30% more.',  cost: 70000, requires: ['builder_load_2'],   free: false },
+
+  { id: 'scout_speed_1',  name: 'SCOUT SPEED I',    icon: '💨', branch: 'robots', tier: 3, desc: 'Scout Bots move 20% faster.',   cost: 350,   requires: ['scout_bot'],      free: false },
+  { id: 'scout_speed_2',  name: 'SCOUT SPEED II',   icon: '💨', branch: 'robots', tier: 4, desc: 'Scout Bots move 20% faster.',   cost: 4500,  requires: ['scout_speed_1'],  free: false },
+  { id: 'scout_speed_3',  name: 'SCOUT SPEED III',  icon: '💨', branch: 'robots', tier: 5, desc: 'Scout Bots move 20% faster.',   cost: 60000, requires: ['scout_speed_2'],  free: false },
+  { id: 'scout_load_1',   name: 'SCOUT LOAD I',     icon: '📦', branch: 'robots', tier: 3, desc: 'Scout Bots carry 30% more.',    cost: 450,   requires: ['scout_bot'],      free: false },
+  { id: 'scout_load_2',   name: 'SCOUT LOAD II',    icon: '📦', branch: 'robots', tier: 4, desc: 'Scout Bots carry 30% more.',    cost: 5500,  requires: ['scout_load_1'],   free: false },
+  { id: 'scout_load_3',   name: 'SCOUT LOAD III',   icon: '📦', branch: 'robots', tier: 5, desc: 'Scout Bots carry 30% more.',    cost: 80000, requires: ['scout_load_2'],   free: false },
 
   // ─── DEFENSE branch ───────────────────────────────────────────────────────
   {

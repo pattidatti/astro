@@ -5,6 +5,8 @@ import { PlanetPanel } from './ui/PlanetPanel.js';
 import { CombatHUD } from './ui/CombatHUD.js';
 import { TechTreeWindow } from './ui/TechTreeWindow.js';
 import { AudioManager } from './audio/AudioManager.js';
+import { TECH_NODES } from './data/techTree.js';
+import { BASE_UPGRADES, getSpeedMult, getLoadMult, countTechLevels } from './data/upgrades.js';
 
 const THREAT_PHASE_COLORS = {
   dormant:  '#4488ff',
@@ -288,8 +290,19 @@ export class HUDBridge {
       document.getElementById('research-btn')?.classList.add('research-btn--pulse');
       this.toast('NEW RESEARCH AVAILABLE', 'success');
     });
-    gameState.on('techUnlocked', () => {
+    gameState.on('techUnlocked', (nodeId) => {
       AudioManager.play('BASE_UPGRADED');
+      const node = TECH_NODES.find(n => n.id === nodeId);
+      if (node) this.toast(`${node.icon || '⚡'} ${node.name} UNLOCKED`, 'success');
+    });
+
+    // Global production rate display — update at most 4×/s
+    this._gpRateTimer = 0;
+    gameState.on('productionTick', () => {
+      this._gpRateTimer++;
+      if (this._gpRateTimer < 15) return; // ~4 updates/sec at 60fps
+      this._gpRateTimer = 0;
+      this._updateGlobalRates();
     });
 
     // Phase 3: Enemy Station events
@@ -524,6 +537,45 @@ export class HUDBridge {
       this._threatBarTimer = 0;
       this._updateThreatBar();
     }
+  }
+
+  _updateGlobalRates() {
+    const _passiveUpg = BASE_UPGRADES.find(u => u.id === 'base_passive');
+    const _passiveRates = _passiveUpg?.passiveRate || [2, 8, 30];
+
+    let oreRate = 0;
+    let energyRate = 0;
+
+    const minerSpeedLv  = countTechLevels(gameState.unlockedTech, 'miner_speed');
+    const minerLoadLv   = countTechLevels(gameState.unlockedTech, 'miner_load');
+    const energySpeedLv = countTechLevels(gameState.unlockedTech, 'energy_speed');
+    const energyLoadLv  = countTechLevels(gameState.unlockedTech, 'energy_load');
+
+    for (const planetId of gameState.ownedPlanets) {
+      const ps = gameState.getPlanetState(planetId);
+      if (!ps || !ps.hasBase) continue;
+      const def = PLANETS.find(p => p.id === planetId);
+      if (!def) continue;
+      const { count: miners } = ps.robots.miner;
+      if (miners > 0) {
+        const oreZones = ps.deposits.ore.unlocked;
+        oreRate += miners * 0.5 * getSpeedMult(minerSpeedLv) * getLoadMult(minerLoadLv)
+          * def.planetMult.ore * Math.max(1, oreZones);
+      }
+      const { count: ebots } = ps.robots.energyBot;
+      if (ebots > 0) {
+        const energyZones = ps.deposits.energy.unlocked;
+        energyRate += ebots * 0.4 * getSpeedMult(energySpeedLv) * getLoadMult(energyLoadLv)
+          * def.planetMult.energy * Math.max(1, energyZones);
+      }
+      const passiveLv = ps.baseLevels.passiveEnergy;
+      if (passiveLv > 0) energyRate += _passiveRates[passiveLv - 1] || 0;
+    }
+
+    const oreEl    = document.getElementById('gp-ore-rate');
+    const energyEl = document.getElementById('gp-energy-rate');
+    if (oreEl)    oreEl.textContent    = `+${oreRate.toFixed(1)}/s`;
+    if (energyEl) energyEl.textContent = `+${energyRate.toFixed(1)}/s`;
   }
 
   toast(msg, severity = 'info', planetId = null) {

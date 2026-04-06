@@ -14,7 +14,7 @@ import {
 } from './data/militaryStats.js';
 import { buildDefaultEnemyStations } from './data/enemyStations.js';
 
-const SAVE_VERSION = 8;
+const SAVE_VERSION = 9;
 
 /**
  * Compute max energy and ore supply capacity for a fleet based on ship count and tech.
@@ -1792,8 +1792,7 @@ class GameState extends EventEmitter {
       for (const pid of this.ownedPlanets) {
         const ps = this.planetState[pid];
         if (!ps) continue;
-        if ((ps.robots.energyBot.speedLevel || 0) > 0 || (ps.robots.energyBot.loadLevel || 0) > 0)
-          this.unlockedTech.add('energy_upgrades');
+        // (energy_upgrades grouping node removed in v9)
         if ((ps.baseLevels.shipSpeed || 0) > 0)    this.unlockedTech.add('base_shipspeed');
         if ((ps.baseLevels.shipSlots || 0) > 0)    { this.unlockedTech.add('base_shipspeed'); this.unlockedTech.add('base_shipslots'); }
         if ((ps.baseLevels.passiveEnergy || 0) > 0) this.unlockedTech.add('base_passive');
@@ -1853,6 +1852,19 @@ class GameState extends EventEmitter {
       if (STATION_RENAMES[st.id]) {
         st.id = STATION_RENAMES[st.id];
         st.anchorPlanet = ANCHOR_RENAMES[st.anchorPlanet] ?? st.anchorPlanet;
+      }
+    }
+
+    // v8→v9 migration: robot speedLevel/loadLevel now driven by global tech nodes
+    if (!data.saveVersion || data.saveVersion < 9) {
+      for (const pid of Object.keys(this.planetState)) {
+        const robots = this.planetState[pid]?.robots || {};
+        for (const type of ['miner', 'energyBot', 'builder', 'scout']) {
+          if (robots[type]) {
+            robots[type].speedLevel = 0;
+            robots[type].loadLevel  = 0;
+          }
+        }
       }
     }
 

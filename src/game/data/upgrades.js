@@ -93,3 +93,15 @@ export const ROBOT_UPGRADES = [
 /** Speed/load level → multiplier mapping */
 export function getSpeedMult(level) { return 1 + level * 0.2; }  // +20% per level
 export function getLoadMult(level)  { return 1 + level * 0.3; }  // +30% per level
+
+/**
+ * Count how many levels of a chained global tech upgrade are unlocked.
+ * Expects nodes named `${prefix}_1`, `${prefix}_2`, `${prefix}_3`.
+ */
+export function countTechLevels(unlockedTech, prefix) {
+  let level = 0;
+  if (unlockedTech.has(`${prefix}_1`)) level++;
+  if (unlockedTech.has(`${prefix}_2`)) level++;
+  if (unlockedTech.has(`${prefix}_3`)) level++;
+  return level;
+}

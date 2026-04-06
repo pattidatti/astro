@@ -31,6 +31,12 @@
       <button id="research-btn" title="Research Tree [T]">RESEARCH <span class="btn-key">T</span></button>
     </div>
 
+    <!-- Global production rate bar -->
+    <div id="global-production">
+      <span class="gp-item"><span class="gp-icon">⬡</span><span id="gp-ore-rate">+0.0/s</span></span>
+      <span class="gp-item"><span class="gp-icon">⚡</span><span id="gp-energy-rate">+0.0/s</span></span>
+    </div>
+
     <!-- Enemy threat summary bar (top-center) -->
     <div id="enemy-threat-bar" style="display:none"></div>
     <div id="enemy-threat-tooltip"></div>
@@ -73,7 +79,6 @@
       <div class="panel-tabs" id="panel-right-tabs">
         <button class="panel-tab active" data-tab="robots">ROBOTS</button>
         <button class="panel-tab" data-tab="defense">DEFENSE</button>
-        <button class="panel-tab" data-tab="upgrades">UPG</button>
       </div>
       <div class="panel-body">
         <div class="panel-tab-content" data-tab="robots">
@@ -82,9 +87,6 @@
         </div>
         <div class="panel-tab-content" data-tab="defense" style="display:none">
           <div class="panel-section" id="panel-defenses"></div>
-        </div>
-        <div class="panel-tab-content" data-tab="upgrades" style="display:none">
-          <div class="panel-section" id="panel-robots-upgrades"></div>
         </div>
       </div>
     </div>

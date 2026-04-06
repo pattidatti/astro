@@ -1,4 +1,5 @@
 import { gameState, getSpeedMult, getLoadMult } from '../GameState.js';
+import { countTechLevels } from '../data/upgrades.js';
 import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES,
          BUILDER_REPAIR_RATE, calcDefenseDPS, calcEnemyDPS } from '../data/defenses.js';
 import { ENEMY_TYPES } from '../data/enemies.js';
@@ -310,7 +311,9 @@ export class CombatSystem {
     // Don't repair during active combat (builders hide)
     if (gameState.isUnderAttack(planetId)) return;
 
-    const { count, speedLevel, loadLevel } = ps.robots.builder;
+    const { count } = ps.robots.builder;
+    const speedLevel = countTechLevels(gameState.unlockedTech, 'builder_speed');
+    const loadLevel  = countTechLevels(gameState.unlockedTech, 'builder_load');
     const builderTechMult = gameState.isTechUnlocked('builder_efficiency') ? 1.6 : 1.0;
     const repairRate = count * BUILDER_REPAIR_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel) * builderTechMult;
     gameState.repairStation(planetId, repairRate * dt);

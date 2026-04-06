@@ -2,7 +2,7 @@ import { gameState, colonyLaunchEnergyCost, colonyTravelDuration, getColonyShipB
 import { PLANETS } from '../data/planets.js';
 
 const PLANET_MAP = new Map(PLANETS.map(p => [p.id, p]));
-import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult } from '../data/upgrades.js';
+import { BASE_UPGRADES, ROBOT_ACTIONS, getSpeedMult, getLoadMult, countTechLevels } from '../data/upgrades.js';
 import { createRoute, calcTravelDuration, SHIPPABLE_RESOURCES } from '../data/routes.js';
 import { DefensePanel } from './DefensePanel.js';
 import * as THREE from 'three';
@@ -482,16 +482,20 @@ export class PlanetPanel {
     if (!def) return 0;
 
     if (resource === 'ore') {
-      const { count, speedLevel, loadLevel } = ps.robots.miner;
+      const { count } = ps.robots.miner;
       if (count === 0) return 0;
+      const speedLevel = countTechLevels(gameState.unlockedTech, 'miner_speed');
+      const loadLevel  = countTechLevels(gameState.unlockedTech, 'miner_load');
       const oreZones = ps.deposits.ore.unlocked;
       return count * BASE_ORE_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
         * def.planetMult.ore * Math.max(1, oreZones);
     }
     if (resource === 'energy') {
       let rate = 0;
-      const { count, speedLevel, loadLevel } = ps.robots.energyBot;
+      const { count } = ps.robots.energyBot;
       if (count > 0) {
+        const speedLevel = countTechLevels(gameState.unlockedTech, 'energy_speed');
+        const loadLevel  = countTechLevels(gameState.unlockedTech, 'energy_load');
         const energyZones = ps.deposits.energy.unlocked;
         rate += count * BASE_ENERGY_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
           * def.planetMult.energy * Math.max(1, energyZones);
@@ -503,8 +507,10 @@ export class PlanetPanel {
     if (resource === 'crystal') {
       const crystalZones = ps.deposits.crystal.unlocked;
       if (crystalZones === 0) return 0;
-      const { count, speedLevel, loadLevel } = ps.robots.miner;
+      const { count } = ps.robots.miner;
       if (count === 0) return 0;
+      const speedLevel = countTechLevels(gameState.unlockedTech, 'miner_speed');
+      const loadLevel  = countTechLevels(gameState.unlockedTech, 'miner_load');
       return count * BASE_CRYSTAL_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
         * def.planetMult.crystal * crystalZones;
     }
@@ -983,10 +989,13 @@ export class PlanetPanel {
 
     el.innerHTML = `<div class="panel-section-title">ACTIVE ROBOTS</div>`;
 
+    const SPEED_PREFIX = { miner: 'miner_speed', energyBot: 'energy_speed', builder: 'builder_speed', scout: 'scout_speed' };
+    const LOAD_PREFIX  = { miner: 'miner_load',  energyBot: 'energy_load',  builder: 'builder_load',  scout: 'scout_load'  };
+
     for (const [type, robot] of Object.entries(ps.robots)) {
       if (robot.count === 0) continue;
-      const spdLv = robot.speedLevel ?? 0;
-      const loadLv = robot.loadLevel ?? 0;
+      const spdLv  = countTechLevels(gameState.unlockedTech, SPEED_PREFIX[type] || '');
+      const loadLv = countTechLevels(gameState.unlockedTech, LOAD_PREFIX[type]  || '');
       const statsHtml = (spdLv > 0 || loadLv > 0)
         ? `<span class="robot-row-stats">${spdLv > 0 ? `💨${spdLv}` : ''}${loadLv > 0 ? ` 📦${loadLv}` : ''}</span>`
         : '';
@@ -1002,80 +1011,8 @@ export class PlanetPanel {
     }
   }
 
-  _renderRobotUpgrades(ps) {
-    const el = document.getElementById('panel-robots-upgrades');
-    if (!el) return;
-
-    if (!ps || !ps.hasBase) { el.innerHTML = ''; return; }
-
-    const ROBOT_UPG_TECH_MAP = {
-      miner:     'miner_upgrades',
-      energyBot: 'energy_upgrades',
-      builder:   'builder_upgrades',
-      scout:     'scout_upgrades',
-    };
-
-    // Only show upgrades for robot types that have ≥1 robot AND the upgrade tech is unlocked
-    const relevantUpgrades = ROBOT_UPGRADES.filter(upg =>
-      ps.robots[upg.robotType]?.count > 0 &&
-      gameState.isTechUnlocked(ROBOT_UPG_TECH_MAP[upg.robotType])
-    );
-    if (relevantUpgrades.length === 0) { el.innerHTML = ''; return; }
-
-    el.innerHTML = `<div class="panel-section-title">BOT UPGRADES</div>`;
-
-    for (const upg of relevantUpgrades) {
-      const robot = ps.robots[upg.robotType];
-      const level = robot[upg.effect] ?? 0;
-      const maxed = level >= upg.maxLevel;
-      const cost = maxed ? null : { energy: upg.energyCost[level] };
-      const canAfford = cost && gameState.siloHas(this._planetId, 'energy', cost.energy);
-
-      const isSpeed = upg.effect === 'speedLevel';
-      const effectTag = isSpeed ? '+SPD' : '+LOAD';
-      const getMult = isSpeed ? getSpeedMult : getLoadMult;
-      const pctPerLevel = isSpeed ? 20 : 30;
-
-      const row = document.createElement('div');
-      row.className = 'robot-upg-row';
-      row.innerHTML = `
-        <span class="robot-upg-name">${upg.name}<span class="upg-effect-tag">${effectTag}</span></span>
-        <span class="robot-upg-level">${maxed ? 'MAX' : `${level}/${upg.maxLevel}`}</span>
-      `;
-
-      row.addEventListener('mouseenter', () => {
-        const curMult = getMult(level);
-        const nextMult = !maxed ? getMult(level + 1) : null;
-        this._showTooltip(row, `
-          <div class="utt-name">${upg.name}</div>
-          <div class="utt-level">${maxed ? 'MAXED OUT' : `LV ${level} / ${upg.maxLevel}`}</div>
-          <div class="utt-desc">${isSpeed ? 'Increases movement speed' : 'Increases cargo capacity'} (+${pctPerLevel}% per level)</div>
-          <div class="utt-cost">${level > 0 ? `Current: ×${curMult.toFixed(1)}` : 'No bonus yet'}${!maxed ? `  →  Next: ×${nextMult.toFixed(1)}` : ''}</div>
-        `);
-      });
-      row.addEventListener('mouseleave', () => this._hideTooltip());
-
-      const btn = document.createElement('button');
-      btn.className = 'robot-upg-btn';
-      btn.disabled = maxed || !canAfford;
-      btn.textContent = maxed ? '✓' : (cost ? `⚡${fmt(cost.energy)}` : '');
-
-      if (!maxed && canAfford) {
-        btn.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
-          AudioManager.play('UI_CLICK');
-          const ok = gameState.buyRobotUpgrade(this._planetId, upg.id);
-          if (ok) flashButton(btn, 'robot-upg-btn--success', `-${fmt(cost.energy)} ⚡`);
-        });
-      } else if (!maxed) {
-        btn.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
-          AudioManager.play('UI_CLICK_DENIED');
-        });
-      }
-      row.appendChild(btn);
-      el.appendChild(row);
-    }
+  _renderRobotUpgrades(_ps) {
+    // Robot upgrades are now global tech tree nodes — UPG tab removed.
   }
 
   // ─── Defense panel ────────────────────────────────────────────────────────

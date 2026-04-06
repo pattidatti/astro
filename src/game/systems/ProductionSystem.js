@@ -1,6 +1,6 @@
 import { gameState, getSpeedMult, getLoadMult } from '../GameState.js';
 import { PLANETS } from '../data/planets.js';
-import { BASE_UPGRADES } from '../data/upgrades.js';
+import { BASE_UPGRADES, countTechLevels } from '../data/upgrades.js';
 
 const _storageUpg = BASE_UPGRADES.find(u => u.effect === 'storage') || { capacityBonus: [] };
 function _calcCrystalCapacity(storageLevel) {
@@ -92,7 +92,9 @@ export class ProductionSystem {
 
     // ── Ore production (miners) ───────────────────────────────────────────
     if (ps.robots.miner.count > 0 && gameState.siloHasRoom(planetId, 'ore')) {
-      const { count, speedLevel, loadLevel } = ps.robots.miner;
+      const { count } = ps.robots.miner;
+      const speedLevel = countTechLevels(gameState.unlockedTech, 'miner_speed');
+      const loadLevel  = countTechLevels(gameState.unlockedTech, 'miner_load');
       const techMult = gameState.getTechOreMult();
       const rate = count * BASE_ORE_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
                    * def.planetMult.ore * Math.max(1, oreZones) * techMult;
@@ -105,7 +107,9 @@ export class ProductionSystem {
       let energyRate = 0;
 
       if (ps.robots.energyBot.count > 0 && gameState.siloHasRoom(planetId, 'energy')) {
-        const { count, speedLevel, loadLevel } = ps.robots.energyBot;
+        const { count } = ps.robots.energyBot;
+        const speedLevel = countTechLevels(gameState.unlockedTech, 'energy_speed');
+        const loadLevel  = countTechLevels(gameState.unlockedTech, 'energy_load');
         const techMult = gameState.getTechEnergyMult();
         energyRate += count * BASE_ENERGY_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
                       * def.planetMult.energy * Math.max(1, energyZones) * techMult;
@@ -125,7 +129,9 @@ export class ProductionSystem {
 
     // ── Crystal production (miners on crystal-capable planets) ────────────
     if (crystalZones > 0 && ps.robots.miner.count > 0 && gameState.siloHasRoom(planetId, 'crystal')) {
-      const { count, speedLevel, loadLevel } = ps.robots.miner;
+      const { count } = ps.robots.miner;
+      const speedLevel = countTechLevels(gameState.unlockedTech, 'miner_speed');
+      const loadLevel  = countTechLevels(gameState.unlockedTech, 'miner_load');
       const techMult = gameState.getTechCrystalMult();
       const rate = count * BASE_CRYSTAL_RATE * getSpeedMult(speedLevel) * getLoadMult(loadLevel)
                    * def.planetMult.crystal * crystalZones * techMult;
@@ -142,7 +148,8 @@ export class ProductionSystem {
   }
 
   _tickScouts(dt, planetId, ps, def) {
-    const { count, speedLevel } = ps.robots.scout;
+    const { count } = ps.robots.scout;
+    const speedLevel = countTechLevels(gameState.unlockedTech, 'scout_speed');
     const progressRate = count * getSpeedMult(speedLevel) * gameState.getTechScoutMult();
 
     for (const resource of ['ore', 'crystal', 'energy']) {

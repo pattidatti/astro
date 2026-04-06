@@ -53,6 +53,35 @@
   z-index: 200;
 }
 
+/* ── GLOBAL PRODUCTION RATE BAR ── */
+#global-production {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  gap: 16px;
+  background: rgba(10, 14, 20, 0.72);
+  border: 1px solid rgba(212, 168, 67, 0.25);
+  border-radius: 6px;
+  padding: 5px 14px;
+  pointer-events: none;
+}
+.gp-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--dune-sand, #e8d5b0);
+  white-space: nowrap;
+}
+.gp-icon {
+  color: var(--dune-gold, #d4a843);
+  font-size: 11px;
+}
+
 /* ── TOP NAV BUTTONS (menu + research) ── */
 #top-nav {
   position: fixed;
