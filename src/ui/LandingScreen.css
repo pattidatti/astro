@@ -457,3 +457,30 @@
 .landing-footer-error {
   color: var(--dune-amber);
 }
+
+/* ════════════════════════════════════════════════════════
+   720p / HEIGHT-CONSTRAINED SCREENS  (max-height: 800px)
+   Target: Chromebook 1280×720 and similar
+   ════════════════════════════════════════════════════════ */
+@media (max-height: 800px) {
+
+  /* Compress vertical spacing so expanded sub-panels don't overflow */
+  #landing-content {
+    padding: 28px 50px;
+    gap: 18px;
+    max-height: 96vh;
+    overflow-y: auto;   /* safety net if content still overflows */
+  }
+
+  .landing-logo-hex {
+    font-size: 36px;
+  }
+
+  .landing-title {
+    font-size: 26px;
+  }
+
+  .landing-btn {
+    padding: 9px 16px;
+  }
+}

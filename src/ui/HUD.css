@@ -2933,3 +2933,37 @@
   margin-left: 6px;
 }
 
+/* ════════════════════════════════════════════════════════
+   720p / HEIGHT-CONSTRAINED SCREENS  (max-height: 800px)
+   Target: Chromebook 1280×720 and similar
+   ════════════════════════════════════════════════════════ */
+@media (max-height: 800px) {
+
+  /* Narrower panels → more center canvas visible */
+  :root {
+    --panel-width: 340px;
+  }
+
+  /* Planet panels: raise top anchor so more panel is visible.
+     44% × 720 = 317px top edge → 403px visible (vs 360px default) */
+  .planet-panel {
+    top: 44%;
+  }
+
+  /* Military panels: reduce max-height so top edge clears nav bar.
+     70vh = 504px → top edge at (720–504)/2 = 108px (vs 72px default) */
+  .military-panel {
+    max-height: 70vh;
+  }
+
+  /* Tighter internal panel spacing to fit more content in smaller height */
+  .panel-header,
+  .mil-panel-header {
+    padding: 7px 12px;
+  }
+  .panel-section,
+  .mil-section {
+    padding: 8px 12px;
+  }
+}
+
