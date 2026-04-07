@@ -14,6 +14,7 @@ import { MiningBurst } from '../effects/MiningBurst.js';
 import { DefenseManager3D } from './DefenseManager3D.js';
 import { MilitaryBase3D } from '../objects/MilitaryBase3D.js';
 import { EnemyStation3D } from '../objects/EnemyStation3D.js';
+import { ENEMY_STATION_DEFS } from '../data/enemyStations.js';
 import { gameState } from '../GameState.js';
 
 /**
@@ -356,6 +357,7 @@ export class SolarSystem {
     if (this.enemyStation) return;
     const st = gameState.enemyStations?.find(s => s.anchorPlanet === this.id && !s.cleared);
     if (!st) return;
+    const staticDef = ENEMY_STATION_DEFS.find(d => d.id === st.id);
     const def = {
       id: st.id,
       type: st.type,
@@ -363,6 +365,7 @@ export class SolarSystem {
       maxHP: st.maxHP,
       shieldMaxHP: st.shieldMaxHP,
       orbitRadius: 50,
+      stationClass: staticDef?.stationClass ?? 'orbital',
     };
     this.enemyStation = new EnemyStation3D(def);
     this.orbitGroup.add(this.enemyStation.group);

@@ -5,14 +5,14 @@
 
 export const ENEMY_STATION_DEFS = [
   // Planet-anchored (4)
-  { id: 'station_nebulox',  type: 'lava',       anchorPlanet: 'nebulox',  maxHP: 800,  shieldMaxHP: 200, orbitRadius: 50 },
-  { id: 'station_glacius',  type: 'ice',        anchorPlanet: 'glacius',  maxHP: 600,  shieldMaxHP: 600, orbitRadius: 50 },
-  { id: 'station_solaris',  type: 'industrial', anchorPlanet: 'solaris',  maxHP: 700,  shieldMaxHP: 400, orbitRadius: 50 },
-  { id: 'station_voidex',   type: 'void',       anchorPlanet: 'voidex',   maxHP: 1200, shieldMaxHP: 300, orbitRadius: 50 },
+  { id: 'station_nebulox',  type: 'lava',       stationClass: 'orbital',   anchorPlanet: 'nebulox',  maxHP: 800,  shieldMaxHP: 200, orbitRadius: 50 },
+  { id: 'station_glacius',  type: 'ice',        stationClass: 'orbital',   anchorPlanet: 'glacius',  maxHP: 600,  shieldMaxHP: 600, orbitRadius: 50 },
+  { id: 'station_solaris',  type: 'industrial', stationClass: 'orbital',   anchorPlanet: 'solaris',  maxHP: 700,  shieldMaxHP: 400, orbitRadius: 50 },
+  { id: 'station_voidex',   type: 'void',       stationClass: 'flagship',  anchorPlanet: 'voidex',   maxHP: 1200, shieldMaxHP: 300, orbitRadius: 50 },
   // Free-floating (3)
-  { id: 'outpost_alpha',    type: 'generic',    anchorPlanet: null,       maxHP: 800,  shieldMaxHP: 300, orbitRadius: null },
-  { id: 'outpost_beta',     type: 'generic',    anchorPlanet: null,       maxHP: 800,  shieldMaxHP: 300, orbitRadius: null },
-  { id: 'outpost_gamma',    type: 'generic',    anchorPlanet: null,       maxHP: 800,  shieldMaxHP: 300, orbitRadius: null },
+  { id: 'outpost_alpha',    type: 'generic',    stationClass: 'outpost',   anchorPlanet: null,       maxHP: 800,  shieldMaxHP: 300, orbitRadius: null },
+  { id: 'outpost_beta',     type: 'generic',    stationClass: 'outpost',   anchorPlanet: null,       maxHP: 800,  shieldMaxHP: 300, orbitRadius: null },
+  { id: 'outpost_gamma',    type: 'generic',    stationClass: 'outpost',   anchorPlanet: null,       maxHP: 800,  shieldMaxHP: 300, orbitRadius: null },
 ];
 
 /**
