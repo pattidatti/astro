@@ -127,6 +127,11 @@ export class TechTreeWindow {
     const existing = this._viewport.querySelector('.tech-branch-content');
     if (existing) existing.remove();
 
+    if (branch === 'robots') {
+      this._buildRobotsBranch();
+      return;
+    }
+
     // Group nodes by tier for this branch
     const byTier = {};
     for (const node of TECH_NODES) {
@@ -150,6 +155,34 @@ export class TechTreeWindow {
         row.appendChild(this._createNodeCard(node));
       }
       content.appendChild(row);
+    }
+
+    this._viewport.insertBefore(content, this._svg);
+  }
+
+  _buildRobotsBranch() {
+    const nodes = TECH_NODES.filter(n => n.branch === 'robots');
+
+    // Group nodes by (row, col) into grid cells
+    const cells = {};
+    for (const node of nodes) {
+      const key = `${node.row}-${node.col}`;
+      if (!cells[key]) cells[key] = { row: node.row, col: node.col, nodes: [] };
+      cells[key].nodes.push(node);
+    }
+
+    const content = document.createElement('div');
+    content.className = 'tech-branch-content tech-branch-robots';
+
+    for (const cell of Object.values(cells)) {
+      const cellDiv = document.createElement('div');
+      cellDiv.className = 'tech-robots-cell';
+      cellDiv.style.gridColumn = cell.col + 1;
+      cellDiv.style.gridRow = cell.row;
+      for (const node of cell.nodes) {
+        cellDiv.appendChild(this._createNodeCard(node));
+      }
+      content.appendChild(cellDiv);
     }
 
     this._viewport.insertBefore(content, this._svg);
