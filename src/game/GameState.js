@@ -326,19 +326,11 @@ class GameState extends EventEmitter {
   }
 
   /**
-   * Get the cost of a tech node, clamped to the focused planet's capacity.
+   * Get the cost of a tech node.
    */
   getTechCost(nodeId, planetId = this.focusedPlanet) {
     const node = TECH_BY_ID[nodeId];
     if (!node || node.free) return { energy: 0 };
-    
-    // Only clamp storage tags or critical early infrastructure
-    const isProgression = nodeId.includes('storage') || 
-                          ['colony_ship', 'military_base', 'cargo_ships', 'base_shipspeed', 'base_passive'].includes(nodeId);
-    
-    if (isProgression) {
-      return this._clampCost(planetId, { energy: node.cost });
-    }
     return { energy: node.cost };
   }
 
@@ -555,10 +547,9 @@ class GameState extends EventEmitter {
 
   // ─── Colony ship system ───────────────────────────────────────────────────
 
-  /** Get the current cost to build a colony ship, clamped to planet capacity. */
+  /** Get the current cost to build a colony ship. */
   getColonyShipCost(planetId) {
-    const raw = getColonyShipBuildCost(this.stats.planetsColonized);
-    return this._clampCost(planetId, raw);
+    return getColonyShipBuildCost(this.stats.planetsColonized);
   }
 
   /** Queue a colony ship build on the given planet. Cost scales with planets colonized. */
@@ -698,9 +689,7 @@ class GameState extends EventEmitter {
     const costMult = this.getTechColonyCostMult();
     const oreCost    = Math.floor((def.baseCost.ore    || 0) * costMult);
     const energyCost = Math.floor((def.baseCost.energy || 0) * costMult);
-    
-    // Clamp to current capacity to prevent soft-locks
-    const cost = this._clampCost(planetId, { ore: oreCost, energy: energyCost });
+    const cost = { ore: oreCost, energy: energyCost };
 
     if (cost.ore > 0 && !this.siloHas(planetId, 'ore', cost.ore)) return false;
     if (cost.energy > 0 && !this.siloHas(planetId, 'energy', cost.energy)) return false;
