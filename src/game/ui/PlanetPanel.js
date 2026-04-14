@@ -287,15 +287,12 @@ export class PlanetPanel {
         return;
       }
 
-      // Apply tech multiplier and clamp to silo capacity — matches buildBase() logic exactly
+      // Apply tech multiplier — matches buildBase() logic exactly
       const rawOreCost    = def.baseCost.ore    || 0;
       const rawEnergyCost = def.baseCost.energy || 0;
       const costMult = gameState.getTechColonyCostMult();
-      const adjOreCost    = Math.floor(rawOreCost    * costMult);
-      const adjEnergyCost = Math.floor(rawEnergyCost * costMult);
-      const cost = gameState._clampCost(this._planetId, { ore: adjOreCost, energy: adjEnergyCost });
-      const oreCost    = cost.ore    || 0;
-      const energyCost = cost.energy || 0;
+      const oreCost    = Math.floor(rawOreCost    * costMult);
+      const energyCost = Math.floor(rawEnergyCost * costMult);
       const canAfford = (oreCost    === 0 || gameState.siloHas(this._planetId, 'ore',    oreCost))
                      && (energyCost === 0 || gameState.siloHas(this._planetId, 'energy', energyCost));
 

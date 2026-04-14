@@ -604,9 +604,8 @@ class GameState extends EventEmitter {
 
     const { fromPlanetId } = this.colonyShipsInOrbit[shipIdx];
 
-    // Use clamped launch cost
     const energyCost = Math.floor(50 + distance * 0.3);
-    const cost = this._clampCost(fromPlanetId, { energy: energyCost });
+    const cost = { energy: energyCost };
 
     if (!this.siloHas(fromPlanetId, 'energy', cost.energy)) return false;
     this.deductFromSilo(fromPlanetId, 'energy', cost.energy);
