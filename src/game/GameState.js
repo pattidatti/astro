@@ -1,4 +1,5 @@
 import { PLANETS } from './data/planets.js';
+import { clampPct } from './data/routes.js';
 import { BASE_UPGRADES, ROBOT_ACTIONS, getSpeedMult, getLoadMult } from './data/upgrades.js';
 import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP,
          BUILDER_REPAIR_RATE, RECOLONIZE_COST_MULT, FALL_ROBOT_SURVIVAL } from './data/defenses.js';
@@ -14,7 +15,7 @@ import {
 } from './data/militaryStats.js';
 import { buildDefaultEnemyStations } from './data/enemyStations.js';
 
-const SAVE_VERSION = 9;
+const SAVE_VERSION = 10;
 
 /**
  * Compute max energy and ore supply capacity for a fleet based on ship count and tech.
@@ -30,7 +31,17 @@ function computeFleetSupplyMax(ships, unlockedTech) {
 }
 
 const COLONY_SHIP_BASE_BUILD_COST = 5000;  // ore
-const COLONY_SHIP_COST_SCALE = 1.5;        // exponential multiplier per planet colonized
+/**
+ * Growth per planet already colonised.
+ *
+ * Each new planet roughly doubles what the previous one yields (planetMult goes
+ * 1.0 → 1.4 → 1.8 → 2.0 → 3.0 → 6.0 → 13.0 → 31.0), so a ship cost growing at
+ * 1.5 made every step slower than the last — the eighth ship alone cost 85k ore,
+ * more than half the maximum ore a planet can hold. 1.35 puts the last ship near
+ * 30k, so expansion accelerates rather than stalls. The real gates on a new
+ * planet are its baseCost and the threat that follows, not the ship.
+ */
+const COLONY_SHIP_COST_SCALE = 1.35;
 const COLONY_SHIP_BUILD_TIME = 20;          // seconds
 const COLONY_LAUNCH_BASE_COST = 50;         // base energy cost for launch
 const COLONY_LAUNCH_DIST_MULT = 0.3;        // energy per orbit-radius unit
@@ -115,7 +126,7 @@ class GameState extends EventEmitter {
     this._initFresh();
     // Re-check tech availability when state changes that could unlock new nodes
     this.on('siloChanged', ({ resource }) => {
-      if (resource === 'energy') this._checkNewTechAvailable();
+      if (resource === 'energy' || resource === 'crystal') this._checkNewTechAvailable();
     });
     this.on('focusedPlanet', () => this._checkNewTechAvailable());
     this.on('baseBuilt',     () => this._checkNewTechAvailable());
@@ -330,8 +341,8 @@ class GameState extends EventEmitter {
    */
   getTechCost(nodeId, planetId = this.focusedPlanet) {
     const node = TECH_BY_ID[nodeId];
-    if (!node || node.free) return { energy: 0 };
-    return { energy: node.cost };
+    if (!node || node.free) return { energy: 0, crystal: 0 };
+    return { energy: node.cost, crystal: node.crystalCost || 0 };
   }
 
   /**
@@ -345,7 +356,9 @@ class GameState extends EventEmitter {
     if (node.requires.some(r => !this.isTechUnlocked(r))) return false;
     
     const cost = this.getTechCost(nodeId);
-    return this.siloHas(this.focusedPlanet, 'energy', cost.energy);
+    if (!this.siloHas(this.focusedPlanet, 'energy', cost.energy)) return false;
+    if (cost.crystal > 0 && !this.siloHas(this.focusedPlanet, 'crystal', cost.crystal)) return false;
+    return true;
   }
 
   /**
@@ -356,6 +369,7 @@ class GameState extends EventEmitter {
     if (!this.canUnlockTech(nodeId)) return false;
     const cost = this.getTechCost(nodeId);
     this.deductFromSilo(this.focusedPlanet, 'energy', cost.energy);
+    if (cost.crystal > 0) this.deductFromSilo(this.focusedPlanet, 'crystal', cost.crystal);
     this.unlockedTech.add(nodeId);
     this._applyTechEffects(nodeId);
     this._newTechAvailable = false;
@@ -710,8 +724,9 @@ class GameState extends EventEmitter {
     if (level >= upg.maxLevel) return null;
 
     const cost = {
-      energy: upg.energyCost[level],
-      ore:    upg.oreCost ? upg.oreCost[level] : 0
+      energy:  upg.energyCost[level],
+      ore:     upg.oreCost ? upg.oreCost[level] : 0,
+      crystal: upg.crystalCost ? upg.crystalCost[level] : 0,
     };
     // Only clamp storage upgrades to ensure player can always increase capacity
     if (upg.effect === 'storage') {
@@ -1290,12 +1305,12 @@ class GameState extends EventEmitter {
     return true;
   }
 
-  updateRoute(routeId, { resource, amount, active } = {}) {
+  updateRoute(routeId, { resource, pct, active } = {}) {
     const route = this.routes.find(r => r.id === routeId);
     if (!route) return false;
     const resourceChanged = resource !== undefined && resource !== route.resource;
     if (resource !== undefined) route.resource = resource;
-    if (amount !== undefined) route.amount = amount;
+    if (pct !== undefined) route.pct = clampPct(pct);
     if (active !== undefined) route.active = active;
     if (resourceChanged) {
       this.activeShips = this.activeShips.filter(s => s.routeId !== routeId);
@@ -1335,9 +1350,11 @@ class GameState extends EventEmitter {
 
     if (cost.energy > 0 && !this.siloHas(planetId, 'energy', cost.energy)) return false;
     if (cost.ore > 0 && !this.siloHas(planetId, 'ore', cost.ore)) return false;
+    if (cost.crystal > 0 && !this.siloHas(planetId, 'crystal', cost.crystal)) return false;
 
     if (cost.energy > 0) this.deductFromSilo(planetId, 'energy', cost.energy);
     if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
+    if (cost.crystal > 0) this.deductFromSilo(planetId, 'crystal', cost.crystal);
 
     const ps = this.getPlanetState(planetId);
     const level = ps.combat.defenses[defenseId] || 0;
@@ -1368,8 +1385,9 @@ class GameState extends EventEmitter {
     if (level >= upg.maxLevel) return null;
 
     const cost = {
-      energy: upg.energyCost[level],
-      ore:    upg.oreCost ? upg.oreCost[level] : 0
+      energy:  upg.energyCost[level],
+      ore:     upg.oreCost ? upg.oreCost[level] : 0,
+      crystal: upg.crystalCost ? upg.crystalCost[level] : 0,
     };
     // Only clamp storage upgrades to ensure player can always increase capacity
     if (upg.effect === 'storage') {
@@ -1387,9 +1405,11 @@ class GameState extends EventEmitter {
 
     if (cost.energy > 0 && !this.siloHas(planetId, 'energy', cost.energy)) return false;
     if (cost.ore > 0 && !this.siloHas(planetId, 'ore', cost.ore)) return false;
+    if (cost.crystal > 0 && !this.siloHas(planetId, 'crystal', cost.crystal)) return false;
 
     if (cost.energy > 0) this.deductFromSilo(planetId, 'energy', cost.energy);
     if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
+    if (cost.crystal > 0) this.deductFromSilo(planetId, 'crystal', cost.crystal);
 
     const ps = this.getPlanetState(planetId);
     const level = ps.combat.defenseLevels[upgradeId] || 0;
@@ -1816,6 +1836,18 @@ class GameState extends EventEmitter {
       if (STATION_RENAMES[st.id]) {
         st.id = STATION_RENAMES[st.id];
         st.anchorPlanet = ANCHOR_RENAMES[st.anchorPlanet] ?? st.anchorPlanet;
+      }
+    }
+
+    // v9→v10 migration: routes stored an absolute cargo amount frozen at creation
+    // time, so silo upgrades never reached routes made before them. Convert each
+    // to the equivalent share of the source silo's current capacity.
+    if (!data.saveVersion || data.saveVersion < 10) {
+      for (const route of this.routes) {
+        if (route.pct !== undefined) continue;
+        const capacity = this.planetState[route.fromPlanet]?.silos?.[route.resource]?.capacity ?? 0;
+        route.pct = capacity > 0 ? clampPct(route.amount / capacity * 100) : 50;
+        delete route.amount;
       }
     }
 

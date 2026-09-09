@@ -72,7 +72,7 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
 
 ### State Management
 
-**GameState** (`src/game/GameState.js`): Singleton with EventEmitter pattern. Save version **9** (v1→…→v9 migration supported).
+**GameState** (`src/game/GameState.js`): Singleton with EventEmitter pattern. Save version **10** (v1→…→v10 migration supported).
 
 **Per-planet state** (one record per owned planet):
 ```js
@@ -80,7 +80,7 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
   hasBase: bool,
   baseLevels: { storage, shipSpeed, shipSlots, passiveEnergy },
   silos: { ore: { amount, capacity }, energy: { amount, capacity }, crystal: { amount, capacity } },
-  robots: { miner: { count, speedLevel, loadLevel }, energyBot, builder, scout },
+  robots: { miner: { count }, energyBot, builder, scout },  // speed/load are global tech nodes
   deposits: { ... },            // from planets.js definition
   depositProgress: { ore, crystal, energy },  // scout unlock progress (seconds)
   upgradeLevels: {},
@@ -117,11 +117,11 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
 **Lifetime stats**: `stats.{ totalOreProduced, totalEnergyProduced, totalCrystalProduced, totalShipDeliveries, totalResourcesShipped, totalRobotsHired, planetsColonized, playTimeSeconds }`
 
 **Key exported functions** (from GameState.js):
-- `getColonyShipBuildCost(planetsColonized)` → `{ ore: 5000 × 1.5^colonized }`
+- `getColonyShipBuildCost(planetsColonized)` → `{ ore: 5000 × 1.35^colonized }`
 - `colonyLaunchEnergyCost(distance)` → `50 + distance × 0.3`
 - `computeFleetSupplyMax(ships, unlockedTech)` → `{ energyMax, oreMax }`
 
-**Events**: `siloChanged`, `baseBuilt`, `baseUpgraded`, `robotHired`, `robotUpgraded`, `routeAdded`, `routeRemoved`, `routeToggled`, `shipLaunched`, `shipArrived`, `depositUnlocked`, `productionTick`, `planetColonized`, `focusedPlanet`, `planetChanged`, `stateLoaded`, `colonyShipQueued`, `colonyShipBuilt`, `colonyShipLaunched`, `colonyShipArriving`, `colonyShipArrived`, `attackStarted`, `attackEnded`, `planetFallen`, `techUnlocked`, `fleetSpawned`, `fleetMoved`, `fleetDestroyed`, `fleetArrived`, `cargoIntercepted`, `stationAlerted`, `enemyStationDamaged`, `enemyStationDestroyed`
+**Events**: `siloChanged`, `baseBuilt`, `baseUpgraded`, `robotHired`, `routeAdded`, `routeRemoved`, `routeToggled`, `shipLaunched`, `shipArrived`, `depositUnlocked`, `productionTick`, `planetColonized`, `focusedPlanet`, `planetChanged`, `stateLoaded`, `colonyShipQueued`, `colonyShipBuilt`, `colonyShipLaunched`, `colonyShipArriving`, `colonyShipArrived`, `attackStarted`, `attackEnded`, `planetFallen`, `techUnlocked`, `fleetSpawned`, `fleetMoved`, `fleetDestroyed`, `fleetArrived`, `cargoIntercepted`, `stationAlerted`, `enemyStationDamaged`, `enemyStationDestroyed`
 
 ### Game Systems (`src/game/systems/`)
 
@@ -133,9 +133,9 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
   - Space elevator: pumps 2.0 ore+energy/s from planet silo → military base silo
   - Advances `colonyShipBuildQueue` and military `queue[]` each frame
 
-- **RouteSystem.js** — One cargo ship per route. Dispatches when route active, slots free, hyperlane unblocked. Delivers on arrival. Reconstructs from `gameState.activeShips` on load.
+- **RouteSystem.js** — One cargo ship per route. Dispatches when route active, slots free, hyperlane unblocked. Cargo size is stored on the route as `pct` (share of the source silo) and resolved through `routeCargoAmount()` at each dispatch, so silo upgrades reach routes created before them. Delivers on arrival. Reconstructs from `gameState.activeShips` on load.
 
-- **ThreatSystem.js** — Schedules enemy waves on owned planets, scales difficulty by planet count + planet ID. Roaming fleets convert via `spawnFleetAttack()`. Emits `attackStarted` / `attackEnded`.
+- **ThreatSystem.js** — Schedules enemy waves on owned planets. Difficulty comes from `scaleThreat(ownedCount, planetId, planetState)`, which is dominated by how developed *that* planet is (robot count, storage level, military base) plus the planet's intrinsic `threatValue`, with only a small term for empire size — defences are per-planet, so threat is too. Colonisation grace period is 180s. Roaming fleets convert via `spawnFleetAttack()`. Emits `attackStarted` / `attackEnded`.
 
 - **CombatSystem.js** — Full per-enemy simulation for focused planet, simplified net-DPS for background planets. Defense fire, active abilities (EMP, shieldBoost, orbitalStrike), builder repair. Calls `reconstructAttacks()` on load.
 
@@ -262,7 +262,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 - **LocalStorage** (`src/storage.js`): Auto-saves every 10s + visibility change + significant events. Key: `astro_save_<slot>`.
 - **Firestore** (`src/db.js`): Cloud sync every 30s at `saves/{uid}/state/current`. Requires auth.
 - **Conflict resolution**: Prefer highest ore; tie-break by timestamp.
-- **Save version**: 9 (migration from v1→v9 supported in `GameState.deserialize()`). v6→v7 adds `distressFlareFired`; v7→v8 renames station IDs (station_drakon→station_nebulox, station_crystara→station_solaris); v8→v9 drops per-planet robot speed/load levels (now global tech nodes).
+- **Save version**: 10 (migration from v1→v10 supported in `GameState.deserialize()`). v6→v7 adds `distressFlareFired`; v7→v8 renames station IDs (station_drakon→station_nebulox, station_crystara→station_solaris); v8→v9 drops per-planet robot speed/load levels (now global tech nodes); v9→v10 converts routes from an absolute `amount` to a `pct` share of the source silo.
 
 ### Authentication
 
@@ -282,7 +282,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/game/ui/HelpWindow.js` | Controls reference overlay (`?`); exports `CONTROL_SECTIONS` |
 | `src/ui/FatalError.js` | WebGL detection + fatal-error screen (boot failure, context loss) |
 | `src/game/Game.js` | Three.js init, galaxy setup, click handling, render loop |
-| `src/game/GameState.js` | Singleton state + EventEmitter (v8 save format) |
+| `src/game/GameState.js` | Singleton state + EventEmitter (v10 save format) |
 | `src/game/HUDBridge.js` | HTML HUD updates, toast notifications, enemy threat bar |
 | `src/game/systems/ProductionSystem.js` | Per-planet resource generation, space elevator, ship build ticks |
 | `src/game/systems/RouteSystem.js` | Cargo ship dispatch + delivery |
@@ -314,7 +314,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/game/data/militaryStats.js` | Supply balance: FUEL_BURN_RATE, AMMO_BURN_RATE, RESUPPLY_RATE, TITAN constants |
 | `src/game/data/fleetCombatStats.js` | Fleet combat geometry: ENGAGE_RADIUS (30), DISENGAGE_RADIUS (50), per-ship positioning; station combat: STATION_ENGAGE_RANGE (20), STATION_DPS by phase |
 | `src/game/data/enemies.js` | ENEMY_TYPES (interceptor/bomber/raider/mothership) + RAID/INVASION_TEMPLATES |
-| `src/game/data/routes.js` | Route creation + validation + travel duration calc |
+| `src/game/data/routes.js` | Route creation + validation + travel duration + `routeCargoAmount()` (pct → tonnage) |
 | `src/game/data/galaxyLayout.js` | Planet positions (4000×4000 grid) + 9 hyperlane connections |
 | `src/game/data/techTree.js` | Tech nodes (6 branches: robots/defense/base/colonization/military/special), FREE_TECH_IDS |
 | `src/game/utils/ShaderLib.js` | Shared GLSL (noise, FBM, Fresnel) |
@@ -372,13 +372,14 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 ## Game Mechanics
 
 - **Resources**: Ore, Crystal, Energy — independent silos per planet
+- **Crystal sinks**: crystal is only produced on crystal-bearing worlds (Crystara, Glacius, Nebulox, Voidex) after a scout opens a crystal zone, and it gates the end of several lines rather than any early choice — levels 4–5 of the four primary defence upgrades (`crystalCost` in `defenses.js`), the `crystal_cores` / `pure_crystal_lasers` / `quantum_fuel` / `fortress_protocol` tech nodes (`crystalCost` in `techTree.js`), and the Battleship and Titan hulls.
 - **Production**: Per-planet per-frame (ProductionSystem). Zone count = multiplier. 0 unlocked zones = 0 production.
 - **Deposit unlock**: Scouts accumulate `depositProgress`; threshold → zone unlocks → production starts
 - **Base upgrades** (4): Storage expansion, ship speed, docking slots, passive energy — each 3–5 levels, cost in energy
-- **Robot hire cost**: Scales with existing count (`energyCostFn(ps)` in ROBOT_ACTIONS)
+- **Robot hire cost**: `base × ROBOT_HIRE_COST_SCALE^count` (1.09) per planet. Output is linear in count, so the growth rate alone sets where robots stop paying off; sustained growth is meant to come from zones/tech/planet multipliers.
 - **Upgrade cost scaling**: `baseCost × 1.15^level` — buy multiplier toggles ×1/×10/×100
 - **8 planets**: Xerion (free home) → Voidex (~8M energy). Each has `resourceTypes` and `planetMult` bonuses.
-- **Colony ships**: Multi-step — (1) build on planet (cost: `5000 ore × 1.5^planetsColonized`, 20s); (2) launch to unowned planet (cost: `50 + dist × 0.3` energy); (3) ship flies + enters orbit; (4) build base manually. Recolonizing fallen planet costs `baseCost × RECOLONIZE_COST_MULT`. On arrival the new planet's silo capacity is expanded to `max(500, baseCost × techMult)` so cargo routes from other planets can fill it enough to build. Cargo ships can deliver to planets without a base (destination only needs to be in `ownedPlanets`).
+- **Colony ships**: Multi-step — (1) build on planet (cost: `5000 ore × 1.35^planetsColonized`, 20s); (2) launch to unowned planet (cost: `50 + dist × 0.3` energy); (3) ship flies + enters orbit; (4) build base manually. Recolonizing fallen planet costs `baseCost × RECOLONIZE_COST_MULT`. On arrival the new planet's silo capacity is expanded to `max(500, baseCost × techMult)` so cargo routes from other planets can fill it enough to build. Cargo ships can deliver to planets without a base (destination only needs to be in `ownedPlanets`).
 - **Military base**: Build with 2000 ore + 1500 energy. Add hangars (1000 + 500×n energy each, max 5, 10–15 fleet cap/hangar). Build ships from military silo. Space elevator pumps 2 ore+energy/s from planet silo.
 - **Military ships** (6 types):
 
@@ -387,7 +388,7 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 | Fighter | 150/80/— | 60 | 8 | 15s | 1 |
 | Bomber | 300/200/— | 90 | 15 | 25s | 2 |
 | Carrier | 800/500/— | 200 | 2 | 40s | 4 |
-| Battleship | 1500/800/— | 300 | 12 | 60s | 5 |
+| Battleship | 1500/800/25 | 300 | 12 | 60s | 5 |
 | Titan | 5000/2000/100 | 800 | 20 | 120s | 10 |
 | Scavenger | 400/600/— | 150 | 1 | 30s | 1 |
 
@@ -395,7 +396,7 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 
 - **Fleet combat**: Player fleets engage roaming fleets within 30 units. Disengage beyond 50 units. Supply runs out → reduced DPS. Carrier heals fleet. Titan ultimate (120s cooldown, 50 ore) AoE instakills light enemies.
 - **Combat & Defense**: Station HP (`BASE_STATION_HP`). Waves of interceptor/bomber/raider/mothership. 3 abilities: EMP, shieldBoost, orbitalStrike. Planet falls → `combat.fallen = true`, fraction of robots lost. Builders repair HP.
-- **Tech tree**: 6 branches (robots/defense/base/colonization/military/special). Costs energy, requires prerequisites. `FREE_TECH_IDS` unlocked on new game. Access via T. Capstone techs: `pure_crystal_lasers` (+15% DPS, +20% ammo) and `quantum_fuel` (×1.5 energy capacity), both 50k energy. `getColonySpeedMult()` → 1.0–2.0×. `getMaxColonyShipsInFlight()` → 1–5.
+- **Tech tree**: 6 branches (robots/defense/base/colonization/military/special). Costs energy, plus crystal on the capstones (`node.crystalCost`); requires prerequisites. `FREE_TECH_IDS` unlocked on new game. Access via T. Capstone techs: `pure_crystal_lasers` (+15% DPS, +20% ammo) and `quantum_fuel` (×1.5 energy capacity), both 50k energy. `getColonySpeedMult()` → 1.0–2.0×. `getMaxColonyShipsInFlight()` → 1–5.
 - **Enemy stations**: 7 stations scattered in galaxy — 4 planet-anchored (Nebulox, Glacius, Solaris, Voidex) + 3 free-floating outposts (Alpha r550, Beta r950, Gamma r1250). Each has a 4-phase state machine: Dormant (passive) → Alert (sends scouts) → Skirmish (raids) → War (invasions). Player fleets besiege within 20 units. Stations fire back (DPS: alert 3, skirmish 8, war 15/s). Destroyed stations leave scavengeable `WreckageField3D`.
 - **Snitch mechanic**: Snitch-type roaming fleets patrol hyperlanes. When a snitch detects a player fleet, it reports to the nearest enemy station (SnitchPath3D visual red line), escalating its phase.
 - **Emergency Jump**: Fleet ability in PlayerFleetPanel. 300s cooldown, costs 40% of current energy. Triggers `WarpDistortionShader` post-processing effect. Instantly repositions fleet.

@@ -9,6 +9,13 @@ const fmt = (n) => {
   return Math.floor(n) + '';
 };
 
+/** Render a tech cost as icon-prefixed parts; crystal only shows when charged. */
+function renderCost(cost) {
+  let html = `⚡ ${fmt(cost.energy)}`;
+  if (cost.crystal > 0) html += ` <span class="tech-cost-crystal">◈ ${fmt(cost.crystal)}</span>`;
+  return html;
+}
+
 const BRANCH_ORDER = ['robots', 'defense', 'base', 'colonization', 'military'];
 const BRANCH_LABELS = {
   robots:       'ROBOTS',
@@ -54,7 +61,7 @@ export class TechTreeWindow {
 
     // Update energy display when silo changes
     this._onSiloChanged = ({ resource }) => {
-      if (resource === 'energy' && this._visible) this._updateEnergyDisplay();
+      if ((resource === 'energy' || resource === 'crystal') && this._visible) this._updateEnergyDisplay();
     };
     gameState.on('siloChanged', this._onSiloChanged);
     gameState.on('focusedPlanet', () => {
@@ -200,7 +207,7 @@ export class TechTreeWindow {
       <div class="tech-node-name">${node.name}</div>
       ${node.free
         ? '<div class="tech-node-icon">FREE</div>'
-        : `<div class="tech-node-cost">⚡ ${fmt(gameState.getTechCost(node.id).energy)}</div>`}
+        : `<div class="tech-node-cost">${renderCost(gameState.getTechCost(node.id))}</div>`}
       <div class="tech-node-badge"></div>
     `;
 
@@ -212,7 +219,11 @@ export class TechTreeWindow {
         tipHtml += `<br><span style="color:var(--dune-text-dim);font-size: 12px">Requires: ${reqNames}</span>`;
       }
       if (!node.free) {
-        tipHtml += `<br><span style="color:#4af0ff">⚡ ${fmt(gameState.getTechCost(node.id).energy)} energy</span>`;
+        {
+          const c = gameState.getTechCost(node.id);
+          tipHtml += `<br><span style="color:#4af0ff">⚡ ${fmt(c.energy)} energy</span>`;
+          if (c.crystal > 0) tipHtml += `<br><span style="color:#cc88ff">◈ ${fmt(c.crystal)} crystal</span>`;
+        }
       }
       this._showTooltip(card, tipHtml);
     });
@@ -246,7 +257,9 @@ export class TechTreeWindow {
       const costEl = card.querySelector('.tech-node-cost');
       if (costEl && !node.free) {
         const cost = gameState.getTechCost(node.id);
-        const canAfford = gameState.siloHas(gameState.focusedPlanet, 'energy', cost.energy);
+        costEl.innerHTML = renderCost(cost);
+        const canAfford = gameState.siloHas(gameState.focusedPlanet, 'energy', cost.energy)
+          && (cost.crystal === 0 || gameState.siloHas(gameState.focusedPlanet, 'crystal', cost.crystal));
         costEl.classList.toggle('tech-node-cost--cant', state === 'available' && !canAfford);
         costEl.classList.toggle('tech-node-cost--can',  state === 'available' && canAfford);
       }
@@ -336,8 +349,8 @@ export class TechTreeWindow {
       return;
     }
 
-    // Check afford
-    if (!gameState.siloHas(gameState.focusedPlanet, 'energy', node.cost)) {
+    // Check afford — canUnlockTech owns the rule (energy and, for late nodes, crystal)
+    if (!gameState.canUnlockTech(nodeId)) {
       this._shakeNode(nodeId);
       AudioManager.play('UI_CLICK_DENIED');
       return;
@@ -369,10 +382,21 @@ export class TechTreeWindow {
 
   // ─── Energy display ───────────────────────────────────────────────────────
 
+  /**
+   * Header readout of what the focused planet can spend. Crystal only appears
+   * once the planet actually has a crystal silo, so worlds that will never
+   * produce it don't show a permanent zero.
+   */
   _updateEnergyDisplay() {
+    if (!this._energyEl) return;
     const ps = gameState.getPlanetState(gameState.focusedPlanet);
     const energy = ps?.silos?.energy?.amount ?? 0;
-    if (this._energyEl) this._energyEl.textContent = `⚡ ${fmt(energy)}`;
+    const crystalSilo = ps?.silos?.crystal;
+    let html = `⚡ ${fmt(energy)}`;
+    if (crystalSilo && crystalSilo.capacity > 0) {
+      html += ` <span class="tech-cost-crystal">◈ ${fmt(crystalSilo.amount)}</span>`;
+    }
+    this._energyEl.innerHTML = html;
   }
 
   // ─── Tooltip ──────────────────────────────────────────────────────────────

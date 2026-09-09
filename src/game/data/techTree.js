@@ -1,7 +1,14 @@
 /**
  * Global Tech Tree — node definitions.
  * All progress is shared across planets.
- * Cost is deducted from the focused planet's energy silo.
+ * Cost is deducted from the focused planet's silos.
+ *
+ * `cost` is energy. `crystalCost` is optional and, where present, charges the
+ * focused planet's crystal silo as well. Crystal gates the capstones of the
+ * military and defence lines: it is only produced on crystal-bearing worlds
+ * (Crystara, Glacius, Nebulox, Voidex) and only after a scout has opened a
+ * crystal zone there, so these nodes require the player to have actually
+ * expanded into that half of the galaxy rather than just banked energy.
  */
 
 export const TECH_NODES = [
@@ -248,7 +255,7 @@ export const TECH_NODES = [
     name: 'FORTRESS PROTOCOL',
     icon: '🏰',
     desc: 'Maximum station armor. Station max HP +550 total.',
-    cost: 10000, free: false, requires: ['station_armor_3'], tier: 4, branch: 'defense',
+    cost: 10000, crystalCost: 600, free: false, requires: ['station_armor_3'], tier: 4, branch: 'defense',
   },
 
   // ─── BASE / INFRASTRUCTURE branch ─────────────────────────────────────────
@@ -548,21 +555,21 @@ export const TECH_NODES = [
     name: 'CRYSTAL CORES',
     icon: '💎',
     desc: 'Unlocks Crystal usage for ultimate titan-class warships and global upgrades.',
-    cost: 10000, free: false, requires: ['carrier_vessels'], tier: 3, branch: 'military',
+    cost: 10000, crystalCost: 400, free: false, requires: ['carrier_vessels'], tier: 3, branch: 'military',
   },
   {
     id: 'pure_crystal_lasers',
     name: 'PURE CRYSTAL LASERS',
     icon: '✨',
     desc: 'Permanent +20% Ammo capacity and +15% DPS for all ships across the galaxy.',
-    cost: 50000, free: false, requires: ['crystal_cores'], tier: 4, branch: 'military',
+    cost: 50000, crystalCost: 2500, free: false, requires: ['crystal_cores'], tier: 4, branch: 'military',
   },
   {
     id: 'quantum_fuel',
     name: 'QUANTUM FUEL',
     icon: '🌌',
     desc: 'Permanent +50% Fuel capacity, reducing the need for fleet resupply stops.',
-    cost: 50000, free: false, requires: ['crystal_cores'], tier: 4, branch: 'military',
+    cost: 50000, crystalCost: 2000, free: false, requires: ['crystal_cores'], tier: 4, branch: 'military',
   },
 ];
 

@@ -42,6 +42,20 @@ export const BASE_UPGRADES = [
   },
 ];
 
+/**
+ * Per-robot hire cost growth.
+ *
+ * Output is linear in robot count while cost is exponential, so the growth rate
+ * alone decides where robots stop being worth buying. At the old 1.15 the useful
+ * range ended around 30–40 bots — reaching 60 cost ~67x what 30 did for twice the
+ * output — which left most of the hire UI as dead weight in the late game. 1.09
+ * roughly doubles the usable range while keeping the first few hires unchanged
+ * (the curves only diverge meaningfully past ~10 bots), so the early pacing the
+ * tutorial depends on is untouched. Sustained growth is meant to come from
+ * multipliers — deposit zones, tech, planet bonuses — not from bot count.
+ */
+export const ROBOT_HIRE_COST_SCALE = 1.09;
+
 /** Robot hire actions — cost scales with existing robot count on the planet */
 export const ROBOT_ACTIONS = [
   {
@@ -50,7 +64,7 @@ export const ROBOT_ACTIONS = [
     name: 'MINER BOT',
     icon: '⛏',
     desc: 'Mines ore from planetary deposits',
-    energyCostFn: (ps) => Math.floor(10 * Math.pow(1.15, ps.robots.miner.count)),
+    energyCostFn: (ps) => Math.floor(10 * Math.pow(ROBOT_HIRE_COST_SCALE, ps.robots.miner.count)),
   },
   {
     id: 'hire_energy',
@@ -58,7 +72,7 @@ export const ROBOT_ACTIONS = [
     name: 'ENERGY BOT',
     icon: '🔋',
     desc: 'Harvests energy from the planet',
-    energyCostFn: (ps) => Math.floor(15 * Math.pow(1.15, ps.robots.energyBot.count)),
+    energyCostFn: (ps) => Math.floor(15 * Math.pow(ROBOT_HIRE_COST_SCALE, ps.robots.energyBot.count)),
   },
   {
     id: 'hire_builder',
@@ -66,7 +80,7 @@ export const ROBOT_ACTIONS = [
     name: 'BUILDER BOT',
     icon: '🔧',
     desc: 'Repairs damaged station hull between attacks',
-    energyCostFn: (ps) => Math.floor(20 * Math.pow(1.15, ps.robots.builder.count)),
+    energyCostFn: (ps) => Math.floor(20 * Math.pow(ROBOT_HIRE_COST_SCALE, ps.robots.builder.count)),
   },
   {
     id: 'hire_scout',
@@ -74,7 +88,7 @@ export const ROBOT_ACTIONS = [
     name: 'SCOUT BOT',
     icon: '📡',
     desc: 'Surveys terrain to unlock new resource deposits',
-    energyCostFn: (ps) => Math.floor(25 * Math.pow(1.15, ps.robots.scout.count)),
+    energyCostFn: (ps) => Math.floor(25 * Math.pow(ROBOT_HIRE_COST_SCALE, ps.robots.scout.count)),
   },
 ];
 

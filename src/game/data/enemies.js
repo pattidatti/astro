@@ -115,22 +115,46 @@ export const INVASION_TEMPLATES = [
 ];
 
 /**
- * Calculate threat level (0-10) for a planet based on player expansion.
- * More owned planets + higher-value planet = higher threat.
- * Xerion always returns 0 (peaceful).
+ * Calculate threat level (0-10) for a planet.
+ *
+ * Threat is dominated by what the player has actually built *on that planet*,
+ * because that is what the player's defences are also scoped to. The previous
+ * formula was driven by owned-planet count, which meant settling a fifth planet
+ * raised the threat on all four existing ones at once, with no matching increase
+ * in anyone's ability to defend — expansion was punished rather than escalated,
+ * and a freshly landed colony with no robots faced the same waves as a developed
+ * world. A small global term survives so that a sprawling empire is still a
+ * bigger target than a single world.
+ *
+ * Xerion always returns 0 (peaceful home world).
+ *
+ * @param {number} ownedPlanetCount
+ * @param {string} planetId
+ * @param {object|null} planetState  the planet's own state record; omitting it
+ *        scores the planet as undeveloped, which is the safe direction to err.
  */
-export function scaleThreat(ownedPlanetCount, planetId) {
+export function scaleThreat(ownedPlanetCount, planetId, planetState = null) {
   if (planetId === 'xerion') return 0;
   const def = PLANETS.find(p => p.id === planetId);
   if (!def) return 0;
 
-  // Base threat from number of owned planets (2 planets = threat 1, 8 planets = threat 7)
-  const expansionThreat = Math.max(0, ownedPlanetCount - 1);
+  // How juicy the planet is intrinsically — Drakon ~1.1, Voidex ~2.8.
+  const valueThreat = def.threatValue > 0 ? Math.log10(def.threatValue) * 0.4 : 0;
 
-  // Bonus threat from planet value (cost-based)
-  const costThreat = def.cost > 0 ? Math.log10(def.cost) * 0.5 : 0;
+  // How much there is to raid here. An empty colony scores 0.
+  let developmentThreat = 0;
+  if (planetState) {
+    const robots = Object.values(planetState.robots || {})
+      .reduce((sum, r) => sum + (r?.count || 0), 0);
+    developmentThreat += Math.min(5, robots / 8);
+    developmentThreat += (planetState.baseLevels?.storage || 0) * 0.4;
+    if (planetState.militaryBase?.built) developmentThreat += 1;
+  }
 
-  return Math.min(10, Math.round(expansionThreat + costThreat));
+  // Empire-wide attention: present, but no longer the dominant term.
+  const expansionThreat = Math.max(0, ownedPlanetCount - 1) * 0.25;
+
+  return Math.min(10, Math.round(valueThreat + developmentThreat + expansionThreat));
 }
 
 /**
@@ -172,8 +196,12 @@ export function invasionSpawnChance(threatLevel) {
 /** Minimum gap in seconds between attacks on the same planet. */
 export const MIN_ATTACK_GAP = 60;
 
-/** Grace period in seconds after colonizing a planet before attacks can start. */
-export const COLONIZATION_GRACE_PERIOD = 60;
+/**
+ * Grace period in seconds after colonizing a planet before attacks can start.
+ * A new colony lands with no robots, no defences and an empty silo; 60s was not
+ * enough to build anything before the first raid arrived.
+ */
+export const COLONIZATION_GRACE_PERIOD = 180;
 
 /** Maximum concurrent active attacks across all planets. */
 export const MAX_CONCURRENT_ATTACKS = 3;

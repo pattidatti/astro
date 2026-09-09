@@ -31,7 +31,7 @@ export class DefensePanel {
     }
 
     const combat = ps.combat;
-    const threatLevel = scaleThreat(gameState.ownedPlanets.length, planetId);
+    const threatLevel = scaleThreat(gameState.ownedPlanets.length, planetId, ps);
     const isUnderAttack = gameState.isUnderAttack(planetId);
 
     let html = '';
@@ -168,17 +168,20 @@ export class DefensePanel {
       const maxed = level >= upg.maxLevel;
       
       const cost = gameState.getDefenseUpgradeCost(planetId, upg.id);
-      const energyCost = cost?.energy || 0;
-      const oreCost    = cost?.ore    || 0;
+      const energyCost  = cost?.energy  || 0;
+      const oreCost     = cost?.ore     || 0;
+      const crystalCost = cost?.crystal || 0;
 
-      const canEnergy = maxed || energyCost <= 0 || gameState.siloHas(planetId, 'energy', energyCost);
-      const canOre    = maxed || oreCost <= 0    || gameState.siloHas(planetId, 'ore',    oreCost);
-      const canAfford = canEnergy && canOre;
+      const canEnergy  = maxed || energyCost <= 0  || gameState.siloHas(planetId, 'energy',  energyCost);
+      const canOre     = maxed || oreCost <= 0     || gameState.siloHas(planetId, 'ore',     oreCost);
+      const canCrystal = maxed || crystalCost <= 0 || gameState.siloHas(planetId, 'crystal', crystalCost);
+      const canAfford = canEnergy && canOre && canCrystal;
 
       let costStr = '';
       if (!maxed) {
-        if (oreCost > 0)    costStr += `<span class="${canOre ? '' : 'cant'}">⬡${fmt(oreCost)}</span>`;
-        if (energyCost > 0) costStr += (costStr ? ' ' : '') + `<span class="${canEnergy ? '' : 'cant'}">⚡${fmt(energyCost)}</span>`;
+        if (oreCost > 0)     costStr += `<span class="${canOre ? '' : 'cant'}">⬡${fmt(oreCost)}</span>`;
+        if (energyCost > 0)  costStr += (costStr ? ' ' : '') + `<span class="${canEnergy ? '' : 'cant'}">⚡${fmt(energyCost)}</span>`;
+        if (crystalCost > 0) costStr += (costStr ? ' ' : '') + `<span class="${canCrystal ? '' : 'cant'}">◈${fmt(crystalCost)}</span>`;
       }
 
       rows += `

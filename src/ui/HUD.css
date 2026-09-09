@@ -3283,3 +3283,8 @@
   max-height: 46vh;
 }
 .help-body--embedded .help-section:first-child { margin-top: 4px; }
+
+/* Crystal portion of a tech node's cost — tinted so the second currency reads
+   as distinct from the energy figure next to it. */
+.tech-cost-crystal { color: #cc88ff; }
+.tech-node-cost--cant .tech-cost-crystal { color: inherit; }

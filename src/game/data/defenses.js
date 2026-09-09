@@ -59,6 +59,13 @@ export const DEFENSE_TYPES = {
  * Defense upgrade tree — separate from base upgrades.
  * Each upgrade enhances a specific defense type's stats.
  */
+/**
+ * Levels 4–5 of the four primary defence upgrades additionally cost crystal
+ * (`crystalCost`, indexed like the other cost arrays, 0 for the early levels).
+ * Early defence stays a pure ore/energy decision so a player who has not reached
+ * a crystal world is never blocked; maxing out a planet's defences is what
+ * requires the crystal chain.
+ */
 export const DEFENSE_UPGRADES = [
   // Cannon upgrades
   {
@@ -72,6 +79,7 @@ export const DEFENSE_UPGRADES = [
     mult: 0.2,  // +20% per level
     energyCost: [100, 400, 1500, 5000, 20000],
     oreCost:    [80, 350, 1200, 4000, 16000],
+    crystalCost: [0, 0, 0, 200, 800],
   },
   {
     id: 'cannon_firerate',
@@ -97,6 +105,7 @@ export const DEFENSE_UPGRADES = [
     mult: 0.2,
     energyCost: [150, 600, 2200, 7000, 28000],
     oreCost:    [120, 500, 1800, 6000, 24000],
+    crystalCost: [0, 0, 0, 200, 800],
   },
   {
     id: 'sat_firerate',
@@ -122,6 +131,7 @@ export const DEFENSE_UPGRADES = [
     mult: 0.25,
     energyCost: [300, 2000, 10000],
     oreCost:    [250, 1500, 8000],
+    crystalCost: [0, 0, 0, 200, 800],
   },
   {
     id: 'ship_armor',
@@ -147,6 +157,7 @@ export const DEFENSE_UPGRADES = [
     mult: 0.25,
     energyCost: [200, 800, 3000, 10000, 40000],
     oreCost:    [150, 600, 2500, 8000, 32000],
+    crystalCost: [0, 0, 0, 200, 800],
   },
   {
     id: 'shield_regen',

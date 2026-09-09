@@ -3,7 +3,7 @@ import { PLANETS } from '../data/planets.js';
 
 const PLANET_MAP = new Map(PLANETS.map(p => [p.id, p]));
 import { BASE_UPGRADES, ROBOT_ACTIONS, getSpeedMult, getLoadMult, countTechLevels } from '../data/upgrades.js';
-import { createRoute, calcTravelDuration, SHIPPABLE_RESOURCES } from '../data/routes.js';
+import { createRoute, calcTravelDuration, routeCargoAmount, SHIPPABLE_RESOURCES } from '../data/routes.js';
 import { DefensePanel } from './DefensePanel.js';
 import * as THREE from 'three';
 import { AudioManager } from '../audio/AudioManager.js';
@@ -637,9 +637,9 @@ export class PlanetPanel {
     for (const route of myRoutes) {
       const toDef = PLANET_MAP.get(route.toPlanet);
 
-      // Compute display % from current silo capacity
-      const silo = ps?.silos?.[route.resource];
-      const pct = silo?.capacity > 0 ? Math.round(route.amount / silo.capacity * 100) : '?';
+      // The route stores a share; resolve it against the silo's current capacity
+      // so the displayed tonnage tracks storage upgrades.
+      const cargo = routeCargoAmount(route, ps);
 
       // Travel time
       const speedLv = ps?.baseLevels?.shipSpeed ?? 0;
@@ -663,9 +663,11 @@ export class PlanetPanel {
         const destPs = gameState.getPlanetState(route.toPlanet);
         if (!gameState.siloHasRoom(route.toPlanet, route.resource)) {
           dispatchStatus = 'destination full';
-        } else if (!gameState.siloHas(route.fromPlanet, route.resource, route.amount)) {
+        } else if (cargo <= 0) {
+          dispatchStatus = 'no silo for this resource';
+        } else if (!gameState.siloHas(route.fromPlanet, route.resource, cargo)) {
           const have = ps?.silos?.[route.resource]?.amount ?? 0;
-          dispatchStatus = `waiting — ${fmt(have)}/${fmt(route.amount)}`;
+          dispatchStatus = `waiting — ${fmt(have)}/${fmt(cargo)}`;
         }
       }
 
@@ -676,7 +678,7 @@ export class PlanetPanel {
         <div class="route-main">
           <div class="route-top-row">
             <span class="route-from-to">${toDef?.name || route.toPlanet}</span>
-            <span class="route-resource">${RESOURCE_ICONS[route.resource]} ${pct}% <span class="route-amount-hint">(${fmt(route.amount)})</span></span>
+            <span class="route-resource">${RESOURCE_ICONS[route.resource]} ${route.pct}% <span class="route-amount-hint">(${fmt(cargo)})</span></span>
           </div>
           <div class="route-meta">${travelStr} · ${dispatchStatus}</div>
           ${etaStr ? `<div class="route-transit-indicator">🚀 in transit — ETA ${etaStr}</div>` : ''}
@@ -790,11 +792,8 @@ export class PlanetPanel {
       e.stopPropagation();
       const to = form.querySelector('#rf-to').value;
       const resource = form.querySelector('#rf-res').value;
-      const silo = ps?.silos?.[resource];
-      const capacity = silo?.capacity ?? 1000;
       const pct = parseInt(form.querySelector('#rf-pct').value, 10);
-      const amount = Math.max(1, Math.round(pct / 100 * capacity));
-      const route = createRoute(this._planetId, to, resource, amount);
+      const route = createRoute(this._planetId, to, resource, pct);
       form.remove();
       addBtn.style.display = '';
       gameState.addRoute(route);
@@ -824,7 +823,7 @@ export class PlanetPanel {
 
     const availableResources = ps ? Object.keys(ps.silos).filter(r => ps.silos[r].capacity > 0) : ['ore'];
     const silo = ps?.silos?.[route.resource];
-    const currentPct = silo?.capacity > 0 ? Math.round(route.amount / silo.capacity * 100) : 50;
+    const currentPct = route.pct;
     const currentAmt = Math.round(currentPct / 100 * (silo?.capacity ?? 1000));
 
     const form = document.createElement('div');
@@ -885,13 +884,10 @@ export class PlanetPanel {
     form.querySelector('#rei-save').addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       const resource = resSelect.value;
-      const s = ps?.silos?.[resource];
-      const cap = s?.capacity ?? 1000;
       const pct = parseInt(pctInput.value, 10);
-      const amount = Math.max(1, Math.round(pct / 100 * cap));
       AudioManager.play('UI_CLICK');
       close();
-      gameState.updateRoute(route.id, { resource, amount });
+      gameState.updateRoute(route.id, { resource, pct });
     });
 
     form.querySelector('#rei-cancel').addEventListener('pointerdown', (e) => {
