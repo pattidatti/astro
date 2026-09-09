@@ -92,7 +92,8 @@
   gap: 6px;
 }
 #menu-btn,
-#research-btn {
+#research-btn,
+#help-btn {
   font-family: 'Orbitron', sans-serif;
   font-size: 12px;
   letter-spacing: 0.1em;
@@ -109,7 +110,8 @@
   line-height: 1;
 }
 #menu-btn:hover,
-#research-btn:hover {
+#research-btn:hover,
+#help-btn:hover {
   color: var(--dune-gold);
   background: rgba(212, 168, 67, 0.08);
   border-color: var(--dune-gold);
@@ -3013,3 +3015,271 @@
   }
 }
 
+
+/* ══════════════════════════════════════════════════════
+   FATAL ERROR SCREEN
+   Shown when boot fails or WebGL is unavailable. Deliberately
+   independent of the rest of the HUD — it has to render when
+   everything else is broken.
+   ══════════════════════════════════════════════════════ */
+#fatal-error {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(198, 123, 48, 0.10), transparent 60%),
+    var(--dune-bg-solid, #0a0c10);
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--dune-text, #e8dcc8);
+  overflow-y: auto;
+}
+
+.fatal-panel {
+  width: 100%;
+  max-width: 560px;
+  padding: 32px;
+  text-align: center;
+  background: rgba(10, 12, 16, 0.92);
+  border: 1px solid var(--dune-border, rgba(212, 168, 67, 0.35));
+  border-radius: 4px;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.7), inset 0 0 40px rgba(212, 168, 67, 0.04);
+}
+
+.fatal-glyph {
+  font-size: 40px;
+  line-height: 1;
+  color: var(--dune-amber, #c67b30);
+  margin-bottom: 16px;
+}
+
+.fatal-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--dune-gold-bright, #e8c45a);
+  margin-bottom: 14px;
+}
+
+.fatal-message {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--dune-text-secondary, #a89870);
+  margin-bottom: 26px;
+}
+
+.fatal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.fatal-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 11px 22px;
+  cursor: pointer;
+  color: var(--dune-sand, #e8d5b0);
+  background: rgba(212, 168, 67, 0.06);
+  border: 1px solid var(--dune-border, rgba(212, 168, 67, 0.35));
+  border-radius: 3px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.fatal-btn:hover {
+  background: rgba(212, 168, 67, 0.16);
+  border-color: var(--dune-gold, #d4a843);
+  color: var(--dune-gold-bright, #e8c45a);
+}
+.fatal-btn--primary {
+  background: rgba(212, 168, 67, 0.16);
+  border-color: var(--dune-gold, #d4a843);
+  color: var(--dune-gold-bright, #e8c45a);
+}
+.fatal-btn--primary:hover { background: rgba(212, 168, 67, 0.28); }
+
+.fatal-details {
+  margin-top: 24px;
+  text-align: left;
+}
+.fatal-details summary {
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--dune-text-dim, #6a5a40);
+  padding: 6px 0;
+  user-select: none;
+}
+.fatal-details summary:hover { color: var(--dune-text-secondary, #a89870); }
+.fatal-details pre {
+  margin-top: 8px;
+  padding: 12px;
+  max-height: 200px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dune-text-dim, #6a5a40);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(212, 168, 67, 0.15);
+  border-radius: 3px;
+}
+
+/* ══════════════════════════════════════════════════════
+   HELP / CONTROLS OVERLAY
+   ══════════════════════════════════════════════════════ */
+#help-btn {
+  /* Square icon button — the shared #menu-btn/#research-btn rule sizes for text. */
+  padding: 7px 0;
+  width: 30px;
+  font-size: 13px;
+}
+
+#help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 6, 10, 0.78);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s;
+}
+#help-overlay.help-overlay--visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+#help-modal {
+  width: 100%;
+  max-width: 520px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--dune-bg);
+  border: 1px solid var(--dune-border-bright);
+  border-radius: 6px;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.7), inset 0 0 40px var(--dune-glow);
+  backdrop-filter: blur(10px);
+}
+
+.help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--dune-border);
+}
+.help-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--dune-gold-bright);
+}
+.help-close {
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 7px;
+  cursor: pointer;
+  color: var(--dune-text-dim);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.help-close:hover {
+  color: var(--dune-gold);
+  border-color: var(--dune-border);
+}
+
+.help-body {
+  padding: 6px 18px 14px;
+  overflow-y: auto;
+}
+.help-body::-webkit-scrollbar { width: 4px; }
+.help-body::-webkit-scrollbar-thumb {
+  background: var(--dune-border);
+  border-radius: 2px;
+}
+
+.help-section { margin-top: 14px; }
+.help-section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--dune-amber);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(212, 168, 67, 0.15);
+}
+
+.help-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 0;
+}
+.help-keys {
+  flex: 0 0 138px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.help-desc {
+  flex: 1;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dune-text-secondary);
+}
+.help-sep {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--dune-text-dim);
+}
+
+/* Shared by the in-game overlay, its footer, and the pause menu's CONTROLS panel. */
+.help-body kbd,
+.help-footer kbd {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
+  white-space: nowrap;
+  color: var(--dune-sand);
+  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid var(--dune-border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+}
+
+.help-footer {
+  padding: 11px 18px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  text-align: center;
+  color: var(--dune-text-dim);
+  border-top: 1px solid var(--dune-border);
+}
+
+/* Controls list embedded in the pause menu — the panel supplies its own
+   padding and scrolling, so drop the overlay's. */
+.help-body--embedded {
+  padding: 0;
+  max-height: 46vh;
+}
+.help-body--embedded .help-section:first-child { margin-top: 4px; }

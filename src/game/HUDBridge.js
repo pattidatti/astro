@@ -4,6 +4,7 @@ import { PLANETS } from './data/planets.js';
 import { PlanetPanel } from './ui/PlanetPanel.js';
 import { CombatHUD } from './ui/CombatHUD.js';
 import { TechTreeWindow } from './ui/TechTreeWindow.js';
+import { HelpWindow } from './ui/HelpWindow.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { TECH_NODES } from './data/techTree.js';
 import { BASE_UPGRADES, getSpeedMult, getLoadMult, countTechLevels } from './data/upgrades.js';
@@ -40,6 +41,7 @@ export class HUDBridge {
     this._planetPanel = new PlanetPanel();
     this._combatHUD = new CombatHUD();
     this._techTree = new TechTreeWindow();
+    this._help = new HelpWindow();
     this._panelsVisible = false;
     this._currentPlanetId = gameState.focusedPlanet;
     this._suppressNextPlanetChanged = false;
@@ -75,6 +77,11 @@ export class HUDBridge {
       e.stopPropagation();
       AudioManager.play('UI_CLICK');
       this._techTree.toggle();
+    });
+
+    document.getElementById('help-btn')?.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this._help.toggle();
     });
 
     this._setupPlanetHover();
@@ -216,9 +223,6 @@ export class HUDBridge {
     });
     gameState.on('robotHired', () => {
       AudioManager.play('ROBOT_HIRED');
-    });
-    gameState.on('robotUpgraded', () => {
-      AudioManager.play('ROBOT_UPGRADED');
     });
     gameState.on('shipLaunched', () => {
       AudioManager.play('SHIP_LAUNCHED');

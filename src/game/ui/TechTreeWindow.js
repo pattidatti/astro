@@ -1,6 +1,7 @@
 import { gameState } from '../GameState.js';
 import { TECH_NODES, TECH_BY_ID } from '../data/techTree.js';
 import { AudioManager } from '../audio/AudioManager.js';
+import { keybindings, PRIORITY } from '../input/Keybindings.js';
 
 const fmt = (n) => {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -36,28 +37,14 @@ export class TechTreeWindow {
       if (e.target === this._overlay) this.hide();
     });
 
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const tag = document.activeElement?.tagName;
-      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-
-      if (e.key === 'Escape' && this._visible) {
-        this.hide();
-        e.stopImmediatePropagation();
-        return;
-      }
-
-      if (e.key === 'T' || e.key === 't') {
-        this.toggle();
-        return;
-      }
-      // 1-5: switch tabs when open
-      if (this._visible && e.key >= '1' && e.key <= '5') {
-        const branch = BRANCH_ORDER[parseInt(e.key) - 1];
-        if (branch) this._switchTab(branch);
-      }
-    });
+    // Keyboard shortcuts. Escape is handled by the router's modal stack —
+    // show()/hide() push and pop this window there.
+    keybindings.bind('t', () => this.toggle());
+    keybindings.bind(['1', '2', '3', '4', '5'], (e) => {
+      if (!this._visible) return false; // let the key fall through when closed
+      const branch = BRANCH_ORDER[parseInt(e.key, 10) - 1];
+      if (branch) this._switchTab(branch);
+    }, { priority: PRIORITY.MODAL });
 
     // Rebuild lines if window resizes
     this._resizeObserver = new ResizeObserver(() => {
@@ -82,6 +69,7 @@ export class TechTreeWindow {
     this._updateEnergyDisplay();
     this._overlay.classList.add('tech-overlay--visible');
     this._visible = true;
+    keybindings.pushModal('tech-tree', () => this.hide());
     // Remove pulse from Research button
     document.getElementById('research-btn')?.classList.remove('research-btn--pulse');
     gameState._newTechAvailable = false;
@@ -90,6 +78,7 @@ export class TechTreeWindow {
   hide() {
     this._overlay.classList.remove('tech-overlay--visible');
     this._visible = false;
+    keybindings.popModal('tech-tree');
   }
 
   toggle() {

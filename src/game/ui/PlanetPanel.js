@@ -92,7 +92,6 @@ export class PlanetPanel {
     gameState.on('baseBuilt', rerender);
     gameState.on('baseUpgraded', rerender);
     gameState.on('robotHired', rerender);
-    gameState.on('robotUpgraded', rerender);
     gameState.on('routeAdded', rerender);
     gameState.on('routeRemoved', rerender);
     gameState.on('depositUnlocked', rerender);
@@ -130,7 +129,6 @@ export class PlanetPanel {
         if (ps && def) {
           this._renderBase(ps, def);
           this._renderHire(ps, def);
-          this._renderRobotUpgrades(ps);
           this._renderRoutes();
         }
       }
@@ -221,7 +219,6 @@ export class PlanetPanel {
     this._renderRoutes();
     this._renderHire(ps, def);
     this._renderActiveRobots(ps);
-    this._renderRobotUpgrades(ps);
     this._renderDefenses();
   }
 
@@ -1006,10 +1003,6 @@ export class PlanetPanel {
       `;
       el.appendChild(row);
     }
-  }
-
-  _renderRobotUpgrades(_ps) {
-    // Robot upgrades are now global tech tree nodes — UPG tab removed.
   }
 
   // ─── Defense panel ────────────────────────────────────────────────────────

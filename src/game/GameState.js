@@ -1,5 +1,5 @@
 import { PLANETS } from './data/planets.js';
-import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult } from './data/upgrades.js';
+import { BASE_UPGRADES, ROBOT_ACTIONS, getSpeedMult, getLoadMult } from './data/upgrades.js';
 import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP,
          BUILDER_REPAIR_RATE, RECOLONIZE_COST_MULT, FALL_ROBOT_SURVIVAL } from './data/defenses.js';
 import { ENEMY_TYPES } from './data/enemies.js';
@@ -82,10 +82,10 @@ function makePlanetState(planetDef) {
       crystal: { amount: 0, capacity: planetDef.resourceTypes.includes('crystal') ? baseCapacity : 0 },
     },
     robots: {
-      miner:     { count: 0, speedLevel: 0, loadLevel: 0 },
-      energyBot: { count: 0, speedLevel: 0, loadLevel: 0 },
-      builder:   { count: 0, speedLevel: 0, loadLevel: 0 },
-      scout:     { count: 0, speedLevel: 0, loadLevel: 0 },
+      miner:     { count: 0 },
+      energyBot: { count: 0 },
+      builder:   { count: 0 },
+      scout:     { count: 0 },
     },
     deposits: JSON.parse(JSON.stringify(planetDef.deposits)),
     upgradeLevels: {},
@@ -765,30 +765,6 @@ class GameState extends EventEmitter {
     this.deductFromSilo(planetId, 'energy', cost.energy);
     this.getPlanetState(planetId).robots[robotType].count++;
     this.emit('robotHired', { planetId, robotType });
-    return true;
-  }
-
-  robotUpgradeCost(planetId, upgradeId) {
-    const ps = this.getPlanetState(planetId);
-    if (!ps) return null;
-    const upg = ROBOT_UPGRADES.find(u => u.id === upgradeId);
-    if (!upg) return null;
-    const robot = ps.robots[upg.robotType];
-    const level = robot[upg.effect] ?? 0;
-    if (level >= upg.maxLevel) return null;
-    return { energy: upg.energyCost[level] };
-  }
-
-  buyRobotUpgrade(planetId, upgradeId) {
-    const cost = this.robotUpgradeCost(planetId, upgradeId);
-    if (!cost) return false;
-    if (!this.siloHas(planetId, 'energy', cost.energy)) return false;
-
-    const ps = this.getPlanetState(planetId);
-    const upg = ROBOT_UPGRADES.find(u => u.id === upgradeId);
-    this.deductFromSilo(planetId, 'energy', cost.energy);
-    ps.robots[upg.robotType][upg.effect]++;
-    this.emit('robotUpgraded', { planetId, upgradeId });
     return true;
   }
 
@@ -1843,14 +1819,15 @@ class GameState extends EventEmitter {
       }
     }
 
-    // v8→v9 migration: robot speedLevel/loadLevel now driven by global tech nodes
+    // v8→v9 migration: per-planet robot speed/load levels were replaced by global
+    // tech nodes (miner_speed, energy_load, …). Drop the now-meaningless fields.
     if (!data.saveVersion || data.saveVersion < 9) {
       for (const pid of Object.keys(this.planetState)) {
         const robots = this.planetState[pid]?.robots || {};
         for (const type of ['miner', 'energyBot', 'builder', 'scout']) {
           if (robots[type]) {
-            robots[type].speedLevel = 0;
-            robots[type].loadLevel  = 0;
+            delete robots[type].speedLevel;
+            delete robots[type].loadLevel;
           }
         }
       }

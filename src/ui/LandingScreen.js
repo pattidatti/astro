@@ -3,6 +3,8 @@ import { getCurrentUser, isGoogleUser, signInWithGoogle, signOut, getAuthError, 
 import { loadFromFirestore, getAllCloudSaves } from '../db.js';
 import { isFirebaseConfigured } from '../firebase.js';
 import { AudioManager } from '../game/audio/AudioManager.js';
+import { getQuality, setQuality, getPreset, QUALITY_PRESETS, QUALITY_ORDER } from '../game/engine/GraphicsSettings.js';
+import { CONTROL_SECTIONS } from '../game/ui/HelpWindow.js';
 import { gameState } from '../game/GameState.js';
 
 function fmtOre(n) {
@@ -87,6 +89,10 @@ export class LandingScreen {
             SETTINGS
             <span class="landing-btn-sub">Audio, graphics &amp; more</span>
           </button>
+          <button class="landing-btn" id="btn-controls">
+            CONTROLS
+            <span class="landing-btn-sub">Keyboard &amp; mouse reference</span>
+          </button>
           <button class="landing-btn" id="btn-stats">
             STATISTICS
             <span class="landing-btn-sub">View your progress</span>
@@ -170,6 +176,7 @@ export class LandingScreen {
     document.getElementById('btn-play').addEventListener('click', () => { menuClick(); this._handleResume(); });
     document.getElementById('btn-slots').addEventListener('click', () => { menuClick(); this._showSaveSlotsPanel(); });
     document.getElementById('btn-settings').addEventListener('click', () => { menuClick(); this._showSettingsPanel(); });
+    document.getElementById('btn-controls').addEventListener('click', () => { menuClick(); this._showControlsPanel(); });
     document.getElementById('btn-stats').addEventListener('click', () => { menuClick(); this._showStatisticsPanel(); });
     document.getElementById('btn-login').addEventListener('click', () => { 
       menuClick(); 
@@ -398,12 +405,13 @@ export class LandingScreen {
         <div class="landing-section-title">GRAPHICS</div>
         <div class="landing-setting-row">
           <span class="landing-setting-label">RENDER QUALITY</span>
-          <span class="landing-setting-selector">&lt; HIGH &gt;</span>
+          <div class="landing-setting-controls">
+            <button id="graphics-quality-down" class="landing-setting-step" title="Lower quality">&lt;</button>
+            <span id="graphics-quality-val" class="landing-setting-selector">${getPreset().label}</span>
+            <button id="graphics-quality-up" class="landing-setting-step" title="Higher quality">&gt;</button>
+          </div>
         </div>
-        <div class="landing-setting-row">
-          <span class="landing-setting-label">BLOOM EFFECT</span>
-          <button id="graphics-bloom-btn" class="landing-setting-toggle">ON</button>
-        </div>
+        <div class="landing-setting-hint" id="graphics-quality-hint">${getPreset().hint}</div>
 
         <div class="landing-section-title">GAMEPLAY</div>
         <div class="landing-setting-row">
@@ -436,17 +444,57 @@ export class LandingScreen {
       if (!nowMuted) AudioManager.play('UI_MUTE');
       e.currentTarget.textContent = nowMuted ? 'ON' : 'OFF';
     });
-    document.getElementById('graphics-bloom-btn').addEventListener('click', (e) => {
-      /* Placeholder for future bloom toggle */
-      e.currentTarget.textContent = e.currentTarget.textContent === 'ON' ? 'OFF' : 'ON';
+    // Quality steps through low → medium → high and applies live; the 3D scene
+    // keeps rendering behind the pause overlay, so the change is visible at once.
+    const stepQuality = (dir) => {
+      const i = QUALITY_ORDER.indexOf(getQuality());
+      const next = QUALITY_ORDER[Math.min(QUALITY_ORDER.length - 1, Math.max(0, i + dir))];
+      if (next === getQuality()) return;
+      setQuality(next);
+      const preset = QUALITY_PRESETS[next];
+      document.getElementById('graphics-quality-val').textContent  = preset.label;
+      document.getElementById('graphics-quality-hint').textContent = preset.hint;
       AudioManager.play('UI_MENU_CLICK');
-    });
+    };
+    document.getElementById('graphics-quality-down').addEventListener('click', () => stepQuality(-1));
+    document.getElementById('graphics-quality-up').addEventListener('click', () => stepQuality(1));
     document.getElementById('gameplay-pause-tab-btn').addEventListener('click', (e) => {
       const nowOn = e.currentTarget.textContent === 'OFF';
       localStorage.setItem('astro_pause_on_tab_switch', nowOn ? 'true' : 'false');
       e.currentTarget.textContent = nowOn ? 'ON' : 'OFF';
       AudioManager.play('UI_MENU_CLICK');
     });
+    document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
+  }
+
+  /**
+   * Controls reference, rendered from the same CONTROL_SECTIONS the in-game
+   * help overlay uses so the two can't drift apart.
+   */
+  _showControlsPanel() {
+    const panel = this._prepareSubPanel();
+    panel.innerHTML = `
+      <div class="landing-panel-box">
+        <div class="landing-panel-title">CONTROLS</div>
+        <div class="help-body help-body--embedded">
+          ${CONTROL_SECTIONS.map(section => `
+            <div class="help-section">
+              <div class="help-section-title">${section.title}</div>
+              ${section.rows.map(([keys, desc]) => `
+                <div class="help-row">
+                  <span class="help-keys">${keys.map(k =>
+                    k === '–' || k === '—' ? `<span class="help-sep">${k}</span>` : `<kbd>${k}</kbd>`
+                  ).join('')}</span>
+                  <span class="help-desc">${desc}</span>
+                </div>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+        <button class="landing-btn-back" id="panel-back" style="margin-top:8px;">BACK</button>
+      </div>
+    `;
+    panel.classList.add('open');
     document.getElementById('panel-back').addEventListener('click', () => this._closeSubPanel());
   }
 

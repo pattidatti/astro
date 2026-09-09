@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { keybindings, PRIORITY } from '../input/Keybindings.js';
 
 const ORBIT_DAMPING = 0.08;
 const ZOOM_SPEED = 0.08;
@@ -74,15 +75,15 @@ export class CameraController {
     el.addEventListener('wheel', (e) => this._onWheel(e), { passive: false });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
 
+    // Held-key state for continuous free-fly movement. Discrete toggles go
+    // through the keybinding router so they respect modals and text fields.
     window.addEventListener('keydown', (e) => {
       this.keys[e.code] = true;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
         this.freeMode = true;
       }
-      if (e.code === 'KeyV') {
-        this.toggleRTSMode();
-      }
     });
+    keybindings.bind('v', () => this.toggleRTSMode(), { priority: PRIORITY.CAMERA });
     window.addEventListener('keyup', (e) => {
       this.keys[e.code] = false;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {

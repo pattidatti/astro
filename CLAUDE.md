@@ -66,11 +66,13 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
 - **CameraController.js** — Three camera modes: **orbital** (default, drag/zoom/click-focus), **free** (Shift+WASD+mouse), **RTS** (V-toggle, 120-unit radius, 22° elevation, top-down tactical view). Dynamic near/far planes by zoom level. `setPlanetColliders()` for collision, `trackObject()` for smooth following.
 - **RenderPipeline.js** — WebGLRenderer (logarithmic depth buffer, PCFSoft shadow maps) + EffectComposer (bloom, ACES tone mapping)
 - **AnimationLoop.js** — rAF loop, dt capped at 100ms. Calls registered `onUpdate(dt)` callbacks + render. Pauses on `document.hidden`.
+- **Keybindings.js** (`src/game/input/`) — Central keyboard router. Every discrete shortcut registers here instead of adding its own `document` listener: dispatch order is by explicit `PRIORITY` (MODAL > UI > CAMERA), text-field and modifier guards live in one place, and `pushModal`/`popModal` give Escape a stack so it closes the topmost overlay before falling through to the pause menu. `suspend()`/`resume()` (counted) silence it while the landing/pause screen owns the keyboard.
+- **GraphicsSettings.js** (`src/game/engine/`) — Quality presets persisted to `localStorage('astro_graphics_quality')`. `onQualityChange()` subscribers (RenderPipeline, SceneManager) apply changes live; nothing needs a reload.
 - **InputManager.js** — Raycasting for 3D click/hover (planets, stations, defense objects, ships, fleet icons). RTS box-select with frustum culling. Waypoint placement on Y=0 plane.
 
 ### State Management
 
-**GameState** (`src/game/GameState.js`): Singleton with EventEmitter pattern. Save version **8** (v1→v2→v3→v4→v5→v6→v7→v8 migration supported).
+**GameState** (`src/game/GameState.js`): Singleton with EventEmitter pattern. Save version **9** (v1→…→v9 migration supported).
 
 **Per-planet state** (one record per owned planet):
 ```js
@@ -260,7 +262,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 - **LocalStorage** (`src/storage.js`): Auto-saves every 10s + visibility change + significant events. Key: `astro_save_<slot>`.
 - **Firestore** (`src/db.js`): Cloud sync every 30s at `saves/{uid}/state/current`. Requires auth.
 - **Conflict resolution**: Prefer highest ore; tie-break by timestamp.
-- **Save version**: 8 (migration from v1→v8 supported in `GameState.deserialize()`). v6→v7 adds `distressFlareFired`; v7→v8 renames station IDs (station_drakon→station_nebulox, station_crystara→station_solaris).
+- **Save version**: 9 (migration from v1→v9 supported in `GameState.deserialize()`). v6→v7 adds `distressFlareFired`; v7→v8 renames station IDs (station_drakon→station_nebulox, station_crystara→station_solaris); v8→v9 drops per-planet robot speed/load levels (now global tech nodes).
 
 ### Authentication
 
@@ -274,7 +276,11 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 
 | Path | Purpose |
 |------|---------|
-| `src/main.js` | Entry point — boot sequence (9 systems) |
+| `src/main.js` | Entry point — boot sequence (9 systems), WebGL check + fatal-error fallback |
+| `src/game/input/Keybindings.js` | Central keyboard router — priority dispatch + modal stack (all shortcuts go through this) |
+| `src/game/engine/GraphicsSettings.js` | Quality presets (low/medium/high) — pixel ratio, shadows, post passes |
+| `src/game/ui/HelpWindow.js` | Controls reference overlay (`?`); exports `CONTROL_SECTIONS` |
+| `src/ui/FatalError.js` | WebGL detection + fatal-error screen (boot failure, context loss) |
 | `src/game/Game.js` | Three.js init, galaxy setup, click handling, render loop |
 | `src/game/GameState.js` | Singleton state + EventEmitter (v8 save format) |
 | `src/game/HUDBridge.js` | HTML HUD updates, toast notifications, enemy threat bar |
@@ -301,7 +307,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/game/audio/MusicManager.js` | Background music system |
 | `src/ui/LandingScreen.js` | Title/pause screen, 3-slot save management |
 | `src/game/data/planets.js` | 8 planets: costs, multipliers, resourceTypes, deposits, nebula palettes |
-| `src/game/data/upgrades.js` | BASE_UPGRADES (4) + ROBOT_UPGRADES (8) + ROBOT_ACTIONS (4) + cost helpers |
+| `src/game/data/upgrades.js` | BASE_UPGRADES (4) + ROBOT_ACTIONS (4) + cost helpers |
 | `src/game/data/defenses.js` | DEFENSE_TYPES (4) + DEFENSE_UPGRADES + ACTIVE_ABILITIES (3) + balance constants |
 | `src/game/data/militaryShips.js` | 6 ship types: fighter/bomber/carrier/battleship/titan/scavenger (stats, costs, combat behavior) |
 | `src/game/data/enemyStations.js` | 7 enemy station definitions (4 planet-anchored + 3 free-floating outposts) |
@@ -358,7 +364,7 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 - **Fonts**: Orbitron (headers/numbers), Share Tech Mono (body/values) — Google Fonts in `index.html`
 - **Panel layout**: 380px floating side panels, shown/hidden by zoom level. Menu button top-left.
 - **CSS**: All styling in `src/ui/HUD.css` + `src/ui/LandingScreen.css` — glassmorphism panels, gradient gold borders
-- **Post-processing**: Bloom (UnrealBloomPass, strength 0.8, threshold 0.6, smoothRadius 0.55) + ColorGradeShader (S-curve, vignette, chromatic aberration), ACES Filmic tone mapping (exposure 1.1)
+- **Post-processing**: Bloom (UnrealBloomPass, strength 0.8, threshold 0.6, smoothRadius 0.55) + ColorGradeShader (S-curve, vignette, chromatic aberration), ACES Filmic tone mapping (exposure 1.1). Bloom and god rays are toggled per quality preset via `pass.enabled` — the composer chain is never rebuilt to drop a pass, since Game.js writes god-ray and warp uniforms every frame.
 - **Lighting**: Directional sun (PCFSoft shadows) + ambient + hemisphere + per-planet rim + fill lights
 - **Shadows**: Planet meshes cast shadows, rings receive. Shadow map 1024×1024.
 - **Fog**: Exponential fog (0.0008 density) for depth at galaxy scale
@@ -369,7 +375,6 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 - **Production**: Per-planet per-frame (ProductionSystem). Zone count = multiplier. 0 unlocked zones = 0 production.
 - **Deposit unlock**: Scouts accumulate `depositProgress`; threshold → zone unlocks → production starts
 - **Base upgrades** (4): Storage expansion, ship speed, docking slots, passive energy — each 3–5 levels, cost in energy
-- **Robot upgrades** (8): Speed + load per robot type — 5 levels each
 - **Robot hire cost**: Scales with existing count (`energyCostFn(ps)` in ROBOT_ACTIONS)
 - **Upgrade cost scaling**: `baseCost × 1.15^level` — buy multiplier toggles ×1/×10/×100
 - **8 planets**: Xerion (free home) → Voidex (~8M energy). Each has `resourceTypes` and `planetMult` bonuses.
@@ -394,5 +399,5 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 - **Enemy stations**: 7 stations scattered in galaxy — 4 planet-anchored (Nebulox, Glacius, Solaris, Voidex) + 3 free-floating outposts (Alpha r550, Beta r950, Gamma r1250). Each has a 4-phase state machine: Dormant (passive) → Alert (sends scouts) → Skirmish (raids) → War (invasions). Player fleets besiege within 20 units. Stations fire back (DPS: alert 3, skirmish 8, war 15/s). Destroyed stations leave scavengeable `WreckageField3D`.
 - **Snitch mechanic**: Snitch-type roaming fleets patrol hyperlanes. When a snitch detects a player fleet, it reports to the nearest enemy station (SnitchPath3D visual red line), escalating its phase.
 - **Emergency Jump**: Fleet ability in PlayerFleetPanel. 300s cooldown, costs 40% of current energy. Triggers `WarpDistortionShader` post-processing effect. Instantly repositions fleet.
-- **Camera modes**: Orbital (default), free-fly (Shift), RTS top-down (V, "ADMIRAL MODE"). Scroll to zoom, click planet to focus.
+- **Camera modes**: Orbital (default), free-fly (Shift), RTS top-down (V, "ADMIRAL MODE"). Scroll to zoom, click planet to focus. Full control list in `HelpWindow.js` (`?` in game, or CONTROLS in the pause menu).
 - **Performance**: Distant planets (>300 units) update at 10% frequency. Hyperlanes skip updates beyond 250 units.
