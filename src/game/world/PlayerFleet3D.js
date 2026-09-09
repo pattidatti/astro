@@ -47,7 +47,7 @@ export class PlayerFleet3D {
     scene.add(this.group);
 
     this._fleetId = null;
-    this._ships   = []; // [{ group: THREE.Group, ship: EnemyShip3D }]
+    this._ships   = []; // [{ group: THREE.Group }]
 
     this._worldPos = new THREE.Vector3();
 
@@ -160,20 +160,18 @@ export class PlayerFleet3D {
     const color = PLAYER_SHIP_COLOR[ship.type]   ?? 0xd4a843;
     const scale = SHIP_SCALE[ship.type]          ?? 10;
 
-    const enemyShip = new EnemyShip3D();
-    enemyShip.setType(geom, color);
-    enemyShip.group.scale.setScalar(scale);
-    enemyShip.group.visible = true;
-
-    // Hide EnemyShip3D's built-in HP bars (fleet displays them differently)
-    if (enemyShip._hpBg) enemyShip._hpBg.visible = false;
-    if (enemyShip._hpFg) enemyShip._hpFg.visible = false;
+    // EnemyShip3D itself is instanced (matrix-only, no scene node) — fleet ships
+    // are parented to a moving fleet group, so they get a real mesh group over
+    // the same shared geometry.
+    const shipGroup = EnemyShip3D.createMeshGroup(geom, color);
+    shipGroup.scale.setScalar(scale);
+    shipGroup.visible = true;
 
     const lp = ship.localPos ?? { x: 0, y: 0, z: 0 };
-    enemyShip.group.position.set(lp.x, 0, lp.z);
+    shipGroup.position.set(lp.x, 0, lp.z);
 
-    this.group.add(enemyShip.group);
-    this._ships.push({ group: enemyShip.group, ship: enemyShip });
+    this.group.add(shipGroup);
+    this._ships.push({ group: shipGroup });
   }
 
   _makeBBox() {
@@ -242,14 +240,9 @@ export class PlayerFleet3D {
   _clearShips() {
     for (const sm of this._ships) {
       this.group.remove(sm.group);
-      sm.ship?.dispose?.();
-      sm.group.traverse(c => {
-        if (c.geometry) c.geometry.dispose();
-        if (c.material) {
-          if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
-          else c.material.dispose();
-        }
-      });
+      // Geometry and the body material are shared across every ship in the
+      // game — only the per-group glow clone belongs to us to release.
+      EnemyShip3D.disposeMeshGroup(sm.group);
     }
     this._ships = [];
   }

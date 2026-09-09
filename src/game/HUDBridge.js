@@ -32,6 +32,9 @@ const fmt = (n) => {
   return Math.floor(n) + '';
 };
 
+/** Set once the player has entered Admiral Mode, so the button stops pulsing. */
+const ADMIRAL_SEEN_KEY = 'astro_admiral_mode_seen';
+
 // Camera distance threshold for showing planet panels
 const PANEL_SHOW_DISTANCE = 80;
 
@@ -82,6 +85,15 @@ export class HUDBridge {
     document.getElementById('help-btn')?.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       this._help.toggle();
+    });
+
+    this._admiralBtn = document.getElementById('admiral-mode-btn');
+    this._admiralShown = false;
+    this._admiralUsed = localStorage.getItem(ADMIRAL_SEEN_KEY) === '1';
+    this._admiralBtn?.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      AudioManager.play('UI_CLICK');
+      this.game.cameraController.toggleRTSMode();
     });
 
     this._setupPlanetHover();
@@ -470,6 +482,38 @@ export class HUDBridge {
     return html;
   }
 
+  /**
+   * Admiral Mode had no discovery path: V was the only way in and nothing
+   * announced it. The button appears the first time the player owns a fleet —
+   * before that there is nothing to command — and pulses until they use the
+   * mode once, after which it settles into a plain toggle.
+   */
+  _updateAdmiralButton(cameraController) {
+    const btn = this._admiralBtn;
+    if (!btn) return;
+
+    const hasFleet = gameState.playerFleets.length > 0;
+    if (hasFleet !== this._admiralShown) {
+      this._admiralShown = hasFleet;
+      btn.classList.toggle('admiral-btn--visible', hasFleet);
+    }
+    if (!hasFleet) return;
+
+    // While the mode is on, the centred ADMIRAL MODE banner takes over: it says
+    // how to exit and how to select and give orders, and at narrow widths the
+    // two would overlap. So the button steps aside rather than duplicating it.
+    const active = cameraController.isRTSMode === true;
+    btn.classList.toggle('admiral-btn--hidden', active);
+
+    if (active && !this._admiralUsed) {
+      this._admiralUsed = true;
+      try {
+        localStorage.setItem(ADMIRAL_SEEN_KEY, '1');
+      } catch { /* storage blocked — it just pulses again next session */ }
+    }
+    btn.classList.toggle('admiral-btn--pulse', !this._admiralUsed && !active);
+  }
+
   update(_dt) {
     // FPS counter
     this._fpsFrames++;
@@ -487,6 +531,8 @@ export class HUDBridge {
     const camera = this.game.camera;
     const cameraController = this.game.cameraController;
     const galaxy = this.game.galaxy;
+
+    this._updateAdmiralButton(cameraController);
 
     // Generic hover target box
     if (this._hoveredAnyMesh) {

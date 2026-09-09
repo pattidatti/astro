@@ -220,9 +220,10 @@ async function boot() {
   // ── Phase 4: UI ───────────────────────────────────────────────
   new HUDBridge(game, { onMenu: openMenu });
 
-  if (gameState.tutorialStep >= 0) {
-    new Tutorial(game);
-  }
+  // Always constructed: the tutorial is chaptered now, and the military chapter
+  // can trigger long after the economy one finished — including for saves that
+  // completed the tutorial before that chapter existed.
+  new Tutorial(game);
 
   keybindings.resume();
 }

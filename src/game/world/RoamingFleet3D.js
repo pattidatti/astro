@@ -94,11 +94,13 @@ export class RoamingFleet3D {
     this._avoidPlanets = avoidPositions;
     this._updateTransform(fromPos, toPos, fleet.position);
 
-    // Animate fleet ships with acrobatics
+    // Bank and pitch each ship around its formation slot. This used to call
+    // EnemyShip3D.animateTransit(), which now only writes a matrix for the
+    // instanced renderer and never reaches the scene graph.
+    const roll = this._turnRate * 1.5;
     for (const sm of this._shipMeshes) {
-      if (sm.ship) {
-        sm.ship.animateTransit(0.016, this._time, this._turnRate);
-      }
+      sm.bodyGroup.rotation.z = roll + Math.sin(this._time * 0.8 + sm.phase) * 0.15;
+      sm.bodyGroup.rotation.x = Math.sin(this._time * 0.4 + sm.phase * 1.5) * 0.1;
     }
 
     this._updateHpBars(fleet);
@@ -136,26 +138,27 @@ export class RoamingFleet3D {
   _buildFighter(enemy, localOffset) {
     const color = TYPE_COLOR[enemy.type] ?? 0xff3333;
 
-    // Create EnemyShip3D instance
-    const ship = new EnemyShip3D();
-    ship.setType(enemy.type, color);
+    // EnemyShip3D is instanced (matrix-only, no scene node) — a fleet ship is
+    // parented to the moving fleet group instead, so it gets a real mesh group
+    // over the same shared geometry.
+    const bodyGroup = EnemyShip3D.createMeshGroup(enemy.type, color);
 
-    // EnemyShip3D is modeled at ~0.3 units scale. Scale up for fleet formation.
-    ship.group.scale.setScalar(FLEET_SHIP_SCALE);
-    ship.group.position.copy(localOffset);
-    ship.group.visible = true;
-
-    // Hide the built-in HP bars from EnemyShip3D (we use external bars)
-    ship._hpBg.visible = false;
-    ship._hpFg.visible = false;
+    // The shared geometry is modeled at ~0.3 units. Scale up for fleet formation.
+    bodyGroup.scale.setScalar(FLEET_SHIP_SCALE);
+    bodyGroup.position.copy(localOffset);
+    bodyGroup.visible = true;
 
     // HP bar — background (grey) + fill (green→red), external to the ship group
     const { hpBack, hpFill } = this._makeHpBar(3.0, localOffset.y + 2.5);
     this.group.add(hpBack);
     this.group.add(hpFill);
 
-    this.group.add(ship.group);
-    this._shipMeshes.push({ bodyGroup: ship.group, hpBack, hpFill, enemyId: enemy.id, ship });
+    this.group.add(bodyGroup);
+    this._shipMeshes.push({
+      bodyGroup, hpBack, hpFill, enemyId: enemy.id,
+      // Per-ship phase so the formation banks out of sync rather than in lockstep.
+      phase: Math.random() * Math.PI * 2,
+    });
   }
 
   _buildMothership(msData) {
@@ -317,19 +320,9 @@ export class RoamingFleet3D {
   _clearChildren() {
     for (const sm of this._shipMeshes) {
       this.group.remove(sm.bodyGroup);
-      // If it's an EnemyShip3D wrapper, dispose it properly
-      if (sm.ship) {
-        sm.ship.dispose?.();
-        sm.bodyGroup.traverse(c => {
-          if (c.geometry) c.geometry.dispose();
-          if (c.material) c.material.dispose();
-        });
-      } else {
-        sm.bodyGroup.traverse(c => {
-          if (c.geometry) c.geometry.dispose();
-          if (c.material) c.material.dispose();
-        });
-      }
+      // Geometry and the body material are shared across every ship in the
+      // game — only the per-group glow clone belongs to us to release.
+      EnemyShip3D.disposeMeshGroup(sm.bodyGroup);
       // Remove HP bar planes from group
       this.group.remove(sm.hpBack);
       this.group.remove(sm.hpFill);

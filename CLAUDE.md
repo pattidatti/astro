@@ -112,7 +112,7 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
 - `colonyShipsInOrbit[]`, `colonyShipsInFlight[]`, `colonyShipsArriving[]`
 - `activeAttacks[]`, `roamingFleets[]`, `lastAttackTime{}`, `colonizationTime{}`
 - `unlockedTech` (Set of tech node IDs), `_newTechAvailable` (bool, drives HUD pulse)
-- `tutorialStep`, `lastSaved`
+- `tutorialStep`, `tutorialMilitaryStep` (tutorial chapter progress; `-1` = that chapter is finished), `lastSaved`
 
 **Lifetime stats**: `stats.{ totalOreProduced, totalEnergyProduced, totalCrystalProduced, totalShipDeliveries, totalResourcesShipped, totalRobotsHired, planetsColonized, playTimeSeconds }`
 
@@ -184,9 +184,9 @@ Shared GLSL utilities in `src/game/utils/ShaderLib.js` (noise, FBM, Fresnel).
 - **Ship3D.js** — 3D cargo vessel geometry and flight animation
 - **ShipManager3D.js** — Pool of visual cargo ships, spawned/recycled per active route
 - **DefenseManager3D.js** — Visual defense structures per planet: DefenseSatellite3D + PatrolShip3D. Provides fire-position lookups for CombatEffects.
-- **RoamingFleet3D.js** — 3D visual for a roaming enemy fleet (group of EnemyShip3D meshes)
+- **RoamingFleet3D.js** — 3D visual for a roaming enemy fleet. Ships are `EnemyShip3D.createMeshGroup()` nodes parented to the fleet group, banked per-ship in `update()` (the instanced `animateTransit()` path never reaches the scene graph).
 - **RoamingFleetManager3D.js** — Pool manager for RoamingFleet3D instances
-- **PlayerFleet3D.js** — 3D visual representation of a player fleet (ship group with formation)
+- **PlayerFleet3D.js** — 3D visual for a player fleet: `EnemyShip3D.createMeshGroup()` nodes in formation, tinted with the player palette.
 - **PlayerFleetManager3D.js** — Pool manager for PlayerFleet3D; handles RTS selection targets and fleet world-position lookups
 - **RouteLane3D.js** — Visual lane rendered between planets with an active trade route
 - **EnemyStationManager3D.js** — Manages 7 enemy station visuals: 4 planet-anchored (Nebulox, Glacius, Solaris, Voidex) + 3 free-floating outposts. Handles station lifecycle, phase updates, and destruction.
@@ -202,7 +202,7 @@ Shared GLSL utilities in `src/game/utils/ShaderLib.js` (noise, FBM, Fresnel).
 - **5 visual robot classes** in `robots/`: `MinerBot`, `ScoutBot`, `SpiderBot`, `HoverBot`, `TitanBot`
 - **RobotManager3D.js** — Pool of up to 32 visual robots, cycles through 5 robot classes
 - **ColonyShip3D.js** — Colony ship; orbit mode (radius 20) and travel mode (parabolic arc)
-- **EnemyShip3D.js** — Enemy fighter: interceptor (needle), bomber (bulky), raider (fork-shape). HP bar + hit-flash.
+- **EnemyShip3D.js** — Enemy fighter geometry: interceptor (needle), bomber (bulky), raider (fork-shape). **Has no `THREE.Group`** — an instance is a logical object that computes a matrix and colour for `EnemyManager3D` to draw through InstancedMesh. Code that needs a real scene node (the fleet visuals, which parent ships to a moving fleet group) must use the static `EnemyShip3D.createMeshGroup(type, colorHex)` / `disposeMeshGroup(group)` pair, which builds plain meshes over the same shared geometry. Geometry and the body material are shared process-wide — never dispose them from a consumer; `disposeMeshGroup` releases only the per-group glow clone.
 - **Mothership3D.js** — Enemy dreadnought (2.5× scale). Warp-in animation, pulsing engines (2.8 Hz), weapon charging (2.2 Hz), HP bar.
 - **MilitaryBase3D.js** — Visual military base structure on planet surface. Shows hangar count and HP state.
 - **DefenseSatellite3D.js** — Orbiting defense platform with weapon arms, solar fins, sensor dome, click hitbox
@@ -224,7 +224,10 @@ Shared GLSL utilities in `src/game/utils/ShaderLib.js` (noise, FBM, Fresnel).
 
 ### Tutorial & Audio
 
-- **Tutorial.js** (`src/game/tutorial/`) — Step-based guided onboarding. Tracks via `gameState.tutorialStep`. Positions `#tutorial-hand` DOM element over UI targets. Steps: build base → hire energy bot → unlock miner in research → hire miner → watch ore silo → expand storage → farewell.
+- **Tutorial.js** (`src/game/tutorial/`) — Guided onboarding in independent **chapters**, each with its own trigger and its own saved progress, positioning `#tutorial-hand` over UI targets. Every step carries a headline plus a sentence of reasoning (`{ title, body, condition, targetEl }`).
+  - **Chapter 1 — economy** (`gameState.tutorialStep`, starts immediately): base → energy bot → research miner → miner → ore silo → storage → scout → deposit zone → defence cannon → colony ship → trade route → farewell.
+  - **Chapter 2 — military** (`gameState.tutorialMilitaryStep`, starts once any owned planet has a built military base): base online → hangar → warship → Admiral Mode → send the fleet → supply. Because it is triggered independently, saves that finished chapter 1 before this chapter existed still receive it.
+  - Exactly one chapter shows at a time; the earlier eligible one wins, so a running chapter is never interrupted. `Tutorial` is always constructed in `main.js` — chapter 2 can trigger hours in.
 - **AudioManager.js** (`src/game/audio/`) — ~20 SFX via Web Audio API. Buffer pooling. Procedural synth sounds (fleet explosion, Titan ultimate, carrier hum). Volume/mute persisted to localStorage.
 - **MusicManager.js** (`src/game/audio/`) — Background music. Fade in/out on planet switch. Started after save applied.
 
@@ -302,7 +305,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/game/ui/TechTreeWindow.js` | Tech tree modal (press T) |
 | `src/game/ui/EnemyStationPanel.js` | Enemy station inspection panel |
 | `src/game/ui/Minimap.js` | Galaxy minimap with fleet markers |
-| `src/game/tutorial/Tutorial.js` | Guided onboarding |
+| `src/game/tutorial/Tutorial.js` | Guided onboarding — economy + military chapters |
 | `src/game/audio/AudioManager.js` | SFX + procedural synth sounds |
 | `src/game/audio/MusicManager.js` | Background music system |
 | `src/ui/LandingScreen.js` | Title/pause screen, 3-slot save management |
@@ -400,5 +403,5 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 - **Enemy stations**: 7 stations scattered in galaxy — 4 planet-anchored (Nebulox, Glacius, Solaris, Voidex) + 3 free-floating outposts (Alpha r550, Beta r950, Gamma r1250). Each has a 4-phase state machine: Dormant (passive) → Alert (sends scouts) → Skirmish (raids) → War (invasions). Player fleets besiege within 20 units. Stations fire back (DPS: alert 3, skirmish 8, war 15/s). Destroyed stations leave scavengeable `WreckageField3D`.
 - **Snitch mechanic**: Snitch-type roaming fleets patrol hyperlanes. When a snitch detects a player fleet, it reports to the nearest enemy station (SnitchPath3D visual red line), escalating its phase.
 - **Emergency Jump**: Fleet ability in PlayerFleetPanel. 300s cooldown, costs 40% of current energy. Triggers `WarpDistortionShader` post-processing effect. Instantly repositions fleet.
-- **Camera modes**: Orbital (default), free-fly (Shift), RTS top-down (V, "ADMIRAL MODE"). Scroll to zoom, click planet to focus. Full control list in `HelpWindow.js` (`?` in game, or CONTROLS in the pause menu).
+- **Camera modes**: Orbital (default), free-fly (Shift), RTS top-down (V, "ADMIRAL MODE"). Scroll to zoom, click planet to focus. Full control list in `HelpWindow.js` (`?` in game, or CONTROLS in the pause menu). The `#admiral-mode-btn` in the top nav appears once the player owns a fleet and pulses until the mode has been used once (`localStorage('astro_admiral_mode_seen')`); it hides itself while the mode is active, since the centred `#rts-mode-indicator` banner then carries the exit and command hints.
 - **Performance**: Distant planets (>300 units) update at 10% frequency. Hyperlanes skip updates beyond 250 units.

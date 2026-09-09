@@ -182,6 +182,10 @@ class GameState extends EventEmitter {
     this._militaryBasePosFns = {}; // planetId → () => THREE.Vector3 (runtime, not serialized)
     this._stationPosFns      = {}; // planetId → () => THREE.Vector3 (runtime, not serialized)
     this.tutorialStep = 0;
+    // Chapter 2 (military) runs independently of chapter 1 so that players who
+    // finished the economy tutorial before it existed still get taught the
+    // fleet layer when they first build a military base.
+    this.tutorialMilitaryStep = 0;
     this.lastSaved = Date.now();
 
     // Global tech tree
@@ -1683,6 +1687,7 @@ class GameState extends EventEmitter {
       lastAttackTime: { ...this.lastAttackTime },
       colonizationTime: { ...this.colonizationTime },
       tutorialStep: this.tutorialStep,
+      tutorialMilitaryStep: this.tutorialMilitaryStep,
       stats: { ...this.stats },
       unlockedTech: Array.from(this.unlockedTech),
       lastSaved: Date.now(),
@@ -1725,6 +1730,9 @@ class GameState extends EventEmitter {
     this.lastAttackTime      = data.lastAttackTime ?? {};
     this.colonizationTime    = data.colonizationTime ?? {};
     this.tutorialStep   = data.tutorialStep ?? -1; // assume tutorial complete for existing saves
+    // Absent on pre-v10 saves — start the military chapter for them too, since
+    // it only ever triggers once a military base exists.
+    this.tutorialMilitaryStep = data.tutorialMilitaryStep ?? 0;
     this.stats = data.stats ?? {
       totalOreProduced: 0, totalEnergyProduced: 0, totalCrystalProduced: 0,
       totalShipDeliveries: 0, totalResourcesShipped: 0, totalRobotsHired: 0,
@@ -1875,6 +1883,7 @@ class GameState extends EventEmitter {
     // Old save had: ore, crystal, energy, robots, ownedPlanets, activePlanet
     this._initFresh();
     this.tutorialStep = -1; // skip tutorial for returning players
+    this.tutorialMilitaryStep = 0;
 
     const ownedPlanets = v1.ownedPlanets || ['xerion'];
     const activePlanet = v1.activePlanet || 'xerion';
