@@ -484,3 +484,67 @@
     padding: 9px 16px;
   }
 }
+
+/* ── Quality stepper (< MEDIUM >) and setting hint line ── */
+.landing-setting-step {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  color: var(--dune-gold);
+  background: rgba(212, 168, 67, 0.06);
+  border: 1px solid var(--dune-border);
+  border-radius: 2px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.landing-setting-step:hover {
+  background: rgba(212, 168, 67, 0.18);
+  border-color: var(--dune-gold);
+  color: var(--dune-gold-bright);
+}
+
+/* Quality label sits between the two steppers — fixed width stops the row
+   from reflowing as LOW/MEDIUM/HIGH change length. */
+#graphics-quality-val {
+  min-width: 68px;
+  text-align: center;
+}
+
+.landing-setting-hint {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--dune-text-dim, #6a5a40);
+  margin: -4px 0 8px 0;
+  padding-left: 2px;
+}
+
+/* ══════════════════════════════════════════════════════
+   NARROW VIEWPORTS
+
+   #landing-content asks for 420px plus 120px of horizontal padding, so on
+   anything narrower than ~560px the menu box was wider than the screen.
+   ══════════════════════════════════════════════════════ */
+
+@media (max-width: 720px) {
+  #landing-content {
+    min-width: 0;
+    width: calc(100vw - 24px);
+    max-width: 460px;
+    padding: 32px 24px;
+    gap: 22px;
+    max-height: 94vh;
+    overflow-y: auto;
+  }
+  .landing-title { letter-spacing: 4px; }
+}
+
+@media (max-width: 420px) {
+  #landing-content { padding: 24px 16px; }
+  .landing-logo-hex { font-size: 32px; }
+  .landing-title { font-size: 20px; letter-spacing: 2px; }
+  .landing-btn { padding: 11px 12px; font-size: 12px; letter-spacing: 2px; }
+}

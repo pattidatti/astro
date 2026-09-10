@@ -59,7 +59,9 @@ export const MILITARY_SHIPS = {
     name:         'Battleship',
     icon:         '⚔',
     tech:         'battleship_chassis',
-    cost:         { ore: 1500, energy: 800 },
+    // Crystal on the two heaviest hulls gives the crystal chain a recurring
+    // sink, not just the one-off capstone unlocks.
+    cost:         { ore: 1500, energy: 800, crystal: 25 },
     buildTime:    60,
     hp:           300,
     speed:        5,

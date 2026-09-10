@@ -1,5 +1,6 @@
 import { PLANETS } from './data/planets.js';
-import { BASE_UPGRADES, ROBOT_ACTIONS, ROBOT_UPGRADES, getSpeedMult, getLoadMult } from './data/upgrades.js';
+import { clampPct } from './data/routes.js';
+import { BASE_UPGRADES, ROBOT_ACTIONS, getSpeedMult, getLoadMult } from './data/upgrades.js';
 import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP,
          BUILDER_REPAIR_RATE, RECOLONIZE_COST_MULT, FALL_ROBOT_SURVIVAL } from './data/defenses.js';
 import { ENEMY_TYPES } from './data/enemies.js';
@@ -14,7 +15,7 @@ import {
 } from './data/militaryStats.js';
 import { buildDefaultEnemyStations } from './data/enemyStations.js';
 
-const SAVE_VERSION = 9;
+const SAVE_VERSION = 11;
 
 /**
  * Compute max energy and ore supply capacity for a fleet based on ship count and tech.
@@ -30,7 +31,17 @@ function computeFleetSupplyMax(ships, unlockedTech) {
 }
 
 const COLONY_SHIP_BASE_BUILD_COST = 5000;  // ore
-const COLONY_SHIP_COST_SCALE = 1.5;        // exponential multiplier per planet colonized
+/**
+ * Growth per planet already colonised.
+ *
+ * Each new planet roughly doubles what the previous one yields (planetMult goes
+ * 1.0 → 1.4 → 1.8 → 2.0 → 3.0 → 6.0 → 13.0 → 31.0), so a ship cost growing at
+ * 1.5 made every step slower than the last — the eighth ship alone cost 85k ore,
+ * more than half the maximum ore a planet can hold. 1.35 puts the last ship near
+ * 30k, so expansion accelerates rather than stalls. The real gates on a new
+ * planet are its baseCost and the threat that follows, not the ship.
+ */
+const COLONY_SHIP_COST_SCALE = 1.35;
 const COLONY_SHIP_BUILD_TIME = 20;          // seconds
 const COLONY_LAUNCH_BASE_COST = 50;         // base energy cost for launch
 const COLONY_LAUNCH_DIST_MULT = 0.3;        // energy per orbit-radius unit
@@ -82,10 +93,10 @@ function makePlanetState(planetDef) {
       crystal: { amount: 0, capacity: planetDef.resourceTypes.includes('crystal') ? baseCapacity : 0 },
     },
     robots: {
-      miner:     { count: 0, speedLevel: 0, loadLevel: 0 },
-      energyBot: { count: 0, speedLevel: 0, loadLevel: 0 },
-      builder:   { count: 0, speedLevel: 0, loadLevel: 0 },
-      scout:     { count: 0, speedLevel: 0, loadLevel: 0 },
+      miner:     { count: 0 },
+      energyBot: { count: 0 },
+      builder:   { count: 0 },
+      scout:     { count: 0 },
     },
     deposits: JSON.parse(JSON.stringify(planetDef.deposits)),
     upgradeLevels: {},
@@ -115,7 +126,7 @@ class GameState extends EventEmitter {
     this._initFresh();
     // Re-check tech availability when state changes that could unlock new nodes
     this.on('siloChanged', ({ resource }) => {
-      if (resource === 'energy') this._checkNewTechAvailable();
+      if (resource === 'energy' || resource === 'crystal') this._checkNewTechAvailable();
     });
     this.on('focusedPlanet', () => this._checkNewTechAvailable());
     this.on('baseBuilt',     () => this._checkNewTechAvailable());
@@ -150,7 +161,9 @@ class GameState extends EventEmitter {
     });
     this.on('planetColonized', () => {
       this.stats.planetsColonized++;
+      this.checkVictory();
     });
+    this.on('enemyStationDestroyed', () => this.checkVictory());
   }
 
   _initFresh() {
@@ -171,6 +184,13 @@ class GameState extends EventEmitter {
     this._militaryBasePosFns = {}; // planetId → () => THREE.Vector3 (runtime, not serialized)
     this._stationPosFns      = {}; // planetId → () => THREE.Vector3 (runtime, not serialized)
     this.tutorialStep = 0;
+    // Chapter 2 (military) runs independently of chapter 1 so that players who
+    // finished the economy tutorial before it existed still get taught the
+    // fleet layer when they first build a military base.
+    this.tutorialMilitaryStep = 0;
+    // Timestamp the galaxy was fully taken, or null. Play continues afterwards —
+    // this only records that it happened, so the screen shows once.
+    this.victoryTime = null;
     this.lastSaved = Date.now();
 
     // Global tech tree
@@ -330,8 +350,8 @@ class GameState extends EventEmitter {
    */
   getTechCost(nodeId, planetId = this.focusedPlanet) {
     const node = TECH_BY_ID[nodeId];
-    if (!node || node.free) return { energy: 0 };
-    return { energy: node.cost };
+    if (!node || node.free) return { energy: 0, crystal: 0 };
+    return { energy: node.cost, crystal: node.crystalCost || 0 };
   }
 
   /**
@@ -345,7 +365,9 @@ class GameState extends EventEmitter {
     if (node.requires.some(r => !this.isTechUnlocked(r))) return false;
     
     const cost = this.getTechCost(nodeId);
-    return this.siloHas(this.focusedPlanet, 'energy', cost.energy);
+    if (!this.siloHas(this.focusedPlanet, 'energy', cost.energy)) return false;
+    if (cost.crystal > 0 && !this.siloHas(this.focusedPlanet, 'crystal', cost.crystal)) return false;
+    return true;
   }
 
   /**
@@ -356,6 +378,7 @@ class GameState extends EventEmitter {
     if (!this.canUnlockTech(nodeId)) return false;
     const cost = this.getTechCost(nodeId);
     this.deductFromSilo(this.focusedPlanet, 'energy', cost.energy);
+    if (cost.crystal > 0) this.deductFromSilo(this.focusedPlanet, 'crystal', cost.crystal);
     this.unlockedTech.add(nodeId);
     this._applyTechEffects(nodeId);
     this._newTechAvailable = false;
@@ -710,8 +733,9 @@ class GameState extends EventEmitter {
     if (level >= upg.maxLevel) return null;
 
     const cost = {
-      energy: upg.energyCost[level],
-      ore:    upg.oreCost ? upg.oreCost[level] : 0
+      energy:  upg.energyCost[level],
+      ore:     upg.oreCost ? upg.oreCost[level] : 0,
+      crystal: upg.crystalCost ? upg.crystalCost[level] : 0,
     };
     // Only clamp storage upgrades to ensure player can always increase capacity
     if (upg.effect === 'storage') {
@@ -765,30 +789,6 @@ class GameState extends EventEmitter {
     this.deductFromSilo(planetId, 'energy', cost.energy);
     this.getPlanetState(planetId).robots[robotType].count++;
     this.emit('robotHired', { planetId, robotType });
-    return true;
-  }
-
-  robotUpgradeCost(planetId, upgradeId) {
-    const ps = this.getPlanetState(planetId);
-    if (!ps) return null;
-    const upg = ROBOT_UPGRADES.find(u => u.id === upgradeId);
-    if (!upg) return null;
-    const robot = ps.robots[upg.robotType];
-    const level = robot[upg.effect] ?? 0;
-    if (level >= upg.maxLevel) return null;
-    return { energy: upg.energyCost[level] };
-  }
-
-  buyRobotUpgrade(planetId, upgradeId) {
-    const cost = this.robotUpgradeCost(planetId, upgradeId);
-    if (!cost) return false;
-    if (!this.siloHas(planetId, 'energy', cost.energy)) return false;
-
-    const ps = this.getPlanetState(planetId);
-    const upg = ROBOT_UPGRADES.find(u => u.id === upgradeId);
-    this.deductFromSilo(planetId, 'energy', cost.energy);
-    ps.robots[upg.robotType][upg.effect]++;
-    this.emit('robotUpgraded', { planetId, upgradeId });
     return true;
   }
 
@@ -1206,6 +1206,35 @@ class GameState extends EventEmitter {
     ps.militaryBase.hp = Math.min(ps.militaryBase.maxHP, ps.militaryBase.hp + amount);
   }
 
+  // ─── Win condition ────────────────────────────────────────────────────────
+
+  /**
+   * The galaxy is taken: every planet colonised and every enemy station cleared.
+   *
+   * The game had no ending at all — the last station could fall with nothing to
+   * mark it. Both halves are required deliberately: owning all eight planets is
+   * the economy game, clearing all seven stations is the military one, and the
+   * point of the ending is that it needs both.
+   */
+  isVictorious() {
+    if (this.ownedPlanets.length < PLANETS.length) return false;
+    const stations = this.enemyStations || [];
+    return stations.length > 0 && stations.every(st => st.cleared);
+  }
+
+  /**
+   * Fire the `victory` event the first time the condition holds. Safe to call
+   * as often as you like — it latches on `victoryTime`, which is saved, so a
+   * reload does not replay the screen.
+   */
+  checkVictory() {
+    if (this.victoryTime) return false;
+    if (!this.isVictorious()) return false;
+    this.victoryTime = Date.now();
+    this.emit('victory', { stats: { ...this.stats }, at: this.victoryTime });
+    return true;
+  }
+
   /** Damage an enemy station (shield absorbs first, then hull).
    * @param {string} stationId
    * @param {number} amount - total damage
@@ -1314,12 +1343,12 @@ class GameState extends EventEmitter {
     return true;
   }
 
-  updateRoute(routeId, { resource, amount, active } = {}) {
+  updateRoute(routeId, { resource, pct, active } = {}) {
     const route = this.routes.find(r => r.id === routeId);
     if (!route) return false;
     const resourceChanged = resource !== undefined && resource !== route.resource;
     if (resource !== undefined) route.resource = resource;
-    if (amount !== undefined) route.amount = amount;
+    if (pct !== undefined) route.pct = clampPct(pct);
     if (active !== undefined) route.active = active;
     if (resourceChanged) {
       this.activeShips = this.activeShips.filter(s => s.routeId !== routeId);
@@ -1359,9 +1388,11 @@ class GameState extends EventEmitter {
 
     if (cost.energy > 0 && !this.siloHas(planetId, 'energy', cost.energy)) return false;
     if (cost.ore > 0 && !this.siloHas(planetId, 'ore', cost.ore)) return false;
+    if (cost.crystal > 0 && !this.siloHas(planetId, 'crystal', cost.crystal)) return false;
 
     if (cost.energy > 0) this.deductFromSilo(planetId, 'energy', cost.energy);
     if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
+    if (cost.crystal > 0) this.deductFromSilo(planetId, 'crystal', cost.crystal);
 
     const ps = this.getPlanetState(planetId);
     const level = ps.combat.defenses[defenseId] || 0;
@@ -1392,8 +1423,9 @@ class GameState extends EventEmitter {
     if (level >= upg.maxLevel) return null;
 
     const cost = {
-      energy: upg.energyCost[level],
-      ore:    upg.oreCost ? upg.oreCost[level] : 0
+      energy:  upg.energyCost[level],
+      ore:     upg.oreCost ? upg.oreCost[level] : 0,
+      crystal: upg.crystalCost ? upg.crystalCost[level] : 0,
     };
     // Only clamp storage upgrades to ensure player can always increase capacity
     if (upg.effect === 'storage') {
@@ -1411,9 +1443,11 @@ class GameState extends EventEmitter {
 
     if (cost.energy > 0 && !this.siloHas(planetId, 'energy', cost.energy)) return false;
     if (cost.ore > 0 && !this.siloHas(planetId, 'ore', cost.ore)) return false;
+    if (cost.crystal > 0 && !this.siloHas(planetId, 'crystal', cost.crystal)) return false;
 
     if (cost.energy > 0) this.deductFromSilo(planetId, 'energy', cost.energy);
     if (cost.ore > 0) this.deductFromSilo(planetId, 'ore', cost.ore);
+    if (cost.crystal > 0) this.deductFromSilo(planetId, 'crystal', cost.crystal);
 
     const ps = this.getPlanetState(planetId);
     const level = ps.combat.defenseLevels[upgradeId] || 0;
@@ -1687,8 +1721,10 @@ class GameState extends EventEmitter {
       lastAttackTime: { ...this.lastAttackTime },
       colonizationTime: { ...this.colonizationTime },
       tutorialStep: this.tutorialStep,
+      tutorialMilitaryStep: this.tutorialMilitaryStep,
       stats: { ...this.stats },
       unlockedTech: Array.from(this.unlockedTech),
+      victoryTime: this.victoryTime,
       lastSaved: Date.now(),
     };
   }
@@ -1729,11 +1765,17 @@ class GameState extends EventEmitter {
     this.lastAttackTime      = data.lastAttackTime ?? {};
     this.colonizationTime    = data.colonizationTime ?? {};
     this.tutorialStep   = data.tutorialStep ?? -1; // assume tutorial complete for existing saves
+    // Absent on pre-v10 saves — start the military chapter for them too, since
+    // it only ever triggers once a military base exists.
+    this.tutorialMilitaryStep = data.tutorialMilitaryStep ?? 0;
     this.stats = data.stats ?? {
       totalOreProduced: 0, totalEnergyProduced: 0, totalCrystalProduced: 0,
       totalShipDeliveries: 0, totalResourcesShipped: 0, totalRobotsHired: 0,
       planetsColonized: 0, playTimeSeconds: 0,
     };
+    // v10→v11: absent on older saves. Left null so a game that already met the
+    // condition still gets its screen the next time the check runs.
+    this.victoryTime    = data.victoryTime ?? null;
     this.lastSaved      = data.lastSaved ?? Date.now();
 
     // Ensure Xerion always has a state entry
@@ -1843,14 +1885,27 @@ class GameState extends EventEmitter {
       }
     }
 
-    // v8→v9 migration: robot speedLevel/loadLevel now driven by global tech nodes
+    // v9→v10 migration: routes stored an absolute cargo amount frozen at creation
+    // time, so silo upgrades never reached routes made before them. Convert each
+    // to the equivalent share of the source silo's current capacity.
+    if (!data.saveVersion || data.saveVersion < 10) {
+      for (const route of this.routes) {
+        if (route.pct !== undefined) continue;
+        const capacity = this.planetState[route.fromPlanet]?.silos?.[route.resource]?.capacity ?? 0;
+        route.pct = capacity > 0 ? clampPct(route.amount / capacity * 100) : 50;
+        delete route.amount;
+      }
+    }
+
+    // v8→v9 migration: per-planet robot speed/load levels were replaced by global
+    // tech nodes (miner_speed, energy_load, …). Drop the now-meaningless fields.
     if (!data.saveVersion || data.saveVersion < 9) {
       for (const pid of Object.keys(this.planetState)) {
         const robots = this.planetState[pid]?.robots || {};
         for (const type of ['miner', 'energyBot', 'builder', 'scout']) {
           if (robots[type]) {
-            robots[type].speedLevel = 0;
-            robots[type].loadLevel  = 0;
+            delete robots[type].speedLevel;
+            delete robots[type].loadLevel;
           }
         }
       }
@@ -1866,6 +1921,7 @@ class GameState extends EventEmitter {
     // Old save had: ore, crystal, energy, robots, ownedPlanets, activePlanet
     this._initFresh();
     this.tutorialStep = -1; // skip tutorial for returning players
+    this.tutorialMilitaryStep = 0;
 
     const ownedPlanets = v1.ownedPlanets || ['xerion'];
     const activePlanet = v1.activePlanet || 'xerion';

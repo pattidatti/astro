@@ -2,6 +2,7 @@ import { gameState } from '../GameState.js';
 import { DEFENSE_TYPES, DEFENSE_UPGRADES, ACTIVE_ABILITIES, BASE_STATION_HP } from '../data/defenses.js';
 import { scaleThreat } from '../data/enemies.js';
 import { AudioManager } from '../audio/AudioManager.js';
+import { onActivate } from '../../ui/activate.js';
 
 const fmt = (n) => {
   if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
@@ -31,7 +32,7 @@ export class DefensePanel {
     }
 
     const combat = ps.combat;
-    const threatLevel = scaleThreat(gameState.ownedPlanets.length, planetId);
+    const threatLevel = scaleThreat(gameState.ownedPlanets.length, planetId, ps);
     const isUnderAttack = gameState.isUnderAttack(planetId);
 
     let html = '';
@@ -168,17 +169,20 @@ export class DefensePanel {
       const maxed = level >= upg.maxLevel;
       
       const cost = gameState.getDefenseUpgradeCost(planetId, upg.id);
-      const energyCost = cost?.energy || 0;
-      const oreCost    = cost?.ore    || 0;
+      const energyCost  = cost?.energy  || 0;
+      const oreCost     = cost?.ore     || 0;
+      const crystalCost = cost?.crystal || 0;
 
-      const canEnergy = maxed || energyCost <= 0 || gameState.siloHas(planetId, 'energy', energyCost);
-      const canOre    = maxed || oreCost <= 0    || gameState.siloHas(planetId, 'ore',    oreCost);
-      const canAfford = canEnergy && canOre;
+      const canEnergy  = maxed || energyCost <= 0  || gameState.siloHas(planetId, 'energy',  energyCost);
+      const canOre     = maxed || oreCost <= 0     || gameState.siloHas(planetId, 'ore',     oreCost);
+      const canCrystal = maxed || crystalCost <= 0 || gameState.siloHas(planetId, 'crystal', crystalCost);
+      const canAfford = canEnergy && canOre && canCrystal;
 
       let costStr = '';
       if (!maxed) {
-        if (oreCost > 0)    costStr += `<span class="${canOre ? '' : 'cant'}">⬡${fmt(oreCost)}</span>`;
-        if (energyCost > 0) costStr += (costStr ? ' ' : '') + `<span class="${canEnergy ? '' : 'cant'}">⚡${fmt(energyCost)}</span>`;
+        if (oreCost > 0)     costStr += `<span class="${canOre ? '' : 'cant'}">⬡${fmt(oreCost)}</span>`;
+        if (energyCost > 0)  costStr += (costStr ? ' ' : '') + `<span class="${canEnergy ? '' : 'cant'}">⚡${fmt(energyCost)}</span>`;
+        if (crystalCost > 0) costStr += (costStr ? ' ' : '') + `<span class="${canCrystal ? '' : 'cant'}">◈${fmt(crystalCost)}</span>`;
       }
 
       rows += `
@@ -232,8 +236,7 @@ export class DefensePanel {
   _bindEvents(container, planetId) {
     // Defense buy buttons
     container.querySelectorAll('[data-defense-id]').forEach(btn => {
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         const defenseId = btn.dataset.defenseId;
         if (gameState.buyDefense(planetId, defenseId)) {
           AudioManager.play('BASE_UPGRADED');
@@ -243,8 +246,7 @@ export class DefensePanel {
 
     // Defense upgrade buttons
     container.querySelectorAll('.defense-upg-btn').forEach(btn => {
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         const upgradeId = btn.dataset.upgradeId;
         if (gameState.buyDefenseUpgrade(planetId, upgradeId)) {
           AudioManager.play('ROBOT_UPGRADED');
@@ -254,8 +256,7 @@ export class DefensePanel {
 
     // Ability buttons
     container.querySelectorAll('.ability-btn').forEach(btn => {
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         const abilityId = btn.dataset.abilityId;
         if (gameState.activateAbility(planetId, abilityId)) {
           AudioManager.play('BASE_UPGRADED');

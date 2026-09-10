@@ -4,9 +4,11 @@ import { PLANETS } from './data/planets.js';
 import { PlanetPanel } from './ui/PlanetPanel.js';
 import { CombatHUD } from './ui/CombatHUD.js';
 import { TechTreeWindow } from './ui/TechTreeWindow.js';
+import { HelpWindow } from './ui/HelpWindow.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { TECH_NODES } from './data/techTree.js';
 import { BASE_UPGRADES, getSpeedMult, getLoadMult, countTechLevels } from './data/upgrades.js';
+import { onActivate } from '../ui/activate.js';
 
 const THREAT_PHASE_COLORS = {
   dormant:  '#4488ff',
@@ -31,6 +33,9 @@ const fmt = (n) => {
   return Math.floor(n) + '';
 };
 
+/** Set once the player has entered Admiral Mode, so the button stops pulsing. */
+const ADMIRAL_SEEN_KEY = 'astro_admiral_mode_seen';
+
 // Camera distance threshold for showing planet panels
 const PANEL_SHOW_DISTANCE = 80;
 
@@ -40,6 +45,7 @@ export class HUDBridge {
     this._planetPanel = new PlanetPanel();
     this._combatHUD = new CombatHUD();
     this._techTree = new TechTreeWindow();
+    this._help = new HelpWindow();
     this._panelsVisible = false;
     this._currentPlanetId = gameState.focusedPlanet;
     this._suppressNextPlanetChanged = false;
@@ -65,16 +71,22 @@ export class HUDBridge {
     this._threatTooltip = document.getElementById('enemy-threat-tooltip');
 
     if (onMenu) {
-      document.getElementById('menu-btn')?.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        onMenu();
-      });
+      onActivate(document.getElementById('menu-btn'), () => onMenu());
     }
 
-    document.getElementById('research-btn')?.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(document.getElementById('research-btn'), () => {
       AudioManager.play('UI_CLICK');
       this._techTree.toggle();
+    });
+
+    onActivate(document.getElementById('help-btn'), () => this._help.toggle());
+
+    this._admiralBtn = document.getElementById('admiral-mode-btn');
+    this._admiralShown = false;
+    this._admiralUsed = localStorage.getItem(ADMIRAL_SEEN_KEY) === '1';
+    onActivate(this._admiralBtn, () => {
+      AudioManager.play('UI_CLICK');
+      this.game.cameraController.toggleRTSMode();
     });
 
     this._setupPlanetHover();
@@ -216,9 +228,6 @@ export class HUDBridge {
     });
     gameState.on('robotHired', () => {
       AudioManager.play('ROBOT_HIRED');
-    });
-    gameState.on('robotUpgraded', () => {
-      AudioManager.play('ROBOT_UPGRADED');
     });
     gameState.on('shipLaunched', () => {
       AudioManager.play('SHIP_LAUNCHED');
@@ -466,6 +475,38 @@ export class HUDBridge {
     return html;
   }
 
+  /**
+   * Admiral Mode had no discovery path: V was the only way in and nothing
+   * announced it. The button appears the first time the player owns a fleet —
+   * before that there is nothing to command — and pulses until they use the
+   * mode once, after which it settles into a plain toggle.
+   */
+  _updateAdmiralButton(cameraController) {
+    const btn = this._admiralBtn;
+    if (!btn) return;
+
+    const hasFleet = gameState.playerFleets.length > 0;
+    if (hasFleet !== this._admiralShown) {
+      this._admiralShown = hasFleet;
+      btn.classList.toggle('admiral-btn--visible', hasFleet);
+    }
+    if (!hasFleet) return;
+
+    // While the mode is on, the centred ADMIRAL MODE banner takes over: it says
+    // how to exit and how to select and give orders, and at narrow widths the
+    // two would overlap. So the button steps aside rather than duplicating it.
+    const active = cameraController.isRTSMode === true;
+    btn.classList.toggle('admiral-btn--hidden', active);
+
+    if (active && !this._admiralUsed) {
+      this._admiralUsed = true;
+      try {
+        localStorage.setItem(ADMIRAL_SEEN_KEY, '1');
+      } catch { /* storage blocked — it just pulses again next session */ }
+    }
+    btn.classList.toggle('admiral-btn--pulse', !this._admiralUsed && !active);
+  }
+
   update(_dt) {
     // FPS counter
     this._fpsFrames++;
@@ -483,6 +524,8 @@ export class HUDBridge {
     const camera = this.game.camera;
     const cameraController = this.game.cameraController;
     const galaxy = this.game.galaxy;
+
+    this._updateAdmiralButton(cameraController);
 
     // Generic hover target box
     if (this._hoveredAnyMesh) {
@@ -586,8 +629,7 @@ export class HUDBridge {
 
     if (planetId) {
       el.classList.add('toast-clickable');
-      el.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(el, () => {
         const sys = this.game.galaxy.getSystem(planetId);
         if (!sys) return;
         gameState.switchPlanet(planetId);

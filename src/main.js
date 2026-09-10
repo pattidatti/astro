@@ -18,6 +18,11 @@ import { FleetCombatSystem } from './game/systems/FleetCombatSystem.js';
 import { SupplySystem } from './game/systems/SupplySystem.js';
 import { EnemyStationSystem } from './game/systems/EnemyStationSystem.js';
 import { Tutorial } from './game/tutorial/Tutorial.js';
+import { keybindings, PRIORITY } from './game/input/Keybindings.js';
+import { showFatalError, isWebGLAvailable } from './ui/FatalError.js';
+import { applyOfflineProgress } from './game/systems/OfflineProgress.js';
+import { showOfflineReport } from './ui/OfflineReport.js';
+import { installVictoryScreen } from './ui/VictoryScreen.js';
 
 async function openPauseMenu() {
   const landing = new LandingScreen({ inGame: true });
@@ -38,6 +43,9 @@ async function openPauseMenu() {
 }
 
 async function boot() {
+  // No in-game shortcut should fire while the landing screen is up.
+  keybindings.suspend();
+
   // ── Session State ───────────────────────────────────────────────
   const activeSlot = sessionStorage.getItem('astro_active_slot') || 'slot_1';
   setCurrentSaveSlot(activeSlot);
@@ -46,7 +54,16 @@ async function boot() {
   AudioManager.init()
     .then(() => MusicManager.init(AudioManager._ctx, AudioManager.getMusicGainNode()))
     .catch(e => console.warn('[AudioManager] init failed:', e));
-  initFirebase();
+  // Firebase lives in its own lazily-loaded chunk now, so start fetching it and
+  // build the galaxy while it is in flight rather than waiting on the network
+  // before the first frame. The landing screen needs to know who is signed in,
+  // so the await lands just before it.
+  const firebaseReady = initFirebase();
+
+  // Launch Three.js immediately — galaxy renders behind landing screen
+  const game = createGame();
+
+  await firebaseReady;
 
   if (isFirebaseConfigured()) {
     console.log('[Boot] Initializing Auth sequence...');
@@ -61,9 +78,6 @@ async function boot() {
       }
     });
   }
-
-  // Launch Three.js immediately — galaxy renders behind landing screen
-  const game = createGame();
 
   // Check if we're returning from a pause-menu "New Game" reload
   let choice;
@@ -106,8 +120,13 @@ async function boot() {
     }
   }
 
+  // Credit production for the time the game spent closed. Runs before the
+  // systems start so the first rendered frame already shows the caught-up
+  // numbers; the report is shown once the HUD exists (Phase 4).
+  let offlineReport = null;
   if (bestSave) {
     gameState.deserialize(bestSave);
+    offlineReport = applyOfflineProgress(gameState);
   }
 
   startAutoSave();
@@ -195,24 +214,72 @@ async function boot() {
   const openMenu = async () => {
     if (menuOpen) return;
     menuOpen = true;
+    keybindings.suspend();
     game.animationLoop.stop();
     document.body.classList.add('game-paused');
-    await openPauseMenu();
-    document.body.classList.remove('game-paused');
-    game.animationLoop.start();
-    menuOpen = false;
+    try {
+      await openPauseMenu();
+    } finally {
+      document.body.classList.remove('game-paused');
+      game.animationLoop.start();
+      keybindings.resume();
+      menuOpen = false;
+    }
   };
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') openMenu();
-  });
+  // Escape reaches this only when no modal is open — the router closes the
+  // topmost overlay first (see game/input/Keybindings.js).
+  keybindings.bind('Escape', () => openMenu(), { priority: PRIORITY.UI });
 
   // ── Phase 4: UI ───────────────────────────────────────────────
   new HUDBridge(game, { onMenu: openMenu });
 
-  if (gameState.tutorialStep >= 0) {
-    new Tutorial(game);
+  // Always constructed: the tutorial is chaptered now, and the military chapter
+  // can trigger long after the economy one finished — including for saves that
+  // completed the tutorial before that chapter existed.
+  new Tutorial(game);
+
+  keybindings.resume();
+
+  // Order matters when both fire at once: the victory screen sits above the
+  // offline report visually, so it must also be the topmost entry on the modal
+  // stack — that is, pushed last.
+  showOfflineReport(offlineReport);
+  installVictoryScreen();
+}
+
+/**
+ * Boot with a visible failure mode.
+ *
+ * `boot()` is one long await chain across audio, auth, WebGL, save migration and
+ * nine game systems. Any throw in there used to reject silently and leave a black
+ * page, so every failure looked identical to the player. Now it names itself.
+ */
+async function main() {
+  if (!isWebGLAvailable()) {
+    showFatalError({
+      title: 'GRAPHICS UNAVAILABLE',
+      message: 'Astro Harvest needs WebGL, and this browser could not provide it. '
+             + 'Try a different browser, or enable hardware acceleration in your browser settings.',
+      canReload: true,
+    });
+    return;
+  }
+
+  try {
+    await boot();
+  } catch (err) {
+    console.error('[Boot] Fatal error during startup:', err);
+    showFatalError({
+      title: 'STARTUP FAILED',
+      message: 'The galaxy could not be initialised. If this keeps happening, the save '
+             + 'in this slot may be corrupt — starting a fresh slot will clear it.',
+      detail: err,
+      canReload: true,
+      canResetSave: true,
+      slot: sessionStorage.getItem('astro_active_slot') || 'slot_1',
+    });
   }
 }
 
-boot();
+main();

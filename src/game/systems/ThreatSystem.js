@@ -37,7 +37,7 @@ export class ThreatSystem {
       // Already under attack?
       if (gameState.isUnderAttack(planetId)) continue;
 
-      const threatLevel = scaleThreat(gameState.ownedPlanets.length, planetId);
+      const threatLevel = scaleThreat(gameState.ownedPlanets.length, planetId, ps);
       if (threatLevel <= 0) continue;
 
       this._spawnTimers[planetId] = (this._spawnTimers[planetId] || 0) + clampedDt;
@@ -241,7 +241,7 @@ export class ThreatSystem {
       attack.wave = nextWaveIndex;
 
       const waveComposition = attack.template.waves[nextWaveIndex];
-      const threatLevel = scaleThreat(gameState.ownedPlanets.length, attack.planetId);
+      const threatLevel = scaleThreat(gameState.ownedPlanets.length, attack.planetId, gameState.getPlanetState(attack.planetId));
       const newEnemies = this._createEnemiesFromComposition(waveComposition, threatLevel);
       attack.enemies.push(...newEnemies);
 
@@ -268,7 +268,7 @@ export class ThreatSystem {
     const ps = gameState.getPlanetState(planetId);
     if (!ps || !ps.hasBase || ps.combat.fallen) return false;
 
-    const threatLevel = scaleThreat(gameState.ownedPlanets.length, planetId);
+    const threatLevel = scaleThreat(gameState.ownedPlanets.length, planetId, ps);
     const effectiveThreat = Math.max(threatLevel, 3);
 
     const templates = getInvasionTemplates(effectiveThreat);

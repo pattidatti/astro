@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { onQualityChange } from './GraphicsSettings.js';
 
 export class SceneManager {
   constructor() {
@@ -15,8 +16,6 @@ export class SceneManager {
     this.sunLight = new THREE.DirectionalLight(0xfff5e0, 0.5);
     this.sunLight.position.set(50, 30, -20);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.width = 1024;
-    this.sunLight.shadow.mapSize.height = 1024;
     this.sunLight.shadow.camera.near = 0.5;
     this.sunLight.shadow.camera.far = 200;
     this.sunLight.shadow.camera.left = -30;
@@ -25,6 +24,15 @@ export class SceneManager {
     this.sunLight.shadow.camera.bottom = -30;
     this.sunLight.shadow.bias = -0.001;
     this.scene.add(this.sunLight);
+
+    // Shadow resolution follows the quality preset. Changing mapSize on a light
+    // that already has an allocated shadow map is ignored unless the old map is
+    // disposed first, so drop it and let three.js reallocate on the next frame.
+    onQualityChange((preset) => {
+      this.sunLight.shadow.mapSize.setScalar(preset.shadowMapSize);
+      this.sunLight.shadow.map?.dispose();
+      this.sunLight.shadow.map = null;
+    });
 
     // Ambient fill — slightly bluer, low intensity
     this.ambientLight = new THREE.AmbientLight(0x1a1a2e, 0.25);

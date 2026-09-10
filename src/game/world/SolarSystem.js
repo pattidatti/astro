@@ -228,7 +228,6 @@ export class SolarSystem {
     const pulseIfMine = (e) => { if (e?.planetId === this.id) this.station.flashPurchase(); };
     gameState.on('robotHired', pulseIfMine);
     gameState.on('baseUpgraded', pulseIfMine);
-    gameState.on('robotUpgraded', pulseIfMine);
 
     // Set initial orbit position
     this._updateOrbit(0);

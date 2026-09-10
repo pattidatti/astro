@@ -238,7 +238,7 @@ export class RoamingFleetSystem {
   _getMaxThreat() {
     let max = 0;
     for (const pid of gameState.ownedPlanets) {
-      max = Math.max(max, scaleThreat(gameState.ownedPlanets.length, pid));
+      max = Math.max(max, scaleThreat(gameState.ownedPlanets.length, pid, gameState.getPlanetState(pid)));
     }
     return max;
   }

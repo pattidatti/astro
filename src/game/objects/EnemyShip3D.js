@@ -142,6 +142,49 @@ export class EnemyShip3D {
     return { geometries: sharedGeometries, materials: sharedMaterials };
   }
 
+  /**
+   * Build a standalone, scene-graph mesh group for one ship.
+   *
+   * The instanced path above (EnemyManager3D) is right for attack waves, where
+   * dozens of identical ships share one draw call and are positioned in world
+   * space. Fleet visuals are a different shape of problem: a handful of ships
+   * parented to a moving fleet group, each carrying its own HP bar and local
+   * formation offset. Those need real Object3Ds, so they get plain meshes over
+   * the same shared geometry — the geometry is shared, only the material clone
+   * per group is not, which is what lets each fleet tint its own glow.
+   *
+   * @param {'interceptor'|'bomber'|'raider'} type
+   * @param {number} colorHex  glow colour
+   * @returns {THREE.Group}
+   */
+  static createMeshGroup(type, colorHex) {
+    EnemyShip3D.initSharedResources();
+    const geo = sharedGeometries[type] || sharedGeometries.interceptor;
+
+    const group = new THREE.Group();
+
+    // Body keeps the shared multi-material array (obsidian / armour / glass).
+    group.add(new THREE.Mesh(geo.body, sharedMaterials.body));
+
+    // Glow is the only per-ship material, so each fleet can carry its own colour.
+    const glowMat = sharedMaterials.glow.clone();
+    glowMat.color.set(colorHex);
+    group.add(new THREE.Mesh(geo.glow, glowMat));
+
+    return group;
+  }
+
+  /** Release the per-group material cloned by createMeshGroup(). */
+  static disposeMeshGroup(group) {
+    if (!group) return;
+    for (const child of group.children) {
+      // Shared materials and geometry are owned by the class, not the group.
+      if (child.material && child.material !== sharedMaterials.body) {
+        child.material.dispose?.();
+      }
+    }
+  }
+
   constructor() {
     this.visible = false;
     this.matrix = new THREE.Matrix4();

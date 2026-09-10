@@ -92,7 +92,9 @@
   gap: 6px;
 }
 #menu-btn,
-#research-btn {
+#research-btn,
+#admiral-mode-btn,
+#help-btn {
   font-family: 'Orbitron', sans-serif;
   font-size: 12px;
   letter-spacing: 0.1em;
@@ -109,7 +111,9 @@
   line-height: 1;
 }
 #menu-btn:hover,
-#research-btn:hover {
+#research-btn:hover,
+#admiral-mode-btn:hover,
+#help-btn:hover {
   color: var(--dune-gold);
   background: rgba(212, 168, 67, 0.08);
   border-color: var(--dune-gold);
@@ -857,18 +861,35 @@
 }
 .tutorial-bubble {
   position: relative;
+  /* Steps now carry a headline plus a sentence of reasoning, so the bubble
+     wraps instead of being a single nowrap line. */
+  max-width: 300px;
   background: rgba(10,12,16,0.96);
   border: 1px solid var(--dune-gold-dim);
   border-radius: 5px;
-  padding: 8px 30px 8px 14px;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--dune-gold);
-  letter-spacing: 2px;
-  text-shadow: 0 0 6px rgba(212,168,67,0.3);
-  white-space: nowrap;
+  padding: 9px 30px 10px 14px;
+  text-align: left;
   box-shadow: 0 0 16px rgba(212,168,67,0.15);
+}
+.tutorial-bubble-title {
+  display: block;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  line-height: 1.3;
+  color: var(--dune-gold);
+  text-shadow: 0 0 6px rgba(212,168,67,0.3);
+}
+.tutorial-bubble-body {
+  display: block;
+  margin-top: 5px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  letter-spacing: 0.2px;
+  color: var(--dune-text-secondary);
+  text-shadow: none;
 }
 .tutorial-dismiss-btn {
   position: absolute;
@@ -3013,3 +3034,669 @@
   }
 }
 
+
+/* ══════════════════════════════════════════════════════
+   FATAL ERROR SCREEN
+   Shown when boot fails or WebGL is unavailable. Deliberately
+   independent of the rest of the HUD — it has to render when
+   everything else is broken.
+   ══════════════════════════════════════════════════════ */
+#fatal-error {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(198, 123, 48, 0.10), transparent 60%),
+    var(--dune-bg-solid, #0a0c10);
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--dune-text, #e8dcc8);
+  overflow-y: auto;
+}
+
+.fatal-panel {
+  width: 100%;
+  max-width: 560px;
+  padding: 32px;
+  text-align: center;
+  background: rgba(10, 12, 16, 0.92);
+  border: 1px solid var(--dune-border, rgba(212, 168, 67, 0.35));
+  border-radius: 4px;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.7), inset 0 0 40px rgba(212, 168, 67, 0.04);
+}
+
+.fatal-glyph {
+  font-size: 40px;
+  line-height: 1;
+  color: var(--dune-amber, #c67b30);
+  margin-bottom: 16px;
+}
+
+.fatal-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--dune-gold-bright, #e8c45a);
+  margin-bottom: 14px;
+}
+
+.fatal-message {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--dune-text-secondary, #a89870);
+  margin-bottom: 26px;
+}
+
+.fatal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.fatal-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 11px 22px;
+  cursor: pointer;
+  color: var(--dune-sand, #e8d5b0);
+  background: rgba(212, 168, 67, 0.06);
+  border: 1px solid var(--dune-border, rgba(212, 168, 67, 0.35));
+  border-radius: 3px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.fatal-btn:hover {
+  background: rgba(212, 168, 67, 0.16);
+  border-color: var(--dune-gold, #d4a843);
+  color: var(--dune-gold-bright, #e8c45a);
+}
+.fatal-btn--primary {
+  background: rgba(212, 168, 67, 0.16);
+  border-color: var(--dune-gold, #d4a843);
+  color: var(--dune-gold-bright, #e8c45a);
+}
+.fatal-btn--primary:hover { background: rgba(212, 168, 67, 0.28); }
+
+.fatal-details {
+  margin-top: 24px;
+  text-align: left;
+}
+.fatal-details summary {
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--dune-text-dim, #6a5a40);
+  padding: 6px 0;
+  user-select: none;
+}
+.fatal-details summary:hover { color: var(--dune-text-secondary, #a89870); }
+.fatal-details pre {
+  margin-top: 8px;
+  padding: 12px;
+  max-height: 200px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dune-text-dim, #6a5a40);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(212, 168, 67, 0.15);
+  border-radius: 3px;
+}
+
+/* ══════════════════════════════════════════════════════
+   HELP / CONTROLS OVERLAY
+   ══════════════════════════════════════════════════════ */
+#help-btn {
+  /* Square icon button — the shared #menu-btn/#research-btn rule sizes for text. */
+  padding: 7px 0;
+  width: 30px;
+  font-size: 13px;
+}
+
+#help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 6, 10, 0.78);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s;
+}
+#help-overlay.help-overlay--visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+#help-modal {
+  width: 100%;
+  max-width: 520px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--dune-bg);
+  border: 1px solid var(--dune-border-bright);
+  border-radius: 6px;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.7), inset 0 0 40px var(--dune-glow);
+  backdrop-filter: blur(10px);
+}
+
+.help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--dune-border);
+}
+.help-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--dune-gold-bright);
+}
+.help-close {
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 7px;
+  cursor: pointer;
+  color: var(--dune-text-dim);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.help-close:hover {
+  color: var(--dune-gold);
+  border-color: var(--dune-border);
+}
+
+.help-body {
+  padding: 6px 18px 14px;
+  overflow-y: auto;
+}
+.help-body::-webkit-scrollbar { width: 4px; }
+.help-body::-webkit-scrollbar-thumb {
+  background: var(--dune-border);
+  border-radius: 2px;
+}
+
+.help-section { margin-top: 14px; }
+.help-section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--dune-amber);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(212, 168, 67, 0.15);
+}
+
+.help-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 0;
+}
+.help-keys {
+  flex: 0 0 138px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.help-desc {
+  flex: 1;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dune-text-secondary);
+}
+.help-sep {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--dune-text-dim);
+}
+
+/* Shared by the in-game overlay, its footer, and the pause menu's CONTROLS panel. */
+.help-body kbd,
+.help-footer kbd {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
+  white-space: nowrap;
+  color: var(--dune-sand);
+  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid var(--dune-border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+}
+
+.help-footer {
+  padding: 11px 18px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  text-align: center;
+  color: var(--dune-text-dim);
+  border-top: 1px solid var(--dune-border);
+}
+
+/* Controls list embedded in the pause menu — the panel supplies its own
+   padding and scrolling, so drop the overlay's. */
+.help-body--embedded {
+  padding: 0;
+  max-height: 46vh;
+}
+.help-body--embedded .help-section:first-child { margin-top: 4px; }
+
+/* Crystal portion of a tech node's cost — tinted so the second currency reads
+   as distinct from the energy figure next to it. */
+.tech-cost-crystal { color: #cc88ff; }
+.tech-node-cost--cant .tech-cost-crystal { color: inherit; }
+
+/* ── Admiral Mode toggle ──
+   RTS mode had no discovery path outside the help screen: the only way in was
+   the V key, which nothing announced. The button appears once the player owns a
+   fleet — before that there is nothing to command — and pulses the first time,
+   the way the research button does for new tech. */
+#admiral-mode-btn {
+  display: none;   /* HUDBridge shows this once a player fleet exists */
+}
+#admiral-mode-btn.admiral-btn--visible {
+  display: block;
+}
+/* Yields to the centred ADMIRAL MODE banner while the mode is active. */
+#admiral-mode-btn.admiral-btn--hidden {
+  display: none;
+}
+#admiral-mode-btn.admiral-btn--pulse {
+  animation: admiral-pulse 1.6s ease-in-out infinite;
+}
+@keyframes admiral-pulse {
+  0%, 100% { border-color: var(--dune-border); box-shadow: 0 0 0 rgba(212, 168, 67, 0); }
+  50%      { border-color: var(--dune-gold);   box-shadow: 0 0 12px rgba(212, 168, 67, 0.5); }
+}
+
+/* ══════════════════════════════════════════════════════
+   Offline progression report — "while you were away"
+   ══════════════════════════════════════════════════════ */
+
+#offline-report {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 6, 10, 0.8);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+#offline-report.offline-report--visible { opacity: 1; }
+
+.offline-panel {
+  width: 100%;
+  max-width: 460px;
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--dune-bg);
+  border: 1px solid var(--dune-border-bright);
+  border-radius: 6px;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.7), inset 0 0 40px var(--dune-glow);
+  backdrop-filter: blur(10px);
+  padding: 20px;
+}
+
+.offline-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--dune-border);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+.offline-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 15px;
+  letter-spacing: 2px;
+  color: var(--dune-gold-bright);
+}
+.offline-away {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--dune-text-secondary);
+  white-space: nowrap;
+}
+
+.offline-note {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text-dim);
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.offline-gains {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.offline-gain {
+  flex: 1 1 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px;
+  border: 1px solid var(--dune-border);
+  border-radius: 4px;
+  background: rgba(212, 168, 67, 0.05);
+}
+.offline-gain-glyph { font-size: 16px; opacity: 0.8; }
+.offline-gain-val {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
+  color: var(--dune-gold-bright);
+}
+.offline-gain-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--dune-text-secondary);
+}
+.offline-gain--energy .offline-gain-val  { color: #e8c45a; }
+.offline-gain--crystal .offline-gain-val { color: #7ac8e0; }
+
+.offline-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dune-border);
+}
+.offline-section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--dune-text-secondary);
+  margin-bottom: 8px;
+}
+.offline-section--warn .offline-section-title { color: var(--dune-amber); }
+
+.offline-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  padding: 3px 0;
+}
+.offline-row-key { color: var(--dune-text); }
+.offline-row-val { color: var(--dune-text-secondary); text-align: right; }
+
+.offline-hint {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text-dim);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.offline-btn {
+  width: 100%;
+  margin-top: 20px;
+  padding: 12px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--dune-bg-solid);
+  background: linear-gradient(180deg, var(--dune-gold-bright), var(--dune-gold));
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.offline-btn:hover { filter: brightness(1.12); }
+
+/* ══════════════════════════════════════════════════════
+   Victory screen — galactic dominion
+   ══════════════════════════════════════════════════════ */
+
+#victory-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(212, 168, 67, 0.16), transparent 62%),
+    rgba(4, 6, 10, 0.93);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+#victory-screen.victory-screen--visible { opacity: 1; }
+
+.victory-panel {
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  overflow-y: auto;
+  text-align: center;
+  padding: 32px 28px;
+  border: 1px solid var(--dune-border-bright);
+  border-radius: 6px;
+  background: var(--dune-bg);
+  box-shadow: 0 0 80px rgba(212, 168, 67, 0.18), inset 0 0 60px var(--dune-glow);
+}
+
+.victory-eyebrow {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: var(--dune-text-secondary);
+}
+.victory-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(26px, 5vw, 42px);
+  letter-spacing: 6px;
+  margin: 10px 0 16px;
+  color: var(--dune-gold-bright);
+  text-shadow: 0 0 30px rgba(212, 168, 67, 0.45);
+}
+.victory-blurb {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--dune-text);
+  max-width: 52ch;
+  margin: 0 auto 28px;
+}
+
+.victory-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 18px;
+  text-align: left;
+  margin-bottom: 28px;
+}
+.victory-stat-group {
+  padding: 14px 16px;
+  border: 1px solid var(--dune-border);
+  border-radius: 4px;
+  background: rgba(212, 168, 67, 0.04);
+}
+.victory-group-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--dune-amber);
+  margin-bottom: 10px;
+}
+.victory-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  padding: 3px 0;
+}
+.victory-stat-label { color: var(--dune-text-secondary); white-space: nowrap; }
+.victory-stat-val   { color: var(--dune-gold-bright); white-space: nowrap; }
+
+.victory-btn {
+  padding: 13px 40px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--dune-bg-solid);
+  background: linear-gradient(180deg, var(--dune-gold-bright), var(--dune-gold));
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.victory-btn:hover { filter: brightness(1.12); }
+
+.victory-footer {
+  margin-top: 14px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text-dim);
+}
+
+/* ══════════════════════════════════════════════════════
+   NARROW VIEWPORTS
+
+   The page shipped a mobile viewport and no width rules at all, so anything
+   under about 1000px put two 380px panels edge to edge with no galaxy left
+   between them. These breakpoints reclaim the middle.
+
+   Below 780px the side panels stop being side panels and dock along the
+   bottom, which keeps the whole top half of the screen as playfield — the
+   thing the player actually needs to see and click. PlanetPanel.update()
+   knows about this width and stops writing an inline `top` there
+   (NARROW_LAYOUT_WIDTH), since an inline style would beat these rules.
+
+   This is narrow-desktop and tablet support. The game wants a pointer for
+   box-select and right-click waypoints and a keyboard for its shortcuts; no
+   breakpoint changes that.
+   ══════════════════════════════════════════════════════ */
+
+@media (max-width: 1100px) {
+  :root { --panel-width: 330px; }
+}
+
+@media (max-width: 900px) {
+  :root { --panel-width: 300px; }
+
+  #menu-btn, #research-btn, #admiral-mode-btn, #help-btn {
+    font-size: 11px;
+    padding: 6px 9px;
+  }
+  /* The keycap hints are redundant on a screen this size — the buttons are the
+     discovery path, and the room is better spent on the galaxy. */
+  #top-nav .btn-key { display: none; }
+
+  #top-left-hud { width: 132px; }
+
+  #global-production { gap: 10px; padding: 4px 10px; font-size: 11px; }
+  #enemy-threat-bar  { gap: 10px; padding: 4px 10px; }
+}
+
+@media (max-width: 780px) {
+  /* Dock both panels along the bottom, side by side, so the playfield keeps
+     the upper half of the screen instead of a vertical slot in the middle. */
+  .planet-panel {
+    top: auto !important;   /* beats the inline top written for wide layouts */
+    bottom: 10px;
+    width: calc(50vw - 14px);
+    max-height: 46vh;
+  }
+  #panel-left  { left: 8px;  transform: translateY(130%); }
+  #panel-right { right: 8px; transform: translateY(130%); }
+  #panel-left.visible,
+  #panel-right.visible { transform: translateY(0); }
+
+  /* Top-centre furniture stacks under the nav row rather than across it. */
+  #enemy-threat-bar  { top: 52px; }
+  #global-production { top: 88px; }
+  /* Moving this down means the -60px hide transform no longer clears the top
+     of the screen, so the "hidden" banner would sit visible under the nav.
+     Both states have to move together. */
+  #rts-mode-indicator {
+    top: 52px;
+    font-size: 11px;
+    padding: 5px 12px;
+    transform: translateX(-50%) translateY(-130px);
+  }
+  #rts-mode-indicator.visible { transform: translateX(-50%) translateY(0); }
+
+  #top-left-hud { width: 112px; }
+  #fps-counter { display: none; }
+}
+
+@media (max-width: 520px) {
+  /* One column. Side by side, each panel would be under 200px wide — narrower
+     than a single upgrade button — so they stack instead, sharing the lower
+     two thirds of the screen. Stacking rather than overlaying matters: both
+     panels are shown together, and an overlay would bury the left panel's
+     build buttons under the right panel entirely. */
+  .planet-panel {
+    width: calc(100vw - 16px);
+    max-height: 32vh;
+  }
+  #panel-left  { left: 8px;  bottom: calc(32vh + 18px); }
+  #panel-right { right: 8px; bottom: 10px; }
+
+  #top-left-hud { display: none; }
+  #help-overlay, #offline-report, #victory-screen { padding: 12px; }
+}
+
+/* ══════════════════════════════════════════════════════
+   KEYBOARD FOCUS
+
+   Before this there was exactly one `:focus` rule in the whole stylesheet,
+   which is unsurprising: the HUD activated on `pointerdown`, so keyboard
+   focus never did anything and nobody missed seeing it. Now that every
+   control activates on `click`, focus needs to be visible or Tab navigation
+   is a guessing game.
+
+   `:focus-visible` rather than `:focus` — a mouse click should not leave a
+   ring behind on the button it just pressed.
+   ══════════════════════════════════════════════════════ */
+
+:focus-visible {
+  outline: 2px solid var(--dune-gold-bright);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Panels and grids clip their children, which would slice the ring in half.
+   An inset outline stays inside the element's own box. */
+.hire-btn:focus-visible,
+.base-upg-btn:focus-visible,
+.panel-tab:focus-visible,
+.tech-node:focus-visible,
+.def-build-btn:focus-visible,
+.def-upg-btn:focus-visible {
+  outline-offset: -3px;
+}

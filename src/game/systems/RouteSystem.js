@@ -1,5 +1,5 @@
 import { gameState } from '../GameState.js';
-import { calcTravelDuration } from '../data/routes.js';
+import { calcTravelDuration, routeCargoAmount } from '../data/routes.js';
 
 export class RouteSystem {
   constructor(animationLoop, roamingFleetSystem) {
@@ -47,8 +47,11 @@ export class RouteSystem {
       if ((shipsByRoute.get(route.id) || 0) > 0) continue; // one ship per route at a time
       if ((shipsByFromPlanet.get(route.fromPlanet) || 0) >= gameState.getShipSlots(route.fromPlanet)) continue;
 
-      // Check if source has enough resource
-      if (!gameState.siloHas(route.fromPlanet, route.resource, route.amount)) continue;
+      // Cargo size is a share of the source silo, resolved fresh each dispatch
+      // so silo upgrades take effect on routes created before them.
+      const cargo = routeCargoAmount(route, ps);
+      if (cargo <= 0) continue;
+      if (!gameState.siloHas(route.fromPlanet, route.resource, cargo)) continue;
 
       // Check if destination has room
       const destPs = gameState.getPlanetState(route.toPlanet);
@@ -59,7 +62,7 @@ export class RouteSystem {
       const shipSpeedLevel = ps.baseLevels.shipSpeed;
       const duration = Math.max(1, calcTravelDuration(route.fromPlanet, route.toPlanet, shipSpeedLevel) * gameState.getTechShipSpeedMult());
 
-      const deducted = gameState.deductFromSilo(route.fromPlanet, route.resource, route.amount);
+      const deducted = gameState.deductFromSilo(route.fromPlanet, route.resource, cargo);
       if (deducted <= 0) continue;
 
       route.lastDispatchTime = now;
@@ -114,7 +117,9 @@ export class RouteSystem {
           fromPlanet: route.fromPlanet,
           toPlanet: route.toPlanet,
           resource: route.resource,
-          amount: route.amount,
+          // The dispatched amount isn't persisted, so recompute it from the
+          // route's share — the closest available reconstruction.
+          amount: routeCargoAmount(route, ps),
           duration,
           t,
         };

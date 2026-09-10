@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **3D Engine**: Three.js 0.170 (WebGL, custom GLSL shaders, post-processing)
 - **Build tool**: Vite 6
-- **Backend**: Firebase (Firestore + Auth)
+- **Backend**: Firebase (Firestore + Auth) — loaded as a separate chunk via dynamic `import()`, never shipped in offline-only mode
 - **Deployment**: GitHub Pages at `astro.haaland.de` (auto-deploy on push to `main` via `.github/workflows/deploy.yml`)
 
 ## Commands
@@ -17,9 +17,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev       # Vite dev server (localhost:5173)
 npm run build     # Production build → dist/
 npm run preview   # Preview production build locally
+npm test          # Vitest — balance formulas + save migration chain
+npm run test:watch
 ```
 
-No lint or test scripts are configured.
+No lint script is configured. Tests live in `test/` and run in plain Node (no
+DOM): they cover the pure formula modules and `GameState.deserialize()`, which
+is the one place a bad edit can silently destroy a player's save.
 
 ## Architecture
 
@@ -66,11 +70,14 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
 - **CameraController.js** — Three camera modes: **orbital** (default, drag/zoom/click-focus), **free** (Shift+WASD+mouse), **RTS** (V-toggle, 120-unit radius, 22° elevation, top-down tactical view). Dynamic near/far planes by zoom level. `setPlanetColliders()` for collision, `trackObject()` for smooth following.
 - **RenderPipeline.js** — WebGLRenderer (logarithmic depth buffer, PCFSoft shadow maps) + EffectComposer (bloom, ACES tone mapping)
 - **AnimationLoop.js** — rAF loop, dt capped at 100ms. Calls registered `onUpdate(dt)` callbacks + render. Pauses on `document.hidden`.
+- **Keybindings.js** (`src/game/input/`) — Central keyboard router. Every discrete shortcut registers here instead of adding its own `document` listener: dispatch order is by explicit `PRIORITY` (MODAL > UI > CAMERA), text-field and modifier guards live in one place, and `pushModal`/`popModal` give Escape a stack so it closes the topmost overlay before falling through to the pause menu. `suspend()`/`resume()` (counted) silence it while the landing/pause screen owns the keyboard.
+  The modal stack also owns **focus**: `pushModal(id, close, el)` moves focus into `el`, traps Tab inside it, and returns focus to the opener on close. Escape routes through `popModal()` for exactly this reason — closing with the key and closing with the button must restore focus the same way. A modal that omits `el` still works, it just gets no focus handling.
+- **GraphicsSettings.js** (`src/game/engine/`) — Quality presets persisted to `localStorage('astro_graphics_quality')`. `onQualityChange()` subscribers (RenderPipeline, SceneManager) apply changes live; nothing needs a reload.
 - **InputManager.js** — Raycasting for 3D click/hover (planets, stations, defense objects, ships, fleet icons). RTS box-select with frustum culling. Waypoint placement on Y=0 plane.
 
 ### State Management
 
-**GameState** (`src/game/GameState.js`): Singleton with EventEmitter pattern. Save version **8** (v1→v2→v3→v4→v5→v6→v7→v8 migration supported).
+**GameState** (`src/game/GameState.js`): Singleton with EventEmitter pattern. Save version **11** (v1→…→v11 migration supported).
 
 **Per-planet state** (one record per owned planet):
 ```js
@@ -78,7 +85,7 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
   hasBase: bool,
   baseLevels: { storage, shipSpeed, shipSlots, passiveEnergy },
   silos: { ore: { amount, capacity }, energy: { amount, capacity }, crystal: { amount, capacity } },
-  robots: { miner: { count, speedLevel, loadLevel }, energyBot, builder, scout },
+  robots: { miner: { count }, energyBot, builder, scout },  // speed/load are global tech nodes
   deposits: { ... },            // from planets.js definition
   depositProgress: { ore, crystal, energy },  // scout unlock progress (seconds)
   upgradeLevels: {},
@@ -110,30 +117,33 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
 - `colonyShipsInOrbit[]`, `colonyShipsInFlight[]`, `colonyShipsArriving[]`
 - `activeAttacks[]`, `roamingFleets[]`, `lastAttackTime{}`, `colonizationTime{}`
 - `unlockedTech` (Set of tech node IDs), `_newTechAvailable` (bool, drives HUD pulse)
-- `tutorialStep`, `lastSaved`
+- `tutorialStep`, `tutorialMilitaryStep` (tutorial chapter progress; `-1` = that chapter is finished), `lastSaved`, `victoryTime`
 
 **Lifetime stats**: `stats.{ totalOreProduced, totalEnergyProduced, totalCrystalProduced, totalShipDeliveries, totalResourcesShipped, totalRobotsHired, planetsColonized, playTimeSeconds }`
 
 **Key exported functions** (from GameState.js):
-- `getColonyShipBuildCost(planetsColonized)` → `{ ore: 5000 × 1.5^colonized }`
+- `getColonyShipBuildCost(planetsColonized)` → `{ ore: 5000 × 1.35^colonized }`
 - `colonyLaunchEnergyCost(distance)` → `50 + distance × 0.3`
 - `computeFleetSupplyMax(ships, unlockedTech)` → `{ energyMax, oreMax }`
 
-**Events**: `siloChanged`, `baseBuilt`, `baseUpgraded`, `robotHired`, `robotUpgraded`, `routeAdded`, `routeRemoved`, `routeToggled`, `shipLaunched`, `shipArrived`, `depositUnlocked`, `productionTick`, `planetColonized`, `focusedPlanet`, `planetChanged`, `stateLoaded`, `colonyShipQueued`, `colonyShipBuilt`, `colonyShipLaunched`, `colonyShipArriving`, `colonyShipArrived`, `attackStarted`, `attackEnded`, `planetFallen`, `techUnlocked`, `fleetSpawned`, `fleetMoved`, `fleetDestroyed`, `fleetArrived`, `cargoIntercepted`, `stationAlerted`, `enemyStationDamaged`, `enemyStationDestroyed`
+**Events**: `siloChanged`, `baseBuilt`, `baseUpgraded`, `robotHired`, `routeAdded`, `routeRemoved`, `routeToggled`, `shipLaunched`, `shipArrived`, `depositUnlocked`, `productionTick`, `planetColonized`, `focusedPlanet`, `planetChanged`, `stateLoaded`, `colonyShipQueued`, `colonyShipBuilt`, `colonyShipLaunched`, `colonyShipArriving`, `colonyShipArrived`, `attackStarted`, `attackEnded`, `planetFallen`, `techUnlocked`, `fleetSpawned`, `fleetMoved`, `fleetDestroyed`, `fleetArrived`, `cargoIntercepted`, `stationAlerted`, `enemyStationDamaged`, `enemyStationDestroyed`, `victory`
 
 ### Game Systems (`src/game/systems/`)
 
-- **ProductionSystem.js** — Per-planet, per-frame resource generation:
+- **ProductionSystem.js** — Per-planet, per-frame resource generation. The rate formulas themselves live in `data/productionRates.js` as pure functions, shared with the offline catch-up and the tests:
   - Ore: `count × 0.5 × speedMult × loadMult × planetMult.ore × max(1, unlockedZones)`
   - Energy: `count × 0.4 × speedMult × loadMult × planetMult.energy × max(1, unlockedZones) + passive`
   - Crystal: `count × 0.2 × speedMult × loadMult × planetMult.crystal × unlockedZones` (only if crystalZones > 0)
   - Scouts tick `depositProgress`; threshold → zone unlocks
   - Space elevator: pumps 2.0 ore+energy/s from planet silo → military base silo
   - Advances `colonyShipBuildQueue` and military `queue[]` each frame
+  - Exports `applyScouting()` and `pumpSpaceElevator()` so the offline catch-up runs the same code
 
-- **RouteSystem.js** — One cargo ship per route. Dispatches when route active, slots free, hyperlane unblocked. Delivers on arrival. Reconstructs from `gameState.activeShips` on load.
+- **OfflineProgress.js** — Credits the time the game spent closed, from `lastSaved`. Steps the live production/scouting/elevator functions in 30s slices (so silos fill and stop, and a survey that completes mid-window raises the rate for the rest of it), capped at `MAX_OFFLINE_SECONDS` (8h) and ignored below `MIN_OFFLINE_SECONDS` (2 min). Deliberately narrow: nothing that spawns objects into the world — build queues, colony flights, raids, fleet combat — runs while away, so an absence can neither produce nor cost the player anything they could not have watched. Also restarts each planet's `lastAttackTime`, since a long absence otherwise leaves every planet instantly past `MIN_ATTACK_GAP`. Returns a report for `ui/OfflineReport.js`.
 
-- **ThreatSystem.js** — Schedules enemy waves on owned planets, scales difficulty by planet count + planet ID. Roaming fleets convert via `spawnFleetAttack()`. Emits `attackStarted` / `attackEnded`.
+- **RouteSystem.js** — One cargo ship per route. Dispatches when route active, slots free, hyperlane unblocked. Cargo size is stored on the route as `pct` (share of the source silo) and resolved through `routeCargoAmount()` at each dispatch, so silo upgrades reach routes created before them. Delivers on arrival. Reconstructs from `gameState.activeShips` on load.
+
+- **ThreatSystem.js** — Schedules enemy waves on owned planets. Difficulty comes from `scaleThreat(ownedCount, planetId, planetState)`, which is dominated by how developed *that* planet is (robot count, storage level, military base) plus the planet's intrinsic `threatValue`, with only a small term for empire size — defences are per-planet, so threat is too. Colonisation grace period is 180s. Roaming fleets convert via `spawnFleetAttack()`. Emits `attackStarted` / `attackEnded`.
 
 - **CombatSystem.js** — Full per-enemy simulation for focused planet, simplified net-DPS for background planets. Defense fire, active abilities (EMP, shieldBoost, orbitalStrike), builder repair. Calls `reconstructAttacks()` on load.
 
@@ -182,9 +192,9 @@ Shared GLSL utilities in `src/game/utils/ShaderLib.js` (noise, FBM, Fresnel).
 - **Ship3D.js** — 3D cargo vessel geometry and flight animation
 - **ShipManager3D.js** — Pool of visual cargo ships, spawned/recycled per active route
 - **DefenseManager3D.js** — Visual defense structures per planet: DefenseSatellite3D + PatrolShip3D. Provides fire-position lookups for CombatEffects.
-- **RoamingFleet3D.js** — 3D visual for a roaming enemy fleet (group of EnemyShip3D meshes)
+- **RoamingFleet3D.js** — 3D visual for a roaming enemy fleet. Ships are `EnemyShip3D.createMeshGroup()` nodes parented to the fleet group, banked per-ship in `update()` (the instanced `animateTransit()` path never reaches the scene graph).
 - **RoamingFleetManager3D.js** — Pool manager for RoamingFleet3D instances
-- **PlayerFleet3D.js** — 3D visual representation of a player fleet (ship group with formation)
+- **PlayerFleet3D.js** — 3D visual for a player fleet: `EnemyShip3D.createMeshGroup()` nodes in formation, tinted with the player palette.
 - **PlayerFleetManager3D.js** — Pool manager for PlayerFleet3D; handles RTS selection targets and fleet world-position lookups
 - **RouteLane3D.js** — Visual lane rendered between planets with an active trade route
 - **EnemyStationManager3D.js** — Manages 7 enemy station visuals: 4 planet-anchored (Nebulox, Glacius, Solaris, Voidex) + 3 free-floating outposts. Handles station lifecycle, phase updates, and destruction.
@@ -200,7 +210,7 @@ Shared GLSL utilities in `src/game/utils/ShaderLib.js` (noise, FBM, Fresnel).
 - **5 visual robot classes** in `robots/`: `MinerBot`, `ScoutBot`, `SpiderBot`, `HoverBot`, `TitanBot`
 - **RobotManager3D.js** — Pool of up to 32 visual robots, cycles through 5 robot classes
 - **ColonyShip3D.js** — Colony ship; orbit mode (radius 20) and travel mode (parabolic arc)
-- **EnemyShip3D.js** — Enemy fighter: interceptor (needle), bomber (bulky), raider (fork-shape). HP bar + hit-flash.
+- **EnemyShip3D.js** — Enemy fighter geometry: interceptor (needle), bomber (bulky), raider (fork-shape). **Has no `THREE.Group`** — an instance is a logical object that computes a matrix and colour for `EnemyManager3D` to draw through InstancedMesh. Code that needs a real scene node (the fleet visuals, which parent ships to a moving fleet group) must use the static `EnemyShip3D.createMeshGroup(type, colorHex)` / `disposeMeshGroup(group)` pair, which builds plain meshes over the same shared geometry. Geometry and the body material are shared process-wide — never dispose them from a consumer; `disposeMeshGroup` releases only the per-group glow clone.
 - **Mothership3D.js** — Enemy dreadnought (2.5× scale). Warp-in animation, pulsing engines (2.8 Hz), weapon charging (2.2 Hz), HP bar.
 - **MilitaryBase3D.js** — Visual military base structure on planet surface. Shows hangar count and HP state.
 - **DefenseSatellite3D.js** — Orbiting defense platform with weapon arms, solar fins, sensor dome, click hitbox
@@ -209,7 +219,8 @@ Shared GLSL utilities in `src/game/utils/ShaderLib.js` (noise, FBM, Fresnel).
 
 ### UI Components
 
-- **PlanetPanel.js** (`src/game/ui/`) — Floating side panels when zoomed into a planet. Tabbed: base build/upgrade, robot hire/upgrade, silo status, trade routes, colony ship launcher. Hosts DefensePanel.
+- **activate.js** (`src/ui/`) — `onActivate(el, handler, opts)`, the single way HUD controls are bound. Everything in game used to bind `pointerdown`, which meant Enter/Space on a focused button did nothing (the whole in-game HUD was mouse-only, while the landing screen's `click` handlers worked fine) and a touch-drag to scroll a panel fired whatever button it started on. `click` covers mouse, tap and keyboard. Non-button elements — the tech tree's node `<div>`s — get `tabindex`, `role="button"` and Enter/Space routed through `el.click()`. `{ once: true }` unbinds every listener the call added, not just the click one.
+- **PlanetPanel.js** (`src/game/ui/`) — Floating side panels when zoomed into a planet. Tabbed: base build/upgrade, robot hire/upgrade, silo status, trade routes, colony ship launcher. Hosts DefensePanel. The per-second sections (base, hire) build into a detached node and commit only when the markup actually differs (`_renderInto()`); the silo bars keep cached element refs and the routes list keeps a fingerprint. Comparing built markup rather than fingerprinting inputs avoids a second copy of the render logic that could drift. Below `NARROW_LAYOUT_WIDTH` (780px) the panels dock to the bottom edge and `update()` stops writing an inline `top`.
 - **CombatHUD.js** (`src/game/ui/`) — Alert banners (INVASION INCOMING, RAID DETECTED, THREAT NEUTRALIZED, STATION DESTROYED, CARGO INTERCEPTED) + floating combat summary. Alerts auto-dismiss after 4s.
 - **DefensePanel.js** (`src/game/ui/`) — Defense build/upgrade grid (cannon, satellite, defenseShip, shield). Ability buttons (EMP, orbitalStrike, shieldBoost) with pie-chart cooldown overlays.
 - **MilitaryPanel.js** (`src/game/ui/`) — Military base status: hangars, fleet capacity, HP bar. Ship build queue management. Supply level bars (fuel/ammo). Build cost from military base silo.
@@ -222,7 +233,10 @@ Shared GLSL utilities in `src/game/utils/ShaderLib.js` (noise, FBM, Fresnel).
 
 ### Tutorial & Audio
 
-- **Tutorial.js** (`src/game/tutorial/`) — Step-based guided onboarding. Tracks via `gameState.tutorialStep`. Positions `#tutorial-hand` DOM element over UI targets. Steps: build base → hire energy bot → unlock miner in research → hire miner → watch ore silo → expand storage → farewell.
+- **Tutorial.js** (`src/game/tutorial/`) — Guided onboarding in independent **chapters**, each with its own trigger and its own saved progress, positioning `#tutorial-hand` over UI targets. Every step carries a headline plus a sentence of reasoning (`{ title, body, condition, targetEl }`).
+  - **Chapter 1 — economy** (`gameState.tutorialStep`, starts immediately): base → energy bot → research miner → miner → ore silo → storage → scout → deposit zone → defence cannon → colony ship → trade route → farewell.
+  - **Chapter 2 — military** (`gameState.tutorialMilitaryStep`, starts once any owned planet has a built military base): base online → hangar → warship → Admiral Mode → send the fleet → supply. Because it is triggered independently, saves that finished chapter 1 before this chapter existed still receive it.
+  - Exactly one chapter shows at a time; the earlier eligible one wins, so a running chapter is never interrupted. `Tutorial` is always constructed in `main.js` — chapter 2 can trigger hours in.
 - **AudioManager.js** (`src/game/audio/`) — ~20 SFX via Web Audio API. Buffer pooling. Procedural synth sounds (fleet explosion, Titan ultimate, carrier hum). Volume/mute persisted to localStorage.
 - **MusicManager.js** (`src/game/audio/`) — Background music. Fade in/out on planet switch. Started after save applied.
 
@@ -260,11 +274,11 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 - **LocalStorage** (`src/storage.js`): Auto-saves every 10s + visibility change + significant events. Key: `astro_save_<slot>`.
 - **Firestore** (`src/db.js`): Cloud sync every 30s at `saves/{uid}/state/current`. Requires auth.
 - **Conflict resolution**: Prefer highest ore; tie-break by timestamp.
-- **Save version**: 8 (migration from v1→v8 supported in `GameState.deserialize()`). v6→v7 adds `distressFlareFired`; v7→v8 renames station IDs (station_drakon→station_nebulox, station_crystara→station_solaris).
+- **Save version**: 11 (migration from v1→v11 supported in `GameState.deserialize()`, covered by `test/saveMigration.test.js`). v6→v7 adds `distressFlareFired`; v7→v8 renames station IDs (station_drakon→station_nebulox, station_crystara→station_solaris); v8→v9 drops per-planet robot speed/load levels (now global tech nodes); v9→v10 converts routes from an absolute `amount` to a `pct` share of the source silo; v10→v11 adds `victoryTime` (defaulted to null).
 
 ### Authentication
 
-`src/auth.js`: `handleAuthRedirect()` on boot (OAuth redirect flow). `getCurrentUser()`, `signOut()`. Optional Google Sign-In with account linking. `onAuthReady(callback)` fires once auth state resolves.
+`src/auth.js`: `handleAuthRedirect()` on boot (OAuth redirect flow). The `firebase/auth` namespace is not imported statically — `initFirebase()` loads it and `auth.js` reaches it through `getAuthSdk()`, so the SDK stays out of the main bundle. `getCurrentUser()`, `signOut()`. Optional Google Sign-In with account linking. `onAuthReady(callback)` fires once auth state resolves.
 
 ### HUD Bridge
 
@@ -274,11 +288,21 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 
 | Path | Purpose |
 |------|---------|
-| `src/main.js` | Entry point — boot sequence (9 systems) |
+| `src/main.js` | Entry point — boot sequence (9 systems), WebGL check + fatal-error fallback |
+| `src/game/input/Keybindings.js` | Central keyboard router — priority dispatch + modal stack (all shortcuts go through this) |
+| `src/game/engine/GraphicsSettings.js` | Quality presets (low/medium/high) — pixel ratio, shadows, post passes |
+| `src/game/ui/HelpWindow.js` | Controls reference overlay (`?`); exports `CONTROL_SECTIONS` |
+| `src/ui/FatalError.js` | WebGL detection + fatal-error screen (boot failure, context loss) |
 | `src/game/Game.js` | Three.js init, galaxy setup, click handling, render loop |
-| `src/game/GameState.js` | Singleton state + EventEmitter (v8 save format) |
+| `src/game/GameState.js` | Singleton state + EventEmitter (v10 save format) |
 | `src/game/HUDBridge.js` | HTML HUD updates, toast notifications, enemy threat bar |
 | `src/game/systems/ProductionSystem.js` | Per-planet resource generation, space elevator, ship build ticks |
+| `src/game/systems/OfflineProgress.js` | Catch-up for time spent with the game closed |
+| `src/game/data/productionRates.js` | Pure per-second production + scouting formulas (live tick, offline, tests) |
+| `src/ui/OfflineReport.js` | "While you were away" panel |
+| `src/ui/VictoryScreen.js` | Endgame screen + `installVictoryScreen()` wiring |
+| `src/ui/format.js` | Shared compact-number and duration formatting |
+| `src/ui/activate.js` | `onActivate()` — click/keyboard/tap activation for every HUD control |
 | `src/game/systems/RouteSystem.js` | Cargo ship dispatch + delivery |
 | `src/game/systems/ThreatSystem.js` | Enemy invasion wave scheduling + difficulty scaling |
 | `src/game/systems/CombatSystem.js` | Planet station combat (full + simplified DPS modes) |
@@ -296,19 +320,19 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/game/ui/TechTreeWindow.js` | Tech tree modal (press T) |
 | `src/game/ui/EnemyStationPanel.js` | Enemy station inspection panel |
 | `src/game/ui/Minimap.js` | Galaxy minimap with fleet markers |
-| `src/game/tutorial/Tutorial.js` | Guided onboarding |
+| `src/game/tutorial/Tutorial.js` | Guided onboarding — economy + military chapters |
 | `src/game/audio/AudioManager.js` | SFX + procedural synth sounds |
 | `src/game/audio/MusicManager.js` | Background music system |
 | `src/ui/LandingScreen.js` | Title/pause screen, 3-slot save management |
 | `src/game/data/planets.js` | 8 planets: costs, multipliers, resourceTypes, deposits, nebula palettes |
-| `src/game/data/upgrades.js` | BASE_UPGRADES (4) + ROBOT_UPGRADES (8) + ROBOT_ACTIONS (4) + cost helpers |
+| `src/game/data/upgrades.js` | BASE_UPGRADES (4) + ROBOT_ACTIONS (4) + cost helpers |
 | `src/game/data/defenses.js` | DEFENSE_TYPES (4) + DEFENSE_UPGRADES + ACTIVE_ABILITIES (3) + balance constants |
 | `src/game/data/militaryShips.js` | 6 ship types: fighter/bomber/carrier/battleship/titan/scavenger (stats, costs, combat behavior) |
 | `src/game/data/enemyStations.js` | 7 enemy station definitions (4 planet-anchored + 3 free-floating outposts) |
 | `src/game/data/militaryStats.js` | Supply balance: FUEL_BURN_RATE, AMMO_BURN_RATE, RESUPPLY_RATE, TITAN constants |
 | `src/game/data/fleetCombatStats.js` | Fleet combat geometry: ENGAGE_RADIUS (30), DISENGAGE_RADIUS (50), per-ship positioning; station combat: STATION_ENGAGE_RANGE (20), STATION_DPS by phase |
 | `src/game/data/enemies.js` | ENEMY_TYPES (interceptor/bomber/raider/mothership) + RAID/INVASION_TEMPLATES |
-| `src/game/data/routes.js` | Route creation + validation + travel duration calc |
+| `src/game/data/routes.js` | Route creation + validation + travel duration + `routeCargoAmount()` (pct → tonnage) |
 | `src/game/data/galaxyLayout.js` | Planet positions (4000×4000 grid) + 9 hyperlane connections |
 | `src/game/data/techTree.js` | Tech nodes (6 branches: robots/defense/base/colonization/military/special), FREE_TECH_IDS |
 | `src/game/utils/ShaderLib.js` | Shared GLSL (noise, FBM, Fresnel) |
@@ -332,7 +356,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/game/objects/Station3D.js` | Orbital station geometry |
 | `src/ui/HUD.css` | UI stylesheet (glassmorphism, gold palette) |
 | `src/ui/LandingScreen.css` | Landing/pause screen styles |
-| `src/firebase.js` | Firebase init (graceful offline fallback) |
+| `src/firebase.js` | Lazy Firebase init (dynamic import, graceful offline fallback) |
 | `src/storage.js` | LocalStorage save/load, 3-slot management, auto-save |
 | `src/db.js` | Firestore cloud sync |
 | `src/auth.js` | Firebase auth (anonymous + Google Sign-In) |
@@ -357,8 +381,10 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 - **Colors**: Gold `#d4a843` (main), amber `#c67b30` (accent), sand `#e8d5b0`, dark bg `#0a0e14`
 - **Fonts**: Orbitron (headers/numbers), Share Tech Mono (body/values) — Google Fonts in `index.html`
 - **Panel layout**: 380px floating side panels, shown/hidden by zoom level. Menu button top-left.
+- **Breakpoints**: width rules narrow the panels at 1100px and 900px, dock them along the bottom edge at 780px (keeping the whole upper screen as playfield), and stack them in one column at 520px. This is narrow-desktop and tablet support — the game needs a pointer for box-select and right-click waypoints. When moving a fixed-position element in a breakpoint, check its *hidden* transform too: `#rts-mode-indicator` hides with `translateY(-60px)`, which stopped clearing the screen once `top` moved to 52px.
+- **Focus**: one global `:focus-visible` gold outline, with an inset variant for controls inside clipping containers (hire/upgrade grids, tabs, tech nodes). Use `:focus-visible`, never `:focus` — a mouse click should not leave a ring behind.
 - **CSS**: All styling in `src/ui/HUD.css` + `src/ui/LandingScreen.css` — glassmorphism panels, gradient gold borders
-- **Post-processing**: Bloom (UnrealBloomPass, strength 0.8, threshold 0.6, smoothRadius 0.55) + ColorGradeShader (S-curve, vignette, chromatic aberration), ACES Filmic tone mapping (exposure 1.1)
+- **Post-processing**: Bloom (UnrealBloomPass, strength 0.8, threshold 0.6, smoothRadius 0.55) + ColorGradeShader (S-curve, vignette, chromatic aberration), ACES Filmic tone mapping (exposure 1.1). Bloom and god rays are toggled per quality preset via `pass.enabled` — the composer chain is never rebuilt to drop a pass, since Game.js writes god-ray and warp uniforms every frame.
 - **Lighting**: Directional sun (PCFSoft shadows) + ambient + hemisphere + per-planet rim + fill lights
 - **Shadows**: Planet meshes cast shadows, rings receive. Shadow map 1024×1024.
 - **Fog**: Exponential fog (0.0008 density) for depth at galaxy scale
@@ -366,14 +392,14 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 ## Game Mechanics
 
 - **Resources**: Ore, Crystal, Energy — independent silos per planet
+- **Crystal sinks**: crystal is only produced on crystal-bearing worlds (Crystara, Glacius, Nebulox, Voidex) after a scout opens a crystal zone, and it gates the end of several lines rather than any early choice — levels 4–5 of the four primary defence upgrades (`crystalCost` in `defenses.js`), the `crystal_cores` / `pure_crystal_lasers` / `quantum_fuel` / `fortress_protocol` tech nodes (`crystalCost` in `techTree.js`), and the Battleship and Titan hulls.
 - **Production**: Per-planet per-frame (ProductionSystem). Zone count = multiplier. 0 unlocked zones = 0 production.
 - **Deposit unlock**: Scouts accumulate `depositProgress`; threshold → zone unlocks → production starts
 - **Base upgrades** (4): Storage expansion, ship speed, docking slots, passive energy — each 3–5 levels, cost in energy
-- **Robot upgrades** (8): Speed + load per robot type — 5 levels each
-- **Robot hire cost**: Scales with existing count (`energyCostFn(ps)` in ROBOT_ACTIONS)
+- **Robot hire cost**: `base × ROBOT_HIRE_COST_SCALE^count` (1.09) per planet. Output is linear in count, so the growth rate alone sets where robots stop paying off; sustained growth is meant to come from zones/tech/planet multipliers.
 - **Upgrade cost scaling**: `baseCost × 1.15^level` — buy multiplier toggles ×1/×10/×100
 - **8 planets**: Xerion (free home) → Voidex (~8M energy). Each has `resourceTypes` and `planetMult` bonuses.
-- **Colony ships**: Multi-step — (1) build on planet (cost: `5000 ore × 1.5^planetsColonized`, 20s); (2) launch to unowned planet (cost: `50 + dist × 0.3` energy); (3) ship flies + enters orbit; (4) build base manually. Recolonizing fallen planet costs `baseCost × RECOLONIZE_COST_MULT`. On arrival the new planet's silo capacity is expanded to `max(500, baseCost × techMult)` so cargo routes from other planets can fill it enough to build. Cargo ships can deliver to planets without a base (destination only needs to be in `ownedPlanets`).
+- **Colony ships**: Multi-step — (1) build on planet (cost: `5000 ore × 1.35^planetsColonized`, 20s); (2) launch to unowned planet (cost: `50 + dist × 0.3` energy); (3) ship flies + enters orbit; (4) build base manually. Recolonizing fallen planet costs `baseCost × RECOLONIZE_COST_MULT`. On arrival the new planet's silo capacity is expanded to `max(500, baseCost × techMult)` so cargo routes from other planets can fill it enough to build. Cargo ships can deliver to planets without a base (destination only needs to be in `ownedPlanets`).
 - **Military base**: Build with 2000 ore + 1500 energy. Add hangars (1000 + 500×n energy each, max 5, 10–15 fleet cap/hangar). Build ships from military silo. Space elevator pumps 2 ore+energy/s from planet silo.
 - **Military ships** (6 types):
 
@@ -382,7 +408,7 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 | Fighter | 150/80/— | 60 | 8 | 15s | 1 |
 | Bomber | 300/200/— | 90 | 15 | 25s | 2 |
 | Carrier | 800/500/— | 200 | 2 | 40s | 4 |
-| Battleship | 1500/800/— | 300 | 12 | 60s | 5 |
+| Battleship | 1500/800/25 | 300 | 12 | 60s | 5 |
 | Titan | 5000/2000/100 | 800 | 20 | 120s | 10 |
 | Scavenger | 400/600/— | 150 | 1 | 30s | 1 |
 
@@ -390,9 +416,11 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 
 - **Fleet combat**: Player fleets engage roaming fleets within 30 units. Disengage beyond 50 units. Supply runs out → reduced DPS. Carrier heals fleet. Titan ultimate (120s cooldown, 50 ore) AoE instakills light enemies.
 - **Combat & Defense**: Station HP (`BASE_STATION_HP`). Waves of interceptor/bomber/raider/mothership. 3 abilities: EMP, shieldBoost, orbitalStrike. Planet falls → `combat.fallen = true`, fraction of robots lost. Builders repair HP.
-- **Tech tree**: 6 branches (robots/defense/base/colonization/military/special). Costs energy, requires prerequisites. `FREE_TECH_IDS` unlocked on new game. Access via T. Capstone techs: `pure_crystal_lasers` (+15% DPS, +20% ammo) and `quantum_fuel` (×1.5 energy capacity), both 50k energy. `getColonySpeedMult()` → 1.0–2.0×. `getMaxColonyShipsInFlight()` → 1–5.
+- **Tech tree**: 6 branches (robots/defense/base/colonization/military/special). Costs energy, plus crystal on the capstones (`node.crystalCost`); requires prerequisites. `FREE_TECH_IDS` unlocked on new game. Access via T. Capstone techs: `pure_crystal_lasers` (+15% DPS, +20% ammo) and `quantum_fuel` (×1.5 energy capacity), both 50k energy. `getColonySpeedMult()` → 1.0–2.0×. `getMaxColonyShipsInFlight()` → 1–5.
 - **Enemy stations**: 7 stations scattered in galaxy — 4 planet-anchored (Nebulox, Glacius, Solaris, Voidex) + 3 free-floating outposts (Alpha r550, Beta r950, Gamma r1250). Each has a 4-phase state machine: Dormant (passive) → Alert (sends scouts) → Skirmish (raids) → War (invasions). Player fleets besiege within 20 units. Stations fire back (DPS: alert 3, skirmish 8, war 15/s). Destroyed stations leave scavengeable `WreckageField3D`.
+- **Win condition**: all 8 planets owned **and** all 7 enemy stations cleared. `gameState.isVictorious()` / `checkVictory()` latch on `victoryTime` (saved), and `ui/VictoryScreen.js` shows GALACTIC DOMINION with a campaign summary. Dismissing it returns to a running game — there is no game over.
+- **Offline progression**: production, surveying and the space elevator are credited for time spent with the game closed, capped at 8 hours (`systems/OfflineProgress.js`). Silo capacity is the real cap for most players, and the report says which silo filled and when.
 - **Snitch mechanic**: Snitch-type roaming fleets patrol hyperlanes. When a snitch detects a player fleet, it reports to the nearest enemy station (SnitchPath3D visual red line), escalating its phase.
 - **Emergency Jump**: Fleet ability in PlayerFleetPanel. 300s cooldown, costs 40% of current energy. Triggers `WarpDistortionShader` post-processing effect. Instantly repositions fleet.
-- **Camera modes**: Orbital (default), free-fly (Shift), RTS top-down (V, "ADMIRAL MODE"). Scroll to zoom, click planet to focus.
+- **Camera modes**: Orbital (default), free-fly (Shift), RTS top-down (V, "ADMIRAL MODE"). Scroll to zoom, click planet to focus. Full control list in `HelpWindow.js` (`?` in game, or CONTROLS in the pause menu). The `#admiral-mode-btn` in the top nav appears once the player owns a fleet and pulses until the mode has been used once (`localStorage('astro_admiral_mode_seen')`); it hides itself while the mode is active, since the centred `#rts-mode-indicator` banner then carries the exit and command hints.
 - **Performance**: Distant planets (>300 units) update at 10% frequency. Hyperlanes skip updates beyond 250 units.

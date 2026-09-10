@@ -1,12 +1,21 @@
 import { gameState } from '../GameState.js';
 import { TECH_NODES, TECH_BY_ID } from '../data/techTree.js';
 import { AudioManager } from '../audio/AudioManager.js';
+import { keybindings, PRIORITY } from '../input/Keybindings.js';
+import { onActivate, onBackdropActivate } from '../../ui/activate.js';
 
 const fmt = (n) => {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
   return Math.floor(n) + '';
 };
+
+/** Render a tech cost as icon-prefixed parts; crystal only shows when charged. */
+function renderCost(cost) {
+  let html = `⚡ ${fmt(cost.energy)}`;
+  if (cost.crystal > 0) html += ` <span class="tech-cost-crystal">◈ ${fmt(cost.crystal)}</span>`;
+  return html;
+}
 
 const BRANCH_ORDER = ['robots', 'defense', 'base', 'colonization', 'military'];
 const BRANCH_LABELS = {
@@ -29,35 +38,17 @@ export class TechTreeWindow {
     this._activeTab = 'robots';
     this._tabBar    = null;
 
-    document.getElementById('tech-close-btn')
-      ?.addEventListener('pointerdown', () => this.hide());
+    onActivate(document.getElementById('tech-close-btn'), () => this.hide());
+    onBackdropActivate(this._overlay, () => this.hide());
 
-    this._overlay.addEventListener('pointerdown', (e) => {
-      if (e.target === this._overlay) this.hide();
-    });
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const tag = document.activeElement?.tagName;
-      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-
-      if (e.key === 'Escape' && this._visible) {
-        this.hide();
-        e.stopImmediatePropagation();
-        return;
-      }
-
-      if (e.key === 'T' || e.key === 't') {
-        this.toggle();
-        return;
-      }
-      // 1-5: switch tabs when open
-      if (this._visible && e.key >= '1' && e.key <= '5') {
-        const branch = BRANCH_ORDER[parseInt(e.key) - 1];
-        if (branch) this._switchTab(branch);
-      }
-    });
+    // Keyboard shortcuts. Escape is handled by the router's modal stack —
+    // show()/hide() push and pop this window there.
+    keybindings.bind('t', () => this.toggle());
+    keybindings.bind(['1', '2', '3', '4', '5'], (e) => {
+      if (!this._visible) return false; // let the key fall through when closed
+      const branch = BRANCH_ORDER[parseInt(e.key, 10) - 1];
+      if (branch) this._switchTab(branch);
+    }, { priority: PRIORITY.MODAL });
 
     // Rebuild lines if window resizes
     this._resizeObserver = new ResizeObserver(() => {
@@ -67,7 +58,7 @@ export class TechTreeWindow {
 
     // Update energy display when silo changes
     this._onSiloChanged = ({ resource }) => {
-      if (resource === 'energy' && this._visible) this._updateEnergyDisplay();
+      if ((resource === 'energy' || resource === 'crystal') && this._visible) this._updateEnergyDisplay();
     };
     gameState.on('siloChanged', this._onSiloChanged);
     gameState.on('focusedPlanet', () => {
@@ -82,6 +73,7 @@ export class TechTreeWindow {
     this._updateEnergyDisplay();
     this._overlay.classList.add('tech-overlay--visible');
     this._visible = true;
+    keybindings.pushModal('tech-tree', () => this.hide(), this._modal || this._overlay);
     // Remove pulse from Research button
     document.getElementById('research-btn')?.classList.remove('research-btn--pulse');
     gameState._newTechAvailable = false;
@@ -90,6 +82,7 @@ export class TechTreeWindow {
   hide() {
     this._overlay.classList.remove('tech-overlay--visible');
     this._visible = false;
+    keybindings.popModal('tech-tree');
   }
 
   toggle() {
@@ -109,10 +102,7 @@ export class TechTreeWindow {
       tab.className = 'tech-tab' + (branch === this._activeTab ? ' tech-tab--active' : '');
       tab.dataset.branch = branch;
       tab.innerHTML = `<span class="tech-tab-key">${i + 1}</span>${BRANCH_LABELS[branch]}`;
-      tab.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        this._switchTab(branch);
-      });
+      onActivate(tab, () => this._switchTab(branch));
       tabBar.appendChild(tab);
     });
     this._viewport.parentNode.insertBefore(tabBar, this._viewport);
@@ -211,7 +201,7 @@ export class TechTreeWindow {
       <div class="tech-node-name">${node.name}</div>
       ${node.free
         ? '<div class="tech-node-icon">FREE</div>'
-        : `<div class="tech-node-cost">⚡ ${fmt(gameState.getTechCost(node.id).energy)}</div>`}
+        : `<div class="tech-node-cost">${renderCost(gameState.getTechCost(node.id))}</div>`}
       <div class="tech-node-badge"></div>
     `;
 
@@ -223,17 +213,18 @@ export class TechTreeWindow {
         tipHtml += `<br><span style="color:var(--dune-text-dim);font-size: 12px">Requires: ${reqNames}</span>`;
       }
       if (!node.free) {
-        tipHtml += `<br><span style="color:#4af0ff">⚡ ${fmt(gameState.getTechCost(node.id).energy)} energy</span>`;
+        {
+          const c = gameState.getTechCost(node.id);
+          tipHtml += `<br><span style="color:#4af0ff">⚡ ${fmt(c.energy)} energy</span>`;
+          if (c.crystal > 0) tipHtml += `<br><span style="color:#cc88ff">◈ ${fmt(c.crystal)} crystal</span>`;
+        }
       }
       this._showTooltip(card, tipHtml);
     });
     card.addEventListener('mouseleave', () => this._hideTooltip());
 
     if (!node.free) {
-      card.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        this._onNodeClick(node.id);
-      });
+      onActivate(card, () => this._onNodeClick(node.id));
     }
 
     return card;
@@ -257,7 +248,9 @@ export class TechTreeWindow {
       const costEl = card.querySelector('.tech-node-cost');
       if (costEl && !node.free) {
         const cost = gameState.getTechCost(node.id);
-        const canAfford = gameState.siloHas(gameState.focusedPlanet, 'energy', cost.energy);
+        costEl.innerHTML = renderCost(cost);
+        const canAfford = gameState.siloHas(gameState.focusedPlanet, 'energy', cost.energy)
+          && (cost.crystal === 0 || gameState.siloHas(gameState.focusedPlanet, 'crystal', cost.crystal));
         costEl.classList.toggle('tech-node-cost--cant', state === 'available' && !canAfford);
         costEl.classList.toggle('tech-node-cost--can',  state === 'available' && canAfford);
       }
@@ -347,8 +340,8 @@ export class TechTreeWindow {
       return;
     }
 
-    // Check afford
-    if (!gameState.siloHas(gameState.focusedPlanet, 'energy', node.cost)) {
+    // Check afford — canUnlockTech owns the rule (energy and, for late nodes, crystal)
+    if (!gameState.canUnlockTech(nodeId)) {
       this._shakeNode(nodeId);
       AudioManager.play('UI_CLICK_DENIED');
       return;
@@ -380,10 +373,21 @@ export class TechTreeWindow {
 
   // ─── Energy display ───────────────────────────────────────────────────────
 
+  /**
+   * Header readout of what the focused planet can spend. Crystal only appears
+   * once the planet actually has a crystal silo, so worlds that will never
+   * produce it don't show a permanent zero.
+   */
   _updateEnergyDisplay() {
+    if (!this._energyEl) return;
     const ps = gameState.getPlanetState(gameState.focusedPlanet);
     const energy = ps?.silos?.energy?.amount ?? 0;
-    if (this._energyEl) this._energyEl.textContent = `⚡ ${fmt(energy)}`;
+    const crystalSilo = ps?.silos?.crystal;
+    let html = `⚡ ${fmt(energy)}`;
+    if (crystalSilo && crystalSilo.capacity > 0) {
+      html += ` <span class="tech-cost-crystal">◈ ${fmt(crystalSilo.amount)}</span>`;
+    }
+    this._energyEl.innerHTML = html;
   }
 
   // ─── Tooltip ──────────────────────────────────────────────────────────────

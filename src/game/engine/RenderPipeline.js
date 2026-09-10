@@ -5,6 +5,9 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { ColorGradeShader } from '../shaders/effects/ColorGradeShader.js';
 import { WarpDistortionShader } from '../shaders/effects/WarpDistortionShader.js';
+import { showFatalError } from '../../ui/FatalError.js';
+import { saveToLocal } from '../../storage.js';
+import { getPreset, onQualityChange } from './GraphicsSettings.js';
 
 export class RenderPipeline {
   constructor(container) {
@@ -14,17 +17,32 @@ export class RenderPipeline {
       alpha: false,
       powerPreference: 'high-performance',
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const preset = getPreset();
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preset.pixelRatio));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setClearColor(0x0a0e14, 1);
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.1;
 
     // Shadow maps
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     container.appendChild(this.renderer.domElement);
+
+    // A lost GPU context leaves a frozen canvas that still accepts clicks, which
+    // reads as a hang. Say what happened instead. (Driver resets and GPU-process
+    // crashes both surface here; Chrome also fires it when a tab is starved.)
+    this.renderer.domElement.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      saveToLocal();
+      showFatalError({
+        title: 'GRAPHICS CONTEXT LOST',
+        message: 'The browser dropped the WebGL context — usually a graphics driver reset '
+               + 'or another program taking over the GPU. Your progress was saved; reload to continue.',
+        canReload: true,
+      });
+    }, false);
 
     this.composer = null;
     this.bloomPass = null;
@@ -35,6 +53,30 @@ export class RenderPipeline {
     this._warpProgress = 0;
     this._warpActive = false;
     this._warpDuration = 0.4;  // seconds
+
+    // Re-apply whenever the player changes quality; also fires once now.
+    this._unsubscribeQuality = onQualityChange((p) => this.applyQualityPreset(p));
+  }
+
+  /**
+   * Apply a quality preset to the live renderer.
+   *
+   * Passes are toggled rather than rebuilt: the composer chain is constructed
+   * incrementally by addGodRayPass()/addWarpPass(), and tearing it down to drop
+   * one pass would lose the god-ray and warp uniforms that Game.js writes to
+   * every frame. `pass.enabled = false` skips the draw at no cost.
+   */
+  applyQualityPreset(preset = getPreset()) {
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preset.pixelRatio));
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    if (this.composer) this.composer.setSize(window.innerWidth, window.innerHeight);
+
+    this.renderer.shadowMap.enabled = preset.shadows;
+    this.renderer.shadowMap.needsUpdate = true;
+
+    if (this.bloomPass)      this.bloomPass.enabled      = preset.bloom;
+    if (this.godRayPass)     this.godRayPass.enabled     = preset.godRays;
+    if (this.colorGradePass) this.colorGradePass.enabled = preset.colorGrade;
   }
 
   setupPostProcessing(scene, camera) {
@@ -53,6 +95,8 @@ export class RenderPipeline {
     // Color grading: S-curve, cool shadows/warm highlights, saturation, vignette, CA
     this.colorGradePass = new ShaderPass(ColorGradeShader);
     this.composer.addPass(this.colorGradePass);
+
+    this.applyQualityPreset();
   }
 
   /** Called by Game.js each frame to advance time-based uniforms. */
@@ -99,6 +143,8 @@ export class RenderPipeline {
 
     this.colorGradePass = new ShaderPass(ColorGradeShader);
     this.composer.addPass(this.colorGradePass);
+
+    this.applyQualityPreset();
   }
 
   /**
@@ -129,6 +175,8 @@ export class RenderPipeline {
 
     this.colorGradePass = new ShaderPass(ColorGradeShader);
     this.composer.addPass(this.colorGradePass);
+
+    this.applyQualityPreset();
   }
 
   /**
@@ -161,6 +209,7 @@ export class RenderPipeline {
   }
 
   resize(width, height) {
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, getPreset().pixelRatio));
     this.renderer.setSize(width, height);
     if (this.composer) {
       this.composer.setSize(width, height);

@@ -1,6 +1,7 @@
 import { gameState } from '../GameState.js';
 import { MILITARY_SHIPS } from '../data/militaryShips.js';
 import { TITAN_ULTIMATE_COOLDOWN, EMERGENCY_JUMP_COOLDOWN, EMERGENCY_JUMP_ENERGY_COST_PCT } from '../data/militaryStats.js';
+import { onActivate } from '../../ui/activate.js';
 
 /**
  * PlayerFleetPanel — shown when the player clicks one of their own fleets in RTS mode.
@@ -224,8 +225,7 @@ export class PlayerFleetPanel {
     if (hasTitan) {
       const titanBtn = this._el.querySelector('#pfp-titan-btn');
       if (titanBtn) {
-        titanBtn.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
+        onActivate(titanBtn, () => {
           if (this._onTitan) this._onTitan(this._fleetId);
         }, { once: true });
       }
@@ -234,8 +234,7 @@ export class PlayerFleetPanel {
     // Emergency Jump button
     const jumpBtn = this._el.querySelector('#pfp-jump-btn');
     if (jumpBtn) {
-      jumpBtn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(jumpBtn, () => {
         const dest = this._el.querySelector('#pfp-jump-dest')?.value;
         if (dest && this._onJump) this._onJump(this._fleetId, dest);
       }, { once: true });
@@ -293,8 +292,7 @@ export class PlayerFleetPanel {
     // Re-bind click when button transitions to ready (once: true consumed on prev click)
     if (ready && !btn.dataset.bound) {
       btn.dataset.bound = '1';
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         delete btn.dataset.bound;
         if (this._onTitan) this._onTitan(this._fleetId);
       }, { once: true });
@@ -332,8 +330,7 @@ export class PlayerFleetPanel {
     // Re-bind when button transitions back to ready
     if (enabled && !btn.dataset.jumpBound) {
       btn.dataset.jumpBound = '1';
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         delete btn.dataset.jumpBound;
         const dest = this._el.querySelector('#pfp-jump-dest')?.value;
         if (dest && this._onJump) this._onJump(this._fleetId, dest);

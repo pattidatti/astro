@@ -2,6 +2,7 @@ import { gameState } from '../GameState.js';
 import { AudioManager } from '../audio/AudioManager.js';
 import { PLANETS } from '../data/planets.js';
 import { MILITARY_SHIPS, SHIP_TYPES } from '../data/militaryShips.js';
+import { onActivate } from '../../ui/activate.js';
 
 const fmt = (n) => {
   if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
@@ -32,8 +33,7 @@ export class MilitaryPanel {
     this.isVisible = false;
 
     // Close button (left panel header only)
-    document.getElementById('mil-panel-close')?.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(document.getElementById('mil-panel-close'), () => {
       this.hide();
     });
 
@@ -153,8 +153,7 @@ export class MilitaryPanel {
         &nbsp;
         <span class="${canEnergy ? '' : 'mil-cost-cant'}">⚡ 1,500 ENERGY</span>
       </span>`;
-    btn.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(btn, () => {
       AudioManager.play('UI_CLICK');
       gameState.buildMilitaryBase(this._planetId);
     });
@@ -222,8 +221,7 @@ export class MilitaryPanel {
         <span>🏗 HANGAR LV${hangars + 1}</span>
         <span class="mil-hangar-effect">+${capPerHangar} Cap</span>
         <span class="mil-hangar-cost ${canAfford ? '' : 'mil-cost-cant'}">⚡ ${fmt(cost.energy)}</span>`;
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         AudioManager.play('UI_CLICK');
         gameState.buildHangar(this._planetId);
       });
@@ -320,8 +318,7 @@ export class MilitaryPanel {
           btn.disabled  = !canBuild;
           btn.innerHTML = `<span class="mil-ship-cost">${costHtml}</span>`;
           btn.title = !capOk ? 'Fleet cap full' : !canBuild ? 'Insufficient resources' : `Build ${ship.name} (${ship.buildTime}s)`;
-          btn.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
+          onActivate(btn, () => {
             AudioManager.play('UI_CLICK');
             gameState.queueShipBuild(this._planetId, shipType);
           });

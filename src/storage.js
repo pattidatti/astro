@@ -73,7 +73,6 @@ export function startAutoSave(intervalMs = 10000) {
   // Save on significant actions
   gameState.on('baseUpgraded',    saveToLocal);
   gameState.on('robotHired',      saveToLocal);
-  gameState.on('robotUpgraded',   saveToLocal);
   gameState.on('planetColonized', saveToLocal);
   gameState.on('routeAdded',      saveToLocal);
   gameState.on('routeRemoved',    saveToLocal);

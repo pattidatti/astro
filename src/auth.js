@@ -1,12 +1,9 @@
-import { 
-  signOut as firebaseSignOut,
-  GoogleAuthProvider, 
-  getRedirectResult, 
-  onAuthStateChanged, 
-  signInWithRedirect,
-  signInWithPopup
-} from 'firebase/auth';
-import { auth, isFirebaseConfigured } from './firebase.js';
+import { auth, isFirebaseConfigured, getAuthSdk } from './firebase.js';
+
+// The firebase/auth namespace is loaded by initFirebase() rather than imported
+// statically, so it stays out of the main bundle (see firebase.js). Every
+// function below already guards on `auth` being non-null, and `auth` is only
+// set once the SDK is in hand, so reaching for it here is safe.
 
 let authError = null;
 let isRedirecting = false;
@@ -31,7 +28,7 @@ export function onAuthReady(callback) {
     callback(null);
     return;
   }
-  onAuthStateChanged(auth, (user) => {
+  getAuthSdk().onAuthStateChanged(auth, (user) => {
     callback(user);
   });
 }
@@ -42,7 +39,7 @@ export function getCurrentUser() {
 
 export function signOut() {
   if (!auth) return;
-  return firebaseSignOut(auth);
+  return getAuthSdk().signOut(auth);
 }
 
 export function isGoogleUser() {
@@ -69,7 +66,7 @@ export async function handleAuthRedirect() {
   isRedirecting = true;
   
   try {
-    const result = await getRedirectResult(auth);
+    const result = await getAuthSdk().getRedirectResult(auth);
     if (result) {
       console.log('[Auth] Redirect success! User:', result.user.email);
       isRedirecting = false;
@@ -90,13 +87,14 @@ export async function handleAuthRedirect() {
  */
 export async function signInWithGoogle() {
   if (!auth) return null;
-  const provider = new GoogleAuthProvider();
+  const sdk = getAuthSdk();
+  const provider = new sdk.GoogleAuthProvider();
   clearAuthError();
   
   console.log('[Auth] Attempting Google sign-in via Popup...');
   
   try {
-    const result = await signInWithPopup(auth, provider);
+    const result = await sdk.signInWithPopup(auth, provider);
     console.log('[Auth] Popup sign-in success!', result.user.email);
     return result.user;
   } catch (e) {
@@ -107,7 +105,7 @@ export async function signInWithGoogle() {
       console.log(`[Auth] Popup issue (${e.code}), falling back to Redirect...`);
       isRedirecting = true;
       try {
-        await signInWithRedirect(auth, provider);
+        await sdk.signInWithRedirect(auth, provider);
       } catch (re) {
         console.error('[Auth] Redirect trigger failed:', re.code);
         isRedirecting = false;
