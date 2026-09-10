@@ -42,9 +42,9 @@ export function showVictoryScreen() {
       <div class="victory-stats">
         <div class="victory-stat-group">
           <div class="victory-group-title">CAMPAIGN</div>
-          ${statRow('PLANETS COLONISED', `${gameState.ownedPlanets.length} / ${PLANETS.length}`)}
-          ${statRow('STATIONS DESTROYED', `${(gameState.enemyStations || []).length} / ${(gameState.enemyStations || []).length}`)}
-          ${statRow('TIME TO DOMINION', fmtDuration(s.playTimeSeconds))}
+          ${statRow('PLANETS', `${gameState.ownedPlanets.length} / ${PLANETS.length}`)}
+          ${statRow('STATIONS', `${(gameState.enemyStations || []).length} / ${(gameState.enemyStations || []).length}`)}
+          ${statRow('DURATION', fmtDuration(s.playTimeSeconds))}
         </div>
         <div class="victory-stat-group">
           <div class="victory-group-title">EXTRACTION</div>
@@ -54,9 +54,9 @@ export function showVictoryScreen() {
         </div>
         <div class="victory-stat-group">
           <div class="victory-group-title">LOGISTICS</div>
-          ${statRow('ROBOTS HIRED', s.totalRobotsHired.toLocaleString())}
+          ${statRow('ROBOTS', s.totalRobotsHired.toLocaleString())}
           ${statRow('CARGO RUNS', s.totalShipDeliveries.toLocaleString())}
-          ${statRow('RESOURCES SHIPPED', fmtCompact(s.totalResourcesShipped))}
+          ${statRow('SHIPPED', fmtCompact(s.totalResourcesShipped))}
         </div>
       </div>
 

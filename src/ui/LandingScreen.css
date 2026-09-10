@@ -521,3 +521,30 @@
   margin: -4px 0 8px 0;
   padding-left: 2px;
 }
+
+/* ══════════════════════════════════════════════════════
+   NARROW VIEWPORTS
+
+   #landing-content asks for 420px plus 120px of horizontal padding, so on
+   anything narrower than ~560px the menu box was wider than the screen.
+   ══════════════════════════════════════════════════════ */
+
+@media (max-width: 720px) {
+  #landing-content {
+    min-width: 0;
+    width: calc(100vw - 24px);
+    max-width: 460px;
+    padding: 32px 24px;
+    gap: 22px;
+    max-height: 94vh;
+    overflow-y: auto;
+  }
+  .landing-title { letter-spacing: 4px; }
+}
+
+@media (max-width: 420px) {
+  #landing-content { padding: 24px 16px; }
+  .landing-logo-hex { font-size: 32px; }
+  .landing-title { font-size: 20px; letter-spacing: 2px; }
+  .landing-btn { padding: 11px 12px; font-size: 12px; letter-spacing: 2px; }
+}

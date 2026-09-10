@@ -48,6 +48,12 @@ function flashButton(btn, successClass, costText) {
 
 const _ndc = new THREE.Vector3();
 
+/**
+ * Viewport width at or below which the planet panels dock to the bottom edge
+ * instead of floating at the sides. Must match the breakpoint in HUD.css.
+ */
+const NARROW_LAYOUT_WIDTH = 780;
+
 export class PlanetPanel {
   constructor() {
     this._leftEl = document.getElementById('panel-left');
@@ -63,6 +69,7 @@ export class PlanetPanel {
     this._siloTimer = 0;       // timestamp (ms) of last silo DOM update
     this._siloCache = {};      // per-resource last-rendered key for dirty-check
     this._routesFp = '';       // fingerprint to skip redundant _renderRoutes() rebuilds
+    this._renderCache = {};    // section key → last-committed markup (see _renderInto)
 
     this._colonyPopupEl = document.getElementById('colony-ship-popup');
     this._colonyPopupVisible = false;
@@ -169,6 +176,7 @@ export class PlanetPanel {
     this._siloTimer = 0;
     this._siloCache = {};
     this._routesFp = '';
+    this._renderCache = {};
     this._activateTab('left', this._leftTab);
     this._activateTab('right', this._rightTab);
     this._renderAll();
@@ -189,6 +197,15 @@ export class PlanetPanel {
   /** Call each frame to reposition panels to match the camera's look-at target screen Y */
   update(camera, anchorPos) {
     if (!this._visible || !this._planetId || !anchorPos) return;
+
+    // Below this width the panels dock along the bottom of the screen (see the
+    // narrow-viewport block in HUD.css). An inline `top` would override that,
+    // so clear it and leave placement to CSS.
+    if (window.innerWidth <= NARROW_LAYOUT_WIDTH) {
+      if (this._leftEl.style.top)  this._leftEl.style.top = '';
+      if (this._rightEl.style.top) this._rightEl.style.top = '';
+      return;
+    }
 
     _ndc.copy(anchorPos).project(camera);
     // Only reposition if planet is reasonably on screen
@@ -222,9 +239,38 @@ export class PlanetPanel {
     this._renderDefenses();
   }
 
+  /**
+   * Build a panel section off-screen and commit it only if it differs from what
+   * is already there.
+   *
+   * The base and hire sections are re-rendered once a second while the panel is
+   * open, and almost every one of those renders produced byte-identical markup:
+   * a robot count and an affordability class change occasionally, everything
+   * else never does. Committing them anyway threw away hover state and tooltips
+   * mid-interaction, detached the button under the player's cursor, and made
+   * the browser recalculate style and layout for the whole section every second.
+   *
+   * Comparing the built markup rather than fingerprinting the inputs keeps the
+   * check honest: there is no second copy of the render logic to drift out of
+   * sync with the first. Building a few dozen detached nodes is cheap; touching
+   * the live tree is what costs.
+   */
+  _renderInto(host, key, build) {
+    const staging = document.createElement('div');
+    build(staging);
+    if (this._renderCache[key] === staging.innerHTML) return false;
+    this._renderCache[key] = staging.innerHTML;
+    host.replaceChildren(...staging.childNodes);
+    return true;
+  }
+
   _renderBase(ps, def) {
-    const el = document.getElementById('panel-base');
-    if (!el) return;
+    const host = document.getElementById('panel-base');
+    if (!host) return;
+    this._renderInto(host, 'base', (el) => this._buildBase(el, ps, def));
+  }
+
+  _buildBase(el, ps, def) {
 
     if (!ps || !ps.hasBase) {
       const isOwned = gameState.ownedPlanets.includes(this._planetId);
@@ -898,8 +944,12 @@ export class PlanetPanel {
   }
 
   _renderHire(ps, def) {
-    const el = document.getElementById('panel-robots-hire');
-    if (!el) return;
+    const host = document.getElementById('panel-robots-hire');
+    if (!host) return;
+    this._renderInto(host, 'hire', (el) => this._buildHire(el, ps, def));
+  }
+
+  _buildHire(el, ps, def) {
 
     el.innerHTML = `<div class="panel-section-title">HIRE ROBOTS</div>`;
 

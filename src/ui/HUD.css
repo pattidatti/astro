@@ -3559,8 +3559,8 @@
   font-size: 12px;
   padding: 3px 0;
 }
-.victory-stat-label { color: var(--dune-text-secondary); }
-.victory-stat-val   { color: var(--dune-gold-bright); }
+.victory-stat-label { color: var(--dune-text-secondary); white-space: nowrap; }
+.victory-stat-val   { color: var(--dune-gold-bright); white-space: nowrap; }
 
 .victory-btn {
   padding: 13px 40px;
@@ -3581,4 +3581,92 @@
   font-family: 'Share Tech Mono', monospace;
   font-size: 11px;
   color: var(--dune-text-dim);
+}
+
+/* ══════════════════════════════════════════════════════
+   NARROW VIEWPORTS
+
+   The page shipped a mobile viewport and no width rules at all, so anything
+   under about 1000px put two 380px panels edge to edge with no galaxy left
+   between them. These breakpoints reclaim the middle.
+
+   Below 780px the side panels stop being side panels and dock along the
+   bottom, which keeps the whole top half of the screen as playfield — the
+   thing the player actually needs to see and click. PlanetPanel.update()
+   knows about this width and stops writing an inline `top` there
+   (NARROW_LAYOUT_WIDTH), since an inline style would beat these rules.
+
+   This is narrow-desktop and tablet support. The game wants a pointer for
+   box-select and right-click waypoints and a keyboard for its shortcuts; no
+   breakpoint changes that.
+   ══════════════════════════════════════════════════════ */
+
+@media (max-width: 1100px) {
+  :root { --panel-width: 330px; }
+}
+
+@media (max-width: 900px) {
+  :root { --panel-width: 300px; }
+
+  #menu-btn, #research-btn, #admiral-mode-btn, #help-btn {
+    font-size: 11px;
+    padding: 6px 9px;
+  }
+  /* The keycap hints are redundant on a screen this size — the buttons are the
+     discovery path, and the room is better spent on the galaxy. */
+  #top-nav .btn-key { display: none; }
+
+  #top-left-hud { width: 132px; }
+
+  #global-production { gap: 10px; padding: 4px 10px; font-size: 11px; }
+  #enemy-threat-bar  { gap: 10px; padding: 4px 10px; }
+}
+
+@media (max-width: 780px) {
+  /* Dock both panels along the bottom, side by side, so the playfield keeps
+     the upper half of the screen instead of a vertical slot in the middle. */
+  .planet-panel {
+    top: auto !important;   /* beats the inline top written for wide layouts */
+    bottom: 10px;
+    width: calc(50vw - 14px);
+    max-height: 46vh;
+  }
+  #panel-left  { left: 8px;  transform: translateY(130%); }
+  #panel-right { right: 8px; transform: translateY(130%); }
+  #panel-left.visible,
+  #panel-right.visible { transform: translateY(0); }
+
+  /* Top-centre furniture stacks under the nav row rather than across it. */
+  #enemy-threat-bar  { top: 52px; }
+  #global-production { top: 88px; }
+  /* Moving this down means the -60px hide transform no longer clears the top
+     of the screen, so the "hidden" banner would sit visible under the nav.
+     Both states have to move together. */
+  #rts-mode-indicator {
+    top: 52px;
+    font-size: 11px;
+    padding: 5px 12px;
+    transform: translateX(-50%) translateY(-130px);
+  }
+  #rts-mode-indicator.visible { transform: translateX(-50%) translateY(0); }
+
+  #top-left-hud { width: 112px; }
+  #fps-counter { display: none; }
+}
+
+@media (max-width: 520px) {
+  /* One column. Side by side, each panel would be under 200px wide — narrower
+     than a single upgrade button — so they stack instead, sharing the lower
+     two thirds of the screen. Stacking rather than overlaying matters: both
+     panels are shown together, and an overlay would bury the left panel's
+     build buttons under the right panel entirely. */
+  .planet-panel {
+    width: calc(100vw - 16px);
+    max-height: 32vh;
+  }
+  #panel-left  { left: 8px;  bottom: calc(32vh + 18px); }
+  #panel-right { right: 8px; bottom: 10px; }
+
+  #top-left-hud { display: none; }
+  #help-overlay, #offline-report, #victory-screen { padding: 12px; }
 }
