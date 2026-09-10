@@ -1,5 +1,6 @@
 import { AudioManager } from '../audio/AudioManager.js';
 import { keybindings, PRIORITY } from '../input/Keybindings.js';
+import { onActivate, onBackdropActivate } from '../../ui/activate.js';
 
 /**
  * Controls reference.
@@ -30,6 +31,7 @@ export const CONTROL_SECTIONS = [
       [['T'],       'Research tree'],
       [['1', '–', '5'], 'Switch research branch while the tree is open'],
       [['?'],       'This screen'],
+      [['TAB'],     'Step through the panel controls; ENTER or SPACE activates'],
       [['ESC'],     'Close the top overlay, or open the menu'],
     ],
   },
@@ -80,11 +82,8 @@ export class HelpWindow {
     `;
     document.body.appendChild(overlay);
 
-    overlay.addEventListener('pointerdown', (e) => {
-      if (e.target === overlay) this.hide();
-    });
-    overlay.querySelector('#help-close-btn')
-      .addEventListener('pointerdown', () => this.hide());
+    onBackdropActivate(overlay, () => this.hide());
+    onActivate(overlay.querySelector('#help-close-btn'), () => this.hide());
 
     this._overlay = overlay;
   }
@@ -93,7 +92,7 @@ export class HelpWindow {
     if (!this._overlay) this._build();
     this._overlay.classList.add('help-overlay--visible');
     this._visible = true;
-    keybindings.pushModal('help', () => this.hide());
+    keybindings.pushModal('help', () => this.hide(), this._overlay);
     AudioManager.play('UI_CLICK');
   }
 

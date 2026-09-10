@@ -17,6 +17,12 @@
  *
  * Escape has dedicated handling: it closes the topmost registered modal, and only
  * reaches ordinary bindings when no modal is open.
+ *
+ * The modal stack also owns focus. A modal that registers its element gets the
+ * three things a keyboard user needs and none of which happen by default: focus
+ * moves into the dialog when it opens, Tab stays inside it while it is open, and
+ * focus returns to whatever opened it on close. Without that, Tab from inside an
+ * open research tree walked through the HUD buttons behind the overlay.
  */
 
 /** Bindings registered with this priority run before lower ones. */
@@ -67,16 +73,26 @@ class KeybindingRouter {
   /**
    * Declare a modal open. Escape closes the most recently pushed one.
    * Pushing the same id twice is a no-op, so callers may push defensively.
+   *
+   * @param {string} id
+   * @param {() => void} close
+   * @param {Element} [el] the dialog element — pass it to get focus handling
    */
-  pushModal(id, close) {
+  pushModal(id, close, el = null) {
     if (this._modals.some(m => m.id === id)) return;
-    this._modals.push({ id, close });
+    const restoreTo = el ? document.activeElement : null;
+    this._modals.push({ id, close, el, restoreTo });
+    if (el) focusFirst(el);
   }
 
   /** Declare a modal closed. Safe to call when it was never pushed. */
   popModal(id) {
     const i = this._modals.findIndex(m => m.id === id);
-    if (i !== -1) this._modals.splice(i, 1);
+    if (i === -1) return;
+    const [modal] = this._modals.splice(i, 1);
+    // Returning focus matters as much as taking it: without this, dismissing a
+    // dialog drops focus on <body> and Tab restarts from the top of the page.
+    if (modal.restoreTo?.isConnected) modal.restoreTo.focus?.();
   }
 
   /** True while any modal is registered as open. */
@@ -91,6 +107,11 @@ class KeybindingRouter {
 
   _dispatch(e) {
     if (this._suspended > 0) return;
+
+    // Tab is handled before the modifier and repeat guards: Shift+Tab is a real
+    // combination, and holding Tab to move several fields is a real gesture.
+    if (e.key === 'Tab' && this._trapTab(e)) return;
+
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.repeat) return;
 
@@ -101,7 +122,10 @@ class KeybindingRouter {
     // open does it reach the ordinary bindings (i.e. the pause menu).
     if (key === 'escape' && this._modals.length > 0) {
       const top = this._modals[this._modals.length - 1];
-      this._modals.pop();
+      // Go through popModal rather than splicing here, so closing with Escape
+      // restores focus the same way closing with the button does. The modal's
+      // own close() usually pops too; the second call is a no-op.
+      this.popModal(top.id);
       top.close?.();
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -117,6 +141,62 @@ class KeybindingRouter {
       return;
     }
   }
+
+  /**
+   * Keep Tab inside the topmost modal that registered an element.
+   * @returns {boolean} true when the event was consumed
+   */
+  _trapTab(e) {
+    const top = this._modals[this._modals.length - 1];
+    if (!top?.el?.isConnected) return false;
+
+    const items = focusableWithin(top.el);
+    if (items.length === 0) return false;
+
+    const first = items[0];
+    const last  = items[items.length - 1];
+    const active = document.activeElement;
+
+    // Focus escaped the dialog (or never entered it) — pull it back.
+    if (!top.el.contains(active)) {
+      (e.shiftKey ? last : first).focus();
+    } else if (e.shiftKey && active === first) {
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      first.focus();
+    } else {
+      return false; // ordinary move inside the dialog — let the browser do it
+    }
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return true;
+  }
+}
+
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+/** Visible, enabled, focusable descendants in document order. */
+function focusableWithin(root) {
+  return [...root.querySelectorAll(FOCUSABLE)]
+    .filter(el => !el.hasAttribute('disabled')
+                && el.getAttribute('aria-hidden') !== 'true'
+                // offsetParent is null for display:none (and fixed elements, which
+                // is why the size check backs it up).
+                && (el.offsetParent !== null || el.getClientRects().length > 0));
+}
+
+/** Move focus into a dialog when it opens. */
+function focusFirst(el) {
+  const items = focusableWithin(el);
+  if (items.length > 0) {
+    items[0].focus();
+    return;
+  }
+  // A dialog with nothing to focus still needs to hold focus, or Tab would
+  // start again from the top of the page behind it.
+  if (!el.hasAttribute('tabindex')) el.tabIndex = -1;
+  el.focus();
 }
 
 function isTextEntry(el) {

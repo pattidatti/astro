@@ -3,6 +3,7 @@ import { AudioManager } from '../game/audio/AudioManager.js';
 import { keybindings } from '../game/input/Keybindings.js';
 import { fmtCompact, fmtDuration } from './format.js';
 import { MAX_OFFLINE_SECONDS } from '../game/systems/OfflineProgress.js';
+import { onActivate, onBackdropActivate } from './activate.js';
 
 /**
  * "While you were away" panel.
@@ -92,12 +93,12 @@ export function showOfflineReport(report) {
     setTimeout(() => overlay.remove(), 600);
   };
 
-  overlay.querySelector('#offline-dismiss').addEventListener('click', () => {
+  onActivate(overlay.querySelector('#offline-dismiss'), () => {
     AudioManager.play('UI_CLICK');
     close();
   });
-  overlay.addEventListener('pointerdown', (e) => { if (e.target === overlay) close(); });
-  keybindings.pushModal('offline-report', close);
+  onBackdropActivate(overlay, close);
+  keybindings.pushModal('offline-report', close, overlay);
 
   requestAnimationFrame(() => overlay.classList.add('offline-report--visible'));
 }

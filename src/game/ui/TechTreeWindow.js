@@ -2,6 +2,7 @@ import { gameState } from '../GameState.js';
 import { TECH_NODES, TECH_BY_ID } from '../data/techTree.js';
 import { AudioManager } from '../audio/AudioManager.js';
 import { keybindings, PRIORITY } from '../input/Keybindings.js';
+import { onActivate, onBackdropActivate } from '../../ui/activate.js';
 
 const fmt = (n) => {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -37,12 +38,8 @@ export class TechTreeWindow {
     this._activeTab = 'robots';
     this._tabBar    = null;
 
-    document.getElementById('tech-close-btn')
-      ?.addEventListener('pointerdown', () => this.hide());
-
-    this._overlay.addEventListener('pointerdown', (e) => {
-      if (e.target === this._overlay) this.hide();
-    });
+    onActivate(document.getElementById('tech-close-btn'), () => this.hide());
+    onBackdropActivate(this._overlay, () => this.hide());
 
     // Keyboard shortcuts. Escape is handled by the router's modal stack —
     // show()/hide() push and pop this window there.
@@ -76,7 +73,7 @@ export class TechTreeWindow {
     this._updateEnergyDisplay();
     this._overlay.classList.add('tech-overlay--visible');
     this._visible = true;
-    keybindings.pushModal('tech-tree', () => this.hide());
+    keybindings.pushModal('tech-tree', () => this.hide(), this._modal || this._overlay);
     // Remove pulse from Research button
     document.getElementById('research-btn')?.classList.remove('research-btn--pulse');
     gameState._newTechAvailable = false;
@@ -105,10 +102,7 @@ export class TechTreeWindow {
       tab.className = 'tech-tab' + (branch === this._activeTab ? ' tech-tab--active' : '');
       tab.dataset.branch = branch;
       tab.innerHTML = `<span class="tech-tab-key">${i + 1}</span>${BRANCH_LABELS[branch]}`;
-      tab.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        this._switchTab(branch);
-      });
+      onActivate(tab, () => this._switchTab(branch));
       tabBar.appendChild(tab);
     });
     this._viewport.parentNode.insertBefore(tabBar, this._viewport);
@@ -230,10 +224,7 @@ export class TechTreeWindow {
     card.addEventListener('mouseleave', () => this._hideTooltip());
 
     if (!node.free) {
-      card.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        this._onNodeClick(node.id);
-      });
+      onActivate(card, () => this._onNodeClick(node.id));
     }
 
     return card;

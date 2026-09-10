@@ -3670,3 +3670,33 @@
   #top-left-hud { display: none; }
   #help-overlay, #offline-report, #victory-screen { padding: 12px; }
 }
+
+/* ══════════════════════════════════════════════════════
+   KEYBOARD FOCUS
+
+   Before this there was exactly one `:focus` rule in the whole stylesheet,
+   which is unsurprising: the HUD activated on `pointerdown`, so keyboard
+   focus never did anything and nobody missed seeing it. Now that every
+   control activates on `click`, focus needs to be visible or Tab navigation
+   is a guessing game.
+
+   `:focus-visible` rather than `:focus` — a mouse click should not leave a
+   ring behind on the button it just pressed.
+   ══════════════════════════════════════════════════════ */
+
+:focus-visible {
+  outline: 2px solid var(--dune-gold-bright);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Panels and grids clip their children, which would slice the ring in half.
+   An inset outline stays inside the element's own box. */
+.hire-btn:focus-visible,
+.base-upg-btn:focus-visible,
+.panel-tab:focus-visible,
+.tech-node:focus-visible,
+.def-build-btn:focus-visible,
+.def-upg-btn:focus-visible {
+  outline-offset: -3px;
+}

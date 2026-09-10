@@ -7,6 +7,7 @@ import { createRoute, calcTravelDuration, routeCargoAmount, SHIPPABLE_RESOURCES 
 import { DefensePanel } from './DefensePanel.js';
 import * as THREE from 'three';
 import { AudioManager } from '../audio/AudioManager.js';
+import { onActivate } from '../../ui/activate.js';
 
 const fmt = (n) => {
   if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
@@ -80,9 +81,7 @@ export class PlanetPanel {
     this._initTabs();
 
     // Close button
-    document.getElementById('panel-close')?.addEventListener('pointerdown', () => {
-      this.hide();
-    });
+    onActivate(document.getElementById('panel-close'), () => this.hide());
 
     // Colony ship click: show target popup
     gameState.on('colonyShipClicked', ({ planetId }) => {
@@ -144,15 +143,13 @@ export class PlanetPanel {
 
   _initTabs() {
     document.querySelectorAll('#panel-left-tabs .panel-tab').forEach(btn => {
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         this._leftTab = btn.dataset.tab;
         this._activateTab('left', this._leftTab);
       });
     });
     document.querySelectorAll('#panel-right-tabs .panel-tab').forEach(btn => {
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         this._rightTab = btn.dataset.tab;
         this._activateTab('right', this._rightTab);
       });
@@ -316,8 +313,7 @@ export class PlanetPanel {
               ${costStr ? `<span class="base-upg-cost ${canAfford ? '' : 'cant'}">${costStr}</span>` : '<span style="font-size: 12px;color:var(--dune-text-dim)">FREE</span>'}
             `;
             if (canAfford) {
-              btn.addEventListener('pointerdown', (e) => {
-                e.stopPropagation();
+              onActivate(btn, () => {
                 AudioManager.play('UI_CLICK');
                 gameState.recolonize(srcId, this._planetId);
               });
@@ -354,14 +350,12 @@ export class PlanetPanel {
           ${costStr ? `<span class="base-upg-cost ${canAfford ? '' : 'cant'}">${costStr}</span>` : '<span style="font-size: 12px;color:var(--dune-text-dim)">FREE</span>'}
         `;
         if (canAfford) {
-          btn.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
+          onActivate(btn, () => {
             AudioManager.play('UI_CLICK');
             gameState.buildBase(this._planetId);
           });
         } else {
-          btn.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
+          onActivate(btn, () => {
             AudioManager.play('UI_CLICK_DENIED');
           });
         }
@@ -432,8 +426,7 @@ export class PlanetPanel {
       `;
 
       if (!maxed && canAfford) {
-        btn.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
+        onActivate(btn, () => {
           AudioManager.play('UI_CLICK');
           const ok = gameState.buyBaseUpgrade(this._planetId, upg.id);
           if (ok) {
@@ -444,8 +437,7 @@ export class PlanetPanel {
           }
         });
       } else if (!maxed) {
-        btn.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
+        onActivate(btn, () => {
           AudioManager.play('UI_CLICK_DENIED');
         });
       }
@@ -498,8 +490,7 @@ export class PlanetPanel {
           <span class="${canEnergy ? '' : 'mil-cost-cant'}">⚡ 1,500 ENERGY</span>
         </span>
       `;
-      milBtn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(milBtn, () => {
         AudioManager.play('UI_CLICK');
         gameState.buildMilitaryBase(this._planetId);
       });
@@ -732,13 +723,11 @@ export class PlanetPanel {
         <button class="route-edit" title="Edit route">✎</button>
         <button class="route-delete" title="Remove route">✕</button>
       `;
-      row.querySelector('.route-edit').addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(row.querySelector('.route-edit'), () => {
         AudioManager.play('UI_CLICK');
         this._openInlineEdit(row, route, ps);
       });
-      row.querySelector('.route-delete').addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(row.querySelector('.route-delete'), () => {
         gameState.removeRoute(route.id);
       });
       el.appendChild(row);
@@ -748,8 +737,7 @@ export class PlanetPanel {
     const addBtn = document.createElement('button');
     addBtn.className = 'add-route-btn';
     addBtn.textContent = '+ ADD ROUTE';
-    addBtn.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(addBtn, () => {
       AudioManager.play('UI_CLICK');
       this._showAddRouteForm(el, addBtn);
     });
@@ -834,8 +822,7 @@ export class PlanetPanel {
     form.querySelector('#rf-res').addEventListener('change', updateSliderLabel);
     form.querySelector('#rf-to').addEventListener('change', updateTravelTime);
 
-    form.querySelector('#rf-confirm').addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(form.querySelector('#rf-confirm'), () => {
       const to = form.querySelector('#rf-to').value;
       const resource = form.querySelector('#rf-res').value;
       const pct = parseInt(form.querySelector('#rf-pct').value, 10);
@@ -844,8 +831,7 @@ export class PlanetPanel {
       addBtn.style.display = '';
       gameState.addRoute(route);
     });
-    form.querySelector('#rf-cancel').addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(form.querySelector('#rf-cancel'), () => {
       AudioManager.play('UI_CLICK');
       form.remove();
       addBtn.style.display = '';
@@ -919,16 +905,14 @@ export class PlanetPanel {
       form.remove();
     };
 
-    form.querySelector('#rei-toggle').addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(form.querySelector('#rei-toggle'), () => {
       gameState.toggleRoute(route.id);
       route.active = !route.active;
       form.querySelector('#rei-toggle').textContent = route.active ? '⏸ PAUSE' : '▶ ENABLE';
       row.querySelector('.route-status').classList.toggle('inactive', !route.active);
     });
 
-    form.querySelector('#rei-save').addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(form.querySelector('#rei-save'), () => {
       const resource = resSelect.value;
       const pct = parseInt(pctInput.value, 10);
       AudioManager.play('UI_CLICK');
@@ -936,8 +920,7 @@ export class PlanetPanel {
       gameState.updateRoute(route.id, { resource, pct });
     });
 
-    form.querySelector('#rei-cancel').addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(form.querySelector('#rei-cancel'), () => {
       AudioManager.play('UI_CLICK');
       close();
     });
@@ -990,15 +973,13 @@ export class PlanetPanel {
       `;
 
       if (canAfford) {
-        btn.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
+        onActivate(btn, () => {
           AudioManager.play('UI_CLICK');
           const ok = gameState.hireRobot(this._planetId, robotType);
           if (ok) flashButton(btn, 'hire-btn--success', `-${fmt(energyCost)} ⚡`);
         });
       } else {
-        btn.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
+        onActivate(btn, () => {
           AudioManager.play('UI_CLICK_DENIED');
         });
       }
@@ -1110,14 +1091,12 @@ export class PlanetPanel {
     `;
 
     if (canAfford) {
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         AudioManager.play('UI_CLICK');
         gameState.queueColonyShipBuild(this._planetId);
       });
     } else {
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         AudioManager.play('UI_CLICK_DENIED');
       });
     }
@@ -1185,8 +1164,7 @@ export class PlanetPanel {
     popup.innerHTML = html;
 
     // Close button
-    popup.querySelector('.csp-close')?.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(popup.querySelector('.csp-close'), () => {
       this._hideColonyShipPopup();
     });
 
@@ -1194,8 +1172,7 @@ export class PlanetPanel {
     popup.querySelectorAll('.target-row').forEach(row => {
       const btn = row.querySelector('.launch-btn');
       if (btn.disabled) return;
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(btn, () => {
         AudioManager.play('UI_CLICK');
         const targetId = row.dataset.target;
         const dist = parseFloat(row.dataset.dist);

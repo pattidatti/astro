@@ -8,6 +8,7 @@ import { HelpWindow } from './ui/HelpWindow.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { TECH_NODES } from './data/techTree.js';
 import { BASE_UPGRADES, getSpeedMult, getLoadMult, countTechLevels } from './data/upgrades.js';
+import { onActivate } from '../ui/activate.js';
 
 const THREAT_PHASE_COLORS = {
   dormant:  '#4488ff',
@@ -70,28 +71,20 @@ export class HUDBridge {
     this._threatTooltip = document.getElementById('enemy-threat-tooltip');
 
     if (onMenu) {
-      document.getElementById('menu-btn')?.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        onMenu();
-      });
+      onActivate(document.getElementById('menu-btn'), () => onMenu());
     }
 
-    document.getElementById('research-btn')?.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(document.getElementById('research-btn'), () => {
       AudioManager.play('UI_CLICK');
       this._techTree.toggle();
     });
 
-    document.getElementById('help-btn')?.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      this._help.toggle();
-    });
+    onActivate(document.getElementById('help-btn'), () => this._help.toggle());
 
     this._admiralBtn = document.getElementById('admiral-mode-btn');
     this._admiralShown = false;
     this._admiralUsed = localStorage.getItem(ADMIRAL_SEEN_KEY) === '1';
-    this._admiralBtn?.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
+    onActivate(this._admiralBtn, () => {
       AudioManager.play('UI_CLICK');
       this.game.cameraController.toggleRTSMode();
     });
@@ -636,8 +629,7 @@ export class HUDBridge {
 
     if (planetId) {
       el.classList.add('toast-clickable');
-      el.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
+      onActivate(el, () => {
         const sys = this.game.galaxy.getSystem(planetId);
         if (!sys) return;
         gameState.switchPlanet(planetId);

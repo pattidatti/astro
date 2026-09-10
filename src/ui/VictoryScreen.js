@@ -3,6 +3,7 @@ import { PLANETS } from '../game/data/planets.js';
 import { AudioManager } from '../game/audio/AudioManager.js';
 import { keybindings } from '../game/input/Keybindings.js';
 import { fmtCompact, fmtDuration } from './format.js';
+import { onActivate } from './activate.js';
 
 /**
  * Endgame screen.
@@ -73,11 +74,11 @@ export function showVictoryScreen() {
     setTimeout(() => overlay.remove(), 900);
   };
 
-  overlay.querySelector('#victory-continue').addEventListener('click', () => {
+  onActivate(overlay.querySelector('#victory-continue'), () => {
     AudioManager.play('UI_CLICK');
     close();
   });
-  keybindings.pushModal('victory', close);
+  keybindings.pushModal('victory', close, overlay);
 
   requestAnimationFrame(() => overlay.classList.add('victory-screen--visible'));
 }

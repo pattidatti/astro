@@ -71,6 +71,7 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
 - **RenderPipeline.js** — WebGLRenderer (logarithmic depth buffer, PCFSoft shadow maps) + EffectComposer (bloom, ACES tone mapping)
 - **AnimationLoop.js** — rAF loop, dt capped at 100ms. Calls registered `onUpdate(dt)` callbacks + render. Pauses on `document.hidden`.
 - **Keybindings.js** (`src/game/input/`) — Central keyboard router. Every discrete shortcut registers here instead of adding its own `document` listener: dispatch order is by explicit `PRIORITY` (MODAL > UI > CAMERA), text-field and modifier guards live in one place, and `pushModal`/`popModal` give Escape a stack so it closes the topmost overlay before falling through to the pause menu. `suspend()`/`resume()` (counted) silence it while the landing/pause screen owns the keyboard.
+  The modal stack also owns **focus**: `pushModal(id, close, el)` moves focus into `el`, traps Tab inside it, and returns focus to the opener on close. Escape routes through `popModal()` for exactly this reason — closing with the key and closing with the button must restore focus the same way. A modal that omits `el` still works, it just gets no focus handling.
 - **GraphicsSettings.js** (`src/game/engine/`) — Quality presets persisted to `localStorage('astro_graphics_quality')`. `onQualityChange()` subscribers (RenderPipeline, SceneManager) apply changes live; nothing needs a reload.
 - **InputManager.js** — Raycasting for 3D click/hover (planets, stations, defense objects, ships, fleet icons). RTS box-select with frustum culling. Waypoint placement on Y=0 plane.
 
@@ -218,6 +219,7 @@ Shared GLSL utilities in `src/game/utils/ShaderLib.js` (noise, FBM, Fresnel).
 
 ### UI Components
 
+- **activate.js** (`src/ui/`) — `onActivate(el, handler, opts)`, the single way HUD controls are bound. Everything in game used to bind `pointerdown`, which meant Enter/Space on a focused button did nothing (the whole in-game HUD was mouse-only, while the landing screen's `click` handlers worked fine) and a touch-drag to scroll a panel fired whatever button it started on. `click` covers mouse, tap and keyboard. Non-button elements — the tech tree's node `<div>`s — get `tabindex`, `role="button"` and Enter/Space routed through `el.click()`. `{ once: true }` unbinds every listener the call added, not just the click one.
 - **PlanetPanel.js** (`src/game/ui/`) — Floating side panels when zoomed into a planet. Tabbed: base build/upgrade, robot hire/upgrade, silo status, trade routes, colony ship launcher. Hosts DefensePanel. The per-second sections (base, hire) build into a detached node and commit only when the markup actually differs (`_renderInto()`); the silo bars keep cached element refs and the routes list keeps a fingerprint. Comparing built markup rather than fingerprinting inputs avoids a second copy of the render logic that could drift. Below `NARROW_LAYOUT_WIDTH` (780px) the panels dock to the bottom edge and `update()` stops writing an inline `top`.
 - **CombatHUD.js** (`src/game/ui/`) — Alert banners (INVASION INCOMING, RAID DETECTED, THREAT NEUTRALIZED, STATION DESTROYED, CARGO INTERCEPTED) + floating combat summary. Alerts auto-dismiss after 4s.
 - **DefensePanel.js** (`src/game/ui/`) — Defense build/upgrade grid (cannon, satellite, defenseShip, shield). Ability buttons (EMP, orbitalStrike, shieldBoost) with pie-chart cooldown overlays.
@@ -300,6 +302,7 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/ui/OfflineReport.js` | "While you were away" panel |
 | `src/ui/VictoryScreen.js` | Endgame screen + `installVictoryScreen()` wiring |
 | `src/ui/format.js` | Shared compact-number and duration formatting |
+| `src/ui/activate.js` | `onActivate()` — click/keyboard/tap activation for every HUD control |
 | `src/game/systems/RouteSystem.js` | Cargo ship dispatch + delivery |
 | `src/game/systems/ThreatSystem.js` | Enemy invasion wave scheduling + difficulty scaling |
 | `src/game/systems/CombatSystem.js` | Planet station combat (full + simplified DPS modes) |
@@ -379,6 +382,7 @@ If `VITE_FIREBASE_PROJECT_ID` is missing, the game runs in **offline-only mode**
 - **Fonts**: Orbitron (headers/numbers), Share Tech Mono (body/values) — Google Fonts in `index.html`
 - **Panel layout**: 380px floating side panels, shown/hidden by zoom level. Menu button top-left.
 - **Breakpoints**: width rules narrow the panels at 1100px and 900px, dock them along the bottom edge at 780px (keeping the whole upper screen as playfield), and stack them in one column at 520px. This is narrow-desktop and tablet support — the game needs a pointer for box-select and right-click waypoints. When moving a fixed-position element in a breakpoint, check its *hidden* transform too: `#rts-mode-indicator` hides with `translateY(-60px)`, which stopped clearing the screen once `top` moved to 52px.
+- **Focus**: one global `:focus-visible` gold outline, with an inset variant for controls inside clipping containers (hire/upgrade grids, tabs, tech nodes). Use `:focus-visible`, never `:focus` — a mouse click should not leave a ring behind.
 - **CSS**: All styling in `src/ui/HUD.css` + `src/ui/LandingScreen.css` — glassmorphism panels, gradient gold borders
 - **Post-processing**: Bloom (UnrealBloomPass, strength 0.8, threshold 0.6, smoothRadius 0.55) + ColorGradeShader (S-curve, vignette, chromatic aberration), ACES Filmic tone mapping (exposure 1.1). Bloom and god rays are toggled per quality preset via `pass.enabled` — the composer chain is never rebuilt to drop a pass, since Game.js writes god-ray and warp uniforms every frame.
 - **Lighting**: Directional sun (PCFSoft shadows) + ambient + hemisphere + per-planet rim + fill lights
