@@ -15,7 +15,7 @@ import {
 } from './data/militaryStats.js';
 import { buildDefaultEnemyStations } from './data/enemyStations.js';
 
-const SAVE_VERSION = 10;
+const SAVE_VERSION = 11;
 
 /**
  * Compute max energy and ore supply capacity for a fleet based on ship count and tech.
@@ -161,7 +161,9 @@ class GameState extends EventEmitter {
     });
     this.on('planetColonized', () => {
       this.stats.planetsColonized++;
+      this.checkVictory();
     });
+    this.on('enemyStationDestroyed', () => this.checkVictory());
   }
 
   _initFresh() {
@@ -186,6 +188,9 @@ class GameState extends EventEmitter {
     // finished the economy tutorial before it existed still get taught the
     // fleet layer when they first build a military base.
     this.tutorialMilitaryStep = 0;
+    // Timestamp the galaxy was fully taken, or null. Play continues afterwards —
+    // this only records that it happened, so the screen shows once.
+    this.victoryTime = null;
     this.lastSaved = Date.now();
 
     // Global tech tree
@@ -1201,6 +1206,35 @@ class GameState extends EventEmitter {
     ps.militaryBase.hp = Math.min(ps.militaryBase.maxHP, ps.militaryBase.hp + amount);
   }
 
+  // ─── Win condition ────────────────────────────────────────────────────────
+
+  /**
+   * The galaxy is taken: every planet colonised and every enemy station cleared.
+   *
+   * The game had no ending at all — the last station could fall with nothing to
+   * mark it. Both halves are required deliberately: owning all eight planets is
+   * the economy game, clearing all seven stations is the military one, and the
+   * point of the ending is that it needs both.
+   */
+  isVictorious() {
+    if (this.ownedPlanets.length < PLANETS.length) return false;
+    const stations = this.enemyStations || [];
+    return stations.length > 0 && stations.every(st => st.cleared);
+  }
+
+  /**
+   * Fire the `victory` event the first time the condition holds. Safe to call
+   * as often as you like — it latches on `victoryTime`, which is saved, so a
+   * reload does not replay the screen.
+   */
+  checkVictory() {
+    if (this.victoryTime) return false;
+    if (!this.isVictorious()) return false;
+    this.victoryTime = Date.now();
+    this.emit('victory', { stats: { ...this.stats }, at: this.victoryTime });
+    return true;
+  }
+
   /** Damage an enemy station (shield absorbs first, then hull).
    * @param {string} stationId
    * @param {number} amount - total damage
@@ -1690,6 +1724,7 @@ class GameState extends EventEmitter {
       tutorialMilitaryStep: this.tutorialMilitaryStep,
       stats: { ...this.stats },
       unlockedTech: Array.from(this.unlockedTech),
+      victoryTime: this.victoryTime,
       lastSaved: Date.now(),
     };
   }
@@ -1738,6 +1773,9 @@ class GameState extends EventEmitter {
       totalShipDeliveries: 0, totalResourcesShipped: 0, totalRobotsHired: 0,
       planetsColonized: 0, playTimeSeconds: 0,
     };
+    // v10→v11: absent on older saves. Left null so a game that already met the
+    // condition still gets its screen the next time the check runs.
+    this.victoryTime    = data.victoryTime ?? null;
     this.lastSaved      = data.lastSaved ?? Date.now();
 
     // Ensure Xerion always has a state entry

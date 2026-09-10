@@ -22,6 +22,7 @@ import { keybindings, PRIORITY } from './game/input/Keybindings.js';
 import { showFatalError, isWebGLAvailable } from './ui/FatalError.js';
 import { applyOfflineProgress } from './game/systems/OfflineProgress.js';
 import { showOfflineReport } from './ui/OfflineReport.js';
+import { installVictoryScreen } from './ui/VictoryScreen.js';
 
 async function openPauseMenu() {
   const landing = new LandingScreen({ inGame: true });
@@ -53,7 +54,16 @@ async function boot() {
   AudioManager.init()
     .then(() => MusicManager.init(AudioManager._ctx, AudioManager.getMusicGainNode()))
     .catch(e => console.warn('[AudioManager] init failed:', e));
-  initFirebase();
+  // Firebase lives in its own lazily-loaded chunk now, so start fetching it and
+  // build the galaxy while it is in flight rather than waiting on the network
+  // before the first frame. The landing screen needs to know who is signed in,
+  // so the await lands just before it.
+  const firebaseReady = initFirebase();
+
+  // Launch Three.js immediately — galaxy renders behind landing screen
+  const game = createGame();
+
+  await firebaseReady;
 
   if (isFirebaseConfigured()) {
     console.log('[Boot] Initializing Auth sequence...');
@@ -68,9 +78,6 @@ async function boot() {
       }
     });
   }
-
-  // Launch Three.js immediately — galaxy renders behind landing screen
-  const game = createGame();
 
   // Check if we're returning from a pause-menu "New Game" reload
   let choice;
@@ -234,7 +241,11 @@ async function boot() {
 
   keybindings.resume();
 
+  // Order matters when both fire at once: the victory screen sits above the
+  // offline report visually, so it must also be the topmost entry on the modal
+  // stack — that is, pushed last.
   showOfflineReport(offlineReport);
+  installVictoryScreen();
 }
 
 /**

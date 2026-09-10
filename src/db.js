@@ -1,17 +1,19 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from './firebase.js';
+import { db, isFirebaseConfigured, getFirestoreSdk } from './firebase.js';
 import { gameState } from './game/GameState.js';
 import { getCurrentSaveSlot } from './storage.js';
 
+// firebase/firestore is loaded by initFirebase() rather than imported statically
+// (see firebase.js). `db` is only non-null once that namespace is in hand, and
+// every exported function below bails out when it is null.
 function saveDocRef(uid, slot) {
-  return doc(db, 'saves', uid, 'state', slot);
+  return getFirestoreSdk().doc(db, 'saves', uid, 'state', slot);
 }
 
 export async function saveToFirestore(uid, slot = getCurrentSaveSlot()) {
   if (!isFirebaseConfigured() || !db || !uid) return;
   try {
     const data = gameState.serialize();
-    await setDoc(saveDocRef(uid, slot), data);
+    await getFirestoreSdk().setDoc(saveDocRef(uid, slot), data);
   } catch (e) {
     console.warn('Firestore save failed:', e);
   }
@@ -20,12 +22,12 @@ export async function saveToFirestore(uid, slot = getCurrentSaveSlot()) {
 export async function loadFromFirestore(uid, slot = getCurrentSaveSlot()) {
   if (!isFirebaseConfigured() || !db || !uid) return null;
   try {
-    const snap = await getDoc(saveDocRef(uid, slot));
+    const snap = await getFirestoreSdk().getDoc(saveDocRef(uid, slot));
     if (snap.exists()) return snap.data();
     
     // Migration: If loading slot_1 and it doesn't exist, try loading 'current'
     if (slot === 'slot_1') {
-      const oldSnap = await getDoc(saveDocRef(uid, 'current'));
+      const oldSnap = await getFirestoreSdk().getDoc(saveDocRef(uid, 'current'));
       if (oldSnap.exists()) return oldSnap.data();
     }
   } catch (e) {

@@ -227,3 +227,45 @@ describe('crystal sinks', () => {
     }
   });
 });
+
+describe('victory condition', () => {
+  // Imported lazily so the module graph above stays free of game state.
+  it('needs every planet and every station, and latches once', async () => {
+    const { gameState } = await import('../src/game/GameState.js');
+    gameState.reset();
+
+    expect(gameState.isVictorious()).toBe(false);
+
+    gameState.ownedPlanets = PLANETS.map(p => p.id);
+    expect(gameState.isVictorious()).toBe(false); // stations still standing
+
+    for (const st of gameState.enemyStations) st.cleared = true;
+    expect(gameState.isVictorious()).toBe(true);
+
+    let fired = 0;
+    gameState.on('victory', () => fired++);
+    expect(gameState.checkVictory()).toBe(true);
+    expect(gameState.victoryTime).toBeGreaterThan(0);
+
+    // A reload, another station event, a re-check — the screen shows once.
+    expect(gameState.checkVictory()).toBe(false);
+    expect(fired).toBe(1);
+
+    gameState.reset();
+  });
+
+  it('survives a save round-trip so the screen is not replayed', async () => {
+    const { gameState } = await import('../src/game/GameState.js');
+    gameState.reset();
+    gameState.ownedPlanets = PLANETS.map(p => p.id);
+    for (const st of gameState.enemyStations) st.cleared = true;
+    gameState.checkVictory();
+
+    const snapshot = JSON.parse(JSON.stringify(gameState.serialize()));
+    gameState.reset();
+    gameState.deserialize(snapshot);
+
+    expect(gameState.victoryTime).toBeGreaterThan(0);
+    expect(gameState.checkVictory()).toBe(false);
+  });
+});

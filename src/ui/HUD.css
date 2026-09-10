@@ -3473,3 +3473,112 @@
   transition: filter 0.15s ease;
 }
 .offline-btn:hover { filter: brightness(1.12); }
+
+/* ══════════════════════════════════════════════════════
+   Victory screen — galactic dominion
+   ══════════════════════════════════════════════════════ */
+
+#victory-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(212, 168, 67, 0.16), transparent 62%),
+    rgba(4, 6, 10, 0.93);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+#victory-screen.victory-screen--visible { opacity: 1; }
+
+.victory-panel {
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  overflow-y: auto;
+  text-align: center;
+  padding: 32px 28px;
+  border: 1px solid var(--dune-border-bright);
+  border-radius: 6px;
+  background: var(--dune-bg);
+  box-shadow: 0 0 80px rgba(212, 168, 67, 0.18), inset 0 0 60px var(--dune-glow);
+}
+
+.victory-eyebrow {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: var(--dune-text-secondary);
+}
+.victory-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(26px, 5vw, 42px);
+  letter-spacing: 6px;
+  margin: 10px 0 16px;
+  color: var(--dune-gold-bright);
+  text-shadow: 0 0 30px rgba(212, 168, 67, 0.45);
+}
+.victory-blurb {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--dune-text);
+  max-width: 52ch;
+  margin: 0 auto 28px;
+}
+
+.victory-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 18px;
+  text-align: left;
+  margin-bottom: 28px;
+}
+.victory-stat-group {
+  padding: 14px 16px;
+  border: 1px solid var(--dune-border);
+  border-radius: 4px;
+  background: rgba(212, 168, 67, 0.04);
+}
+.victory-group-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--dune-amber);
+  margin-bottom: 10px;
+}
+.victory-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  padding: 3px 0;
+}
+.victory-stat-label { color: var(--dune-text-secondary); }
+.victory-stat-val   { color: var(--dune-gold-bright); }
+
+.victory-btn {
+  padding: 13px 40px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--dune-bg-solid);
+  background: linear-gradient(180deg, var(--dune-gold-bright), var(--dune-gold));
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.victory-btn:hover { filter: brightness(1.12); }
+
+.victory-footer {
+  margin-top: 14px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--dune-text-dim);
+}
