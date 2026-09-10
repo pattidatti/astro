@@ -20,6 +20,8 @@ import { EnemyStationSystem } from './game/systems/EnemyStationSystem.js';
 import { Tutorial } from './game/tutorial/Tutorial.js';
 import { keybindings, PRIORITY } from './game/input/Keybindings.js';
 import { showFatalError, isWebGLAvailable } from './ui/FatalError.js';
+import { applyOfflineProgress } from './game/systems/OfflineProgress.js';
+import { showOfflineReport } from './ui/OfflineReport.js';
 
 async function openPauseMenu() {
   const landing = new LandingScreen({ inGame: true });
@@ -111,8 +113,13 @@ async function boot() {
     }
   }
 
+  // Credit production for the time the game spent closed. Runs before the
+  // systems start so the first rendered frame already shows the caught-up
+  // numbers; the report is shown once the HUD exists (Phase 4).
+  let offlineReport = null;
   if (bestSave) {
     gameState.deserialize(bestSave);
+    offlineReport = applyOfflineProgress(gameState);
   }
 
   startAutoSave();
@@ -226,6 +233,8 @@ async function boot() {
   new Tutorial(game);
 
   keybindings.resume();
+
+  showOfflineReport(offlineReport);
 }
 
 /**

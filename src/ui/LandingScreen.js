@@ -6,13 +6,7 @@ import { AudioManager } from '../game/audio/AudioManager.js';
 import { getQuality, setQuality, getPreset, QUALITY_PRESETS, QUALITY_ORDER } from '../game/engine/GraphicsSettings.js';
 import { CONTROL_SECTIONS } from '../game/ui/HelpWindow.js';
 import { gameState } from '../game/GameState.js';
-
-function fmtOre(n) {
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return Math.floor(n).toString();
-}
+import { fmtCompact as fmtOre, fmtDuration as fmtTime } from './format.js';
 
 function fmtDate(ts) {
   if (!ts) return 'unknown date';
@@ -21,16 +15,6 @@ function fmtDate(ts) {
   if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
   if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
   return Math.floor(diff / 86400000) + 'd ago';
-}
-
-function fmtTime(secs) {
-  if (!secs) return '0s';
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const sec = Math.floor(secs % 60);
-  if (h > 0) return `${h}h ${m}m ${sec}s`;
-  if (m > 0) return `${m}m ${sec}s`;
-  return `${sec}s`;
 }
 
 function getTotalOre(save) {

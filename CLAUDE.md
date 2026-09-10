@@ -17,9 +17,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev       # Vite dev server (localhost:5173)
 npm run build     # Production build → dist/
 npm run preview   # Preview production build locally
+npm test          # Vitest — balance formulas + save migration chain
+npm run test:watch
 ```
 
-No lint or test scripts are configured.
+No lint script is configured. Tests live in `test/` and run in plain Node (no
+DOM): they cover the pure formula modules and `GameState.deserialize()`, which
+is the one place a bad edit can silently destroy a player's save.
 
 ## Architecture
 
@@ -125,13 +129,16 @@ Tab visibility: `animationLoop.stop()` on `visibilitychange → hidden`; 200ms C
 
 ### Game Systems (`src/game/systems/`)
 
-- **ProductionSystem.js** — Per-planet, per-frame resource generation:
+- **ProductionSystem.js** — Per-planet, per-frame resource generation. The rate formulas themselves live in `data/productionRates.js` as pure functions, shared with the offline catch-up and the tests:
   - Ore: `count × 0.5 × speedMult × loadMult × planetMult.ore × max(1, unlockedZones)`
   - Energy: `count × 0.4 × speedMult × loadMult × planetMult.energy × max(1, unlockedZones) + passive`
   - Crystal: `count × 0.2 × speedMult × loadMult × planetMult.crystal × unlockedZones` (only if crystalZones > 0)
   - Scouts tick `depositProgress`; threshold → zone unlocks
   - Space elevator: pumps 2.0 ore+energy/s from planet silo → military base silo
   - Advances `colonyShipBuildQueue` and military `queue[]` each frame
+  - Exports `applyScouting()` and `pumpSpaceElevator()` so the offline catch-up runs the same code
+
+- **OfflineProgress.js** — Credits the time the game spent closed, from `lastSaved`. Steps the live production/scouting/elevator functions in 30s slices (so silos fill and stop, and a survey that completes mid-window raises the rate for the rest of it), capped at `MAX_OFFLINE_SECONDS` (8h) and ignored below `MIN_OFFLINE_SECONDS` (2 min). Deliberately narrow: nothing that spawns objects into the world — build queues, colony flights, raids, fleet combat — runs while away, so an absence can neither produce nor cost the player anything they could not have watched. Also restarts each planet's `lastAttackTime`, since a long absence otherwise leaves every planet instantly past `MIN_ATTACK_GAP`. Returns a report for `ui/OfflineReport.js`.
 
 - **RouteSystem.js** — One cargo ship per route. Dispatches when route active, slots free, hyperlane unblocked. Cargo size is stored on the route as `pct` (share of the source silo) and resolved through `routeCargoAmount()` at each dispatch, so silo upgrades reach routes created before them. Delivers on arrival. Reconstructs from `gameState.activeShips` on load.
 
@@ -288,6 +295,10 @@ Dynamic near/far planes: d < 20 → 0.05/500, d < 80 → 0.1/1000, else → 1.0/
 | `src/game/GameState.js` | Singleton state + EventEmitter (v10 save format) |
 | `src/game/HUDBridge.js` | HTML HUD updates, toast notifications, enemy threat bar |
 | `src/game/systems/ProductionSystem.js` | Per-planet resource generation, space elevator, ship build ticks |
+| `src/game/systems/OfflineProgress.js` | Catch-up for time spent with the game closed |
+| `src/game/data/productionRates.js` | Pure per-second production + scouting formulas (live tick, offline, tests) |
+| `src/ui/OfflineReport.js` | "While you were away" panel |
+| `src/ui/format.js` | Shared compact-number and duration formatting |
 | `src/game/systems/RouteSystem.js` | Cargo ship dispatch + delivery |
 | `src/game/systems/ThreatSystem.js` | Enemy invasion wave scheduling + difficulty scaling |
 | `src/game/systems/CombatSystem.js` | Planet station combat (full + simplified DPS modes) |
